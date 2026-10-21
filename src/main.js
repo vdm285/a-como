@@ -347,13 +347,19 @@ async function boot() {
 
   window.addEventListener('hashchange', parseHash);
   window.addEventListener('resize', () => { map.resize(); applyPadding(false); renderChrome(); });
+  // Keyboard: Escape steps back one level (card → playback → chosen week → stage);
+  // Space plays or pauses the scrubber; "/" focuses the search.
   window.addEventListener('keydown', (e) => {
+    const inInput = document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
     if (e.key === 'Escape') {
-      if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+      if (inInput) return;
       if (state.view.kind !== 'city') closeCard();
+      else if (ui.playTimer) togglePlay();
+      else if (state.week) setWeek(null);
       else if (ui.stage && ui.stage.kind !== 'index') resetStage();
-    }
-    if (e.key === '/' && document.activeElement && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); const inp = chrome.querySelector('.search input'); if (inp) inp.focus(); }
+    } else if (e.key === ' ' && !inInput && ui.stage && ui.stage.weeks && ui.stage.weeks.length > 1 && !(document.activeElement && document.activeElement.tagName === 'BUTTON')) {
+      e.preventDefault(); togglePlay();
+    } else if (e.key === '/' && !inInput) { e.preventDefault(); const inp = chrome.querySelector('.search input'); if (inp) inp.focus(); }
   });
   window.addEventListener('online', () => renderChrome());
   window.addEventListener('offline', () => showToast(t('offline'), 4000));
