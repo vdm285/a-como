@@ -1,74 +1,43 @@
-# **🛒 Comparador de Precios CDMX \- Zero Friction App**
+# A cómo
 
-Una aplicación web progresiva (PWA) enfocada en la hiper-optimización de la compra de despensa. Diseñada bajo una estricta filosofía de "Fricción Cero" y "Soberanía de Datos", permite a los usuarios comparar y registrar precios físicos en milisegundos.
+**El mapa de precios del súper en la Ciudad de México.** Cada tienda que vigila PROFECO, dibujada donde está, coloreada por lo que buscas; una canasta que dice en qué tienda sale más barata la lista completa; y tus propios precios junto a los oficiales, guardados sólo en tu teléfono.
 
-## **📖 1\. Filosofía del Proyecto**
+*The supermarket price map of Mexico City: every store PROFECO monitors, drawn where it stands and coloured by what you search; a basket that says which store is cheapest for the whole list; your own shelf prices beside the official ones, kept only on your phone. Spanish first; English is a setting.*
 
-Este proyecto no es una app convencional. Está construido bajo los siguientes pilares inquebrantables:
+Live: https://vdm285.github.io/compa-precio/
 
-* **Fricción Cero (Pragmatismo Extremo):** Si el registro manual de un precio toma más de 5 segundos en el pasillo del supermercado, la app falló. Minimizamos clics, eliminamos campos obligatorios innecesarios y utilizamos el poder de las expresiones regulares para extraer metadatos (como el gramaje) directamente de la entrada de texto cruda.  
-* **"Prueba de la Hoja de Cálculo":** Cada *feature* debe responder a la pregunta: *"¿Es esto mejor que usar Google Sheets?"*. La respuesta vive en el motor calculador "Bang for your Buck" (precio estandarizado automático) y el semáforo visual inmediato.  
-* **Privado Primero (Soberanía de Datos):** El usuario siempre tiene la opción de basarse en sus propios registros locales, evitando la paranoia de alteraciones de precios orquestadas por marcas o usuarios maliciosos en la base global.  
-* **Zero-Install (Tecnologías Web Estándar):** No requerimos descargas de la App Store que comprometan la privacidad del dispositivo. La app vive en el navegador (HTML/JS/Tailwind) con la capacidad de trabajar offline vía Service Workers / IndexedDB.  
-* **Desarrollo Asistido ("El Herrero y la Espada"):** Utilizamos IA potente en el entorno de desarrollo para forjar lógicas complejas y expresiones regulares infalibles, pero el producto final es una "espada de acero valyrio" estática: ligera, determinista y sin dependencias costosas de llamadas a IA en producción.
+## What it does
 
-## **🏗️ 2\. Decisiones Técnicas: Aceptadas y Rechazadas**
+- **Where is this cheaper?** Search a product ("leche Lala 1 L") and the map colours every store by its latest price against the city median. Search a generic product ("leche") and it colours by the cheapest price per litre at each store, sizes and brands compared like with like.
+- **Which store for my list?** Add products to the basket; the map colours by the basket total per store, hatches the stores that lack an item, and ranks them.
+- **How expensive is this store?** Tap a dot: its basket index (median price ratio against the city, documented in the card), where it beats the city and where it loses, and everything PROFECO saw there.
+- **How did it move?** A scrubber under the map walks the weeks since January 2025; play it and watch a price cross the city.
+- **Is the price I am looking at good?** Type the number you see on the shelf; it sits beside PROFECO's with its date, and it never leaves your browser (export to JSON or CSV any time).
 
-Durante el diseño arquitectónico, tomamos decisiones conscientes para mantener el pragmatismo:
+## Data and credits
 
-* **🟢 ACEPTADO: Normalización Relacional (Evento vs Entidad)**  
-  * *Por qué:* En lugar de anidar todos los precios dentro del objeto "Producto" (lo que causaría arrays infinitos e imposibilidad de trazar el historial), creamos el objeto Registro\_Precio como un evento (similar a un ticket de compra).  
-* **🟢 ACEPTADO: Códigos Postales (CP) en lugar de Mapas GPS**  
-  * *Por qué:* Un mapa consume datos, pide permisos molestos y gasta batería. El CP es un estándar público de 5 dígitos que permite crear un "radio" de competencia virtual de manera instantánea y ligera.  
-* **🟢 ACEPTADO: \<datalist\> nativo para búsquedas**  
-  * *Por qué:* Para corregir categorías, en lugar de importar librerías pesadas como *Select2*, usamos HTML nativo que provee autocompletado nativo sin JavaScript.  
-* **🔴 RECHAZADO: Firebase / MongoDB**  
-  * *Por qué:* Demasiado complejo y costoso para la filosofía. Usaremos IndexedDB local como caché principal y, en versiones futuras, Google Sheets como base de datos en la nube (Backend gratuito y auditable por el usuario).  
-* **🔴 RECHAZADO: OCR e IA en Producción Inicial**  
-  * *Por qué:* Leer etiquetas de precios con la cámara requiere modelos pesados. La captura manual rápida (con el teclado del móvil) demostró ser más ágil como MVP.
+- Prices: **PROFECO, Quién es Quién en los Precios**, open data under the Mexican government's free-use terms (Libre Uso MX), rebuilt weekly by a GitHub Actions job. The files are not committed; see `docs/PIPELINES.md` and `docs/research/profeco-qqp-2026-10.md`.
+- Map: borough and municipality shapes from **INEGI**; streets, parks and water © **OpenStreetMap contributors** (ODbL). See `docs/research/geo-cdmx-2026-10.md`.
+- The code is public domain (The Unlicense). The data files keep their own licenses, named above and in `docs/research/licenses-2026-10.md`.
 
-## **📁 3\. Estructura de Datos (Esqueletos JSON)**
+Nothing is invented: no estimated prices, no generated images, no community layer. When PROFECO did not visit a store that week, the map shows a hollow dot and says so.
 
-El sistema operará bajo una base relacional plana estructurada así:
+## Run it
 
-// 1\. Objeto Producto (Catálogo Base)  
-{  
-  "id\_producto": "prod\_catsup\_heinz",  
-  "nombre\_raiz": "Catsup Heinz", // Nombre sin la unidad  
-  "marca": "Heinz",  
-  "subtipo\_calculo": "catsup" // El ancla para comparar "Peras con Peras"  
-}
+```bash
+npm install
+```
 
-// 2\. Objeto Registro de Precio (El Evento / Ticket)  
-{  
-  "id\_registro": "reg\_1710698400000",   
-  "timestamp": 1710698400000,  
-  "id\_producto": "prod\_catsup\_heinz",  
-  "id\_tienda": "suc\_walmart\_patio", // FK  
-  "precio\_etiqueta": 28.50,  
-  "presentacion\_parseada": { "valor": 620, "unidad": "g" },  
-  "registro\_meta": {  
-     "origen\_id": "manual\_privado", // "scraping", "comunidad"  
-     "tiene\_foto": true  
-  }  
-}
+```bash
+npm run qqp
+```
 
-## **🚀 4\. Roadmap / Checklist de Pendientes**
+```bash
+npm run dev
+```
 
-* \[x\] Motor analizador de "Peras con Peras" (Regla de Tres).  
-* \[x\] Escala de colores estricta visualizando "Promedio" o "Más barato".  
-* \[x\] Diccionario semántico Regex integrado.  
-* \[x\] Flujo UX para reportes de Bugs / Actualización a un clic.  
-* \[ \] **Sincronización Offline:** Implementar localForage o IndexedDB.  
-* \[ \] **Lógica de Radio Geográfico:** Construir la lógica matemática que compare si dos Códigos Postales están dentro del radio aceptable de competencia.  
-* \[ \] **Google Sheets Backend:** Configurar Google Apps Script como REST API para recibir los JSON.  
-* \[ \] **PWA Manifest:** Crear el archivo manifest.json y el Service Worker para permitir "Añadir a la pantalla de inicio".
+`npm run qqp` downloads PROFECO's yearly archives into `data/cache/qqp/` (D: only; a few hundred MB) and writes `public/data/qqp/`. `npm run geo` rebuilds the committed map geometry. `npm test` runs the logic tests. `npm run build` writes `dist/`.
 
-## **🤖 5\. Guía para IAs Copiloto (Developer Notes)**
+## For the next person (human or AI)
 
-*A cualquier IA leyendo este repositorio en el futuro:*
-
-1. **Respeta Tailwind CSS CDN:** No migres a bundlers (Webpack/Vite) a menos que el usuario lo exija explícitamente. Priorizamos el concepto de "un archivo funcional".  
-2. **Motor Matemático:** Revisa la función procesarDatos(). El secreto del comparador radica en el atributo subtipo\_calculo. Toda la matemática (min, max, media) se agrupa usando ese String específico. No modifiques esa lógica sin consultarlo.  
-3. **No uses Alert() invasivos:** Usa modales en el DOM (como modal-bug o modal-ubicacion).  
-4. **Modales Limpios:** La convención de los modales es transformar las clases modal-enter a modal-enter-active con un timeout sutil de 10ms. Respeta esta animación CSS.
+Start with `AGENTS.md`, then `docs/VISION.md`, then `HANDOFF.md`. The owner's working method lives outside the repo in `D:\_GitHub\revamp-playbook.md`.

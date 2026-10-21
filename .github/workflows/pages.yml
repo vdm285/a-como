@@ -1,0 +1,57 @@
+name: Pages
+
+# Builds the site and refreshes the PROFECO data on a schedule. The data is deploy-time only
+# (public/data/qqp/ is gitignored): a failed fetch never fails the deploy, the previous deploy
+# simply keeps serving. See docs/PIPELINES.md.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Tuesdays 13:00 UTC (07:00 Mexico City): PROFECO's weekly files have usually landed by then.
+    - cron: '0 13 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      # The RAR archives are large; keep them between runs so a weekly refresh downloads only
+      # what changed (the pipeline skips a download when the cached file is fresh enough).
+      - uses: actions/cache@v4
+        with:
+          path: data/cache/qqp
+          key: qqp-${{ github.run_id }}
+          restore-keys: qqp-
+      - run: npm run qqp
+        continue-on-error: true
+      - run: npm run build
+        env:
+          VITE_BASE: /compa-precio/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

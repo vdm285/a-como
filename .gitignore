@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.vite/
+*.log
+Thumbs.db
+.DS_Store
+shot-*.png
+shot-dom.html
+
+# Downloads, caches and raw sources stay on D:, under the project, never committed.
+data/cache/
+data/sources/
+
+# Deploy-time data: rebuilt by GitHub Actions on a schedule (docs/PIPELINES.md).
+# The geo file under public/data/geo/ is slow-changing and IS committed.
+public/data/qqp/
