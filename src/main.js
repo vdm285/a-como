@@ -277,7 +277,9 @@ function renderChrome() {
 
 // ---------------------------------------------------------------- boot
 async function boot() {
-  setLang(state.prefs.lang || ((navigator.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es'));
+  // Spanish first, always; English is a setting (or ?lang=en in the hash), never a guess
+  // from the browser's language.
+  setLang(state.prefs.lang || 'es');
   document.title = t('appName');
   const msg = veil.querySelector('.msg');
   msg.textContent = t('loading');

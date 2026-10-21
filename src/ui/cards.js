@@ -47,9 +47,13 @@ export function storeCard(c) {
   let wins = [], losses = [], rows = [];
   if (items && byProduct) {
     rows = items.map(([pid, price, date]) => { const p = byProduct.get(pid); return p ? { p, price, date, dev: deviation(price, p.median) } : null; }).filter(Boolean);
-    const withDev = rows.filter((r) => r.dev != null);
-    wins = [...withDev].sort((a, b) => a.dev - b.dev).slice(0, 5).filter((r) => r.dev < -0.02);
-    losses = [...withDev].sort((a, b) => b.dev - a.dev).slice(0, 5).filter((r) => r.dev > 0.02);
+    // Wins and losses: medicines only count for pharmacies (their spread swamps everything else
+    // in a supermarket's list), and a deviation beyond ±150 % is almost always a capture typo in
+    // the survey, so it is shown in the full list with a flag but never as a "win" or a "loss".
+    const pharmacy = /farmacia/i.test(store.giro || '') || /farmacia/i.test(store.chain || '');
+    const eligible = rows.filter((r) => r.dev != null && Math.abs(r.dev) <= 1.5 && (pharmacy || !/medicamento/i.test(r.p.category || '')));
+    wins = [...eligible].sort((a, b) => a.dev - b.dev).slice(0, 5).filter((r) => r.dev < -0.02);
+    losses = [...eligible].sort((a, b) => b.dev - a.dev).slice(0, 5).filter((r) => r.dev > 0.02);
   }
   const q = fold(filter || '');
   const words = q.split(' ').filter(Boolean);
@@ -59,7 +63,7 @@ export function storeCard(c) {
   const row = (r) => html`<li @click=${() => c.onOpenProduct(r.p.id)} tabindex="0" @keydown=${(e) => { if (e.key === 'Enter') c.onOpenProduct(r.p.id); }}>
     <span class="sw" style="background:${r.dev == null ? 'transparent' : r.dev < 0 ? 'var(--cheaper)' : r.dev > 0 ? 'var(--dearer)' : 'var(--mid)'}"></span>
     <div class="nm"><div class="n">${r.p.name}${r.p.brand ? ` · ${r.p.brand}` : ''}</div><div class="s">${r.p.presentation || ''} · ${fdate(r.date, true)}</div></div>
-    <div class="pr"><div class="p num">${money(r.price)}</div>${devChip(r.dev)}</div>
+    <div class="pr"><div class="p num">${money(r.price)}</div>${r.dev != null && Math.abs(r.dev) > 1.5 ? html`<div class="miss" title=${t('outlierHint')}>${t('outlier')}</div>` : devChip(r.dev)}</div>
   </li>`;
   const siblings = c.siblings || [];
   return html`<div class="card ${c.side} ${c.entering ? 'enter' : ''}" role="dialog" aria-label=${store.name}>

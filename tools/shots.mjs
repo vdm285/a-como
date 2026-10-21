@@ -21,7 +21,7 @@ const STATES = [
   { name: 'group', hash: 'g/leche-ultrapasteurizada' },
   { name: 'product', hash: 'p/leche-ultrapasteurizada-a3d941' },
   { name: 'store', hash: 't/chedraui-selecto-46b8a5' },
-  { name: 'basket', hash: 'c?items=leche-ultrapasteurizada-a3d941:1,huevo-blanco-000000:1' },
+  { name: 'basket', hash: 'c?items=leche-ultrapasteurizada-a3d941:1,huevo-f2ba30:1' },
   { name: 'settings', hash: 's' },
 ];
 const VIEWPORTS = { desktop: { width: 1600, height: 900, deviceScaleFactor: 1 }, phone: { width: 375, height: 812, deviceScaleFactor: 2, isMobile: true, hasTouch: true } };
@@ -36,6 +36,8 @@ try {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     for (const st of STATES) {
       if (vp === 'phone' && ['city-week', 'settings'].includes(st.name)) continue;
+      // a fresh document per state, so a typed search or an open card never leaks into the next
+      await page.goto('about:blank');
       await page.goto(`${BASE}#${st.hash}`, { waitUntil: 'networkidle2', timeout: 60000 });
       await page.waitForSelector('#stage .dot', { timeout: 30000 });
       if (st.type) { await page.type('.search input', st.type); }

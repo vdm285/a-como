@@ -36,7 +36,7 @@ const STR = {
     basketTotal: 'Total por tienda',
     missing: 'faltan {n}',
     missingOne: 'falta 1',
-    complete: 'completa',
+    complete: 'con todo',
     savings: 'Ahorro frente a la más cara: {amount}',
     vsMedian: '{pct} vs. la mediana',
     store: 'Tienda',
@@ -132,6 +132,8 @@ const STR = {
     noCoords: 'PROFECO no publica coordenadas de esta tienda; no aparece en el mapa.',
     pacicHint: 'La canasta de 24 productos que PROFECO vigila (PACIC). Toca uno y elige la marca y el tamaño.',
     giro: 'Giro',
+    outlier: 'dato atípico',
+    outlierHint: 'Más de 150 % lejos de la mediana de la ciudad: casi siempre un error de captura en la encuesta. Se muestra tal cual, sin contar como ganancia ni pérdida.',
   },
   en: {
     appName: 'A cómo',
@@ -167,7 +169,7 @@ const STR = {
     basketTotal: 'Total per store',
     missing: '{n} missing',
     missingOne: '1 missing',
-    complete: 'complete',
+    complete: 'with everything',
     savings: 'Savings against the dearest: {amount}',
     vsMedian: '{pct} vs. the median',
     store: 'Store',
@@ -263,6 +265,8 @@ const STR = {
     noCoords: 'PROFECO publishes no coordinates for this store; it is not on the map.',
     pacicHint: 'The 24-product basket PROFECO monitors (PACIC). Tap one and pick the brand and size.',
     giro: 'Type',
+    outlier: 'atypical',
+    outlierHint: 'More than 150 % away from the city median: almost always a capture typo in the survey. Shown as published, never counted as a win or a loss.',
   },
 };
 

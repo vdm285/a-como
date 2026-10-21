@@ -31,13 +31,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      # The RAR archives are large; keep them between runs so a weekly refresh downloads only
-      # what changed (the pipeline skips a download when the cached file is fresh enough).
+      # Keep only the RAR archives between runs (the previous year's 85 MB never changes; the
+      # current year's is re-downloaded when PROFECO republishes it). The extracted CSVs are
+      # several GB and are rebuilt from the archives, so they stay out of the cache.
       - uses: actions/cache@v4
         with:
-          path: data/cache/qqp
-          key: qqp-${{ github.run_id }}
-          restore-keys: qqp-
+          path: data/cache/qqp/raw
+          key: qqp-raw-${{ github.run_id }}
+          restore-keys: qqp-raw-
       - run: npm run qqp
         continue-on-error: true
       - run: npm run build
