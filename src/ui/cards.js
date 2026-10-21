@@ -26,6 +26,13 @@ function head({ kicker, title, sub, onClose, onKicker }) {
   </div>`;
 }
 
+// The access date the license asks for (AAAA-MM-DD): the latest download in the build's meta.
+function retrievedDate(meta) {
+  const files = (meta && meta.source && meta.source.files) || [];
+  const d = files.map((f) => (f.retrieved || '').slice(0, 10)).filter(Boolean).sort().pop();
+  return d || (meta && meta.built ? meta.built.slice(0, 10) : '—');
+}
+
 function sourceLine(date) {
   return html`<div class="muted" style="margin-top:6px">PROFECO · Quién es Quién en los Precios${date ? html` · ${fdate(date)}` : nothing}</div>`;
 }
@@ -54,9 +61,20 @@ export function storeCard(c) {
     <div class="nm"><div class="n">${r.p.name}${r.p.brand ? ` · ${r.p.brand}` : ''}</div><div class="s">${r.p.presentation || ''} · ${fdate(r.date, true)}</div></div>
     <div class="pr"><div class="p num">${money(r.price)}</div>${devChip(r.dev)}</div>
   </li>`;
+  const siblings = c.siblings || [];
   return html`<div class="card ${c.side} ${c.entering ? 'enter' : ''}" role="dialog" aria-label=${store.name}>
-    ${head({ kicker: store.chain, title: store.name, sub: `${store.address || ''}${store.municipio ? ' · ' + store.municipio : ''}`, onClose: c.onClose })}
+    ${head({ kicker: `${store.chain}${store.giro && store.giro !== store.chain ? ' · ' + store.giro : ''}`, title: store.name, sub: `${store.address || ''}${store.municipio ? ' · ' + store.municipio : ''}`, onClose: c.onClose })}
     <div class="body">
+      ${store.lat == null ? html`<section><div class="note">${t('noCoords')}</div></section>` : nothing}
+      ${siblings.length ? html`<section>
+        <h3>${t('sameSpot')} · ${siblings.length + 1}</h3>
+        <ul class="rank">${siblings.slice(0, showAll ? siblings.length : 8).map(({ store: s, val }) => html`<li @click=${() => c.onOpenStore(s.id)} tabindex="0" @keydown=${(e) => { if (e.key === 'Enter') c.onOpenStore(s.id); }}>
+          <span class="sw" style="background:${val && val.dev != null ? (val.dev < 0 ? 'var(--cheaper)' : val.dev > 0 ? 'var(--dearer)' : 'var(--mid)') : 'transparent'}"></span>
+          <div class="nm"><div class="n">${s.name}</div><div class="s">${s.chain}${s.giro && s.giro !== s.chain ? ' · ' + s.giro : ''} · ${t('products_n', { n: s.products })}</div></div>
+          <div class="pr">${val && val.value != null ? html`<div class="p num">${stage && stage.kind === 'index' ? val.value.toFixed(2) : money(val.value)}</div>${devChip(val.dev)}` : nothing}</div>
+        </li>`)}</ul>
+        ${siblings.length > 8 && !showAll ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: siblings.length - 8 })}</button>` : nothing}
+      </section>` : nothing}
       ${stage && stage.kind !== 'index' && stageVal ? html`<section>
         <h3>${stage.kind === 'basket' ? t('basket') : stage.kind === 'group' ? (c.byGroup && c.byGroup.get(stage.id) ? c.byGroup.get(stage.id).name : t('group')) : (stage.summary ? stage.summary.name : t('product'))}</h3>
         ${stageVal.value != null ? html`<div class="hero"><span class="big num">${money(stageVal.value)}</span>${stage.kind === 'group' && stage.unit ? html`<span class="unit">${t('perUnit', { unit: unitName(stage.unit) })}</span>` : nothing}${stageVal.hatched ? html`<span class="delta">${stageVal.missing.length === 1 ? t('missingOne') : t('missing', { n: stageVal.missing.length })}</span>` : html`<span class="delta">${devChip(stageVal.dev)}</span>`}</div>${stageVal.date ? html`<div class="muted">${fdate(stageVal.date)}</div>` : nothing}` : html`<div class="note">${stage.kind === 'basket' ? t('noData') : t('notInStore')}</div>`}
@@ -205,7 +223,8 @@ export function basketCard(c) {
   return html`<div class="card ${c.side} ${c.entering ? 'enter' : ''}" role="dialog" aria-label=${t('basket')}>
     ${head({ kicker: t('basket'), title: t('products_n', { n: items.length }), sub: ranking && ranking.completeCount ? `${t('stores_n', { n: ranking.completeCount })} · ${t('complete')}` : '', onClose: c.onClose })}
     <div class="body">
-      ${items.length === 0 ? html`<section><div class="note">${t('basketEmpty')}</div></section>` : html`
+      ${items.length === 0 ? html`<section><div class="note">${t('basketEmpty')}</div></section>
+      ${c.pacicGroups && c.pacicGroups.length ? html`<section><h3>${t('canasta')} · PACIC</h3><div class="note" style="margin-bottom:8px">${t('pacicHint')}</div><div class="chips">${c.pacicGroups.map((g) => html`<button class="chip" @click=${() => c.onOpenGroup(g.id)}>${g.name}</button>`)}</div></section>` : nothing}` : html`
       <section>
         <ul class="bitems">${items.map((it) => { const p = byProduct.get(it.id); return html`<li>
           <div><div class="n" style="cursor:pointer" @click=${() => c.onOpenProduct(it.id)}>${p ? p.name + (p.brand ? ' · ' + p.brand : '') : it.id}</div><div class="s">${p ? (p.presentation || '') : ''}${p && p.median != null ? ` · ${money(p.median)}` : ''}</div></div>
@@ -258,7 +277,7 @@ export function settingsCard(c) {
         <h3>${t('about')}</h3>
         <p>${t('aboutText')}</p>
         <h3 style="margin-top:12px">${t('sources')}</h3>
-        <p>${t('sourcePrices', { date: fdate(meta ? meta.latestDate : null) })} <a href="https://datos.profeco.gob.mx/datos_abiertos/qqp.php" target="_blank" rel="noopener">datos.profeco.gob.mx</a></p>
+        <p>${t('sourcePrices', { date: fdate(meta ? meta.latestDate : null), retrieved: retrievedDate(meta) })} <a href="https://datos.profeco.gob.mx/datos_abiertos/qqp.php" target="_blank" rel="noopener">datos.profeco.gob.mx</a></p>
         <p>${t('sourceMap')} <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">openstreetmap.org/copyright</a></p>
         <p><a href="https://github.com/vdm285/compa-precio" target="_blank" rel="noopener">${t('code')}</a>${meta && meta.built ? html` · build ${fdate(meta.built.slice(0, 10))}` : nothing}</p>
         <p class="kbd">${t('kbdHint')} · ${t('zoomHint')}</p>

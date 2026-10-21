@@ -63,10 +63,14 @@ export async function computeStage(stage, week) {
     return { kind: 'index', values, colors: colorsFrom(values, cap), cap, weeks, week: pw.week, weekIdx: pw.idx, unit: null };
   }
 
+  // The per-store weekly files cover the last 26 weeks of the global window; the scrubber
+  // for product, group and basket stages uses that window even before a week is chosen.
+  const recent = (d.meta.weeks || []).slice(-26);
+
   if (stage.kind === 'product') {
     const p = await loadProduct(stage.id);
     const summary = state.byProduct.get(stage.id);
-    let weeks = [], pw = { week: null, idx: null };
+    let weeks = recent, pw = { week: null, idx: null };
     const prices = new Map();
     if (week) {
       const w = await loadProductWeeks(stage.id);
@@ -86,7 +90,7 @@ export async function computeStage(stage, week) {
     const dim = groupDimension(members);
     const usable = dim ? members.filter((p) => p.size && p.size.unit === dim.dim && p.size.value > 0) : [];
     const files = await Promise.all(usable.map((p) => loadProduct(p.id).catch(() => null)));
-    let weeks = [], pw = { week: null, idx: null }, weekFiles = null;
+    let weeks = recent, pw = { week: null, idx: null }, weekFiles = null;
     if (week && usable.length) {
       weekFiles = await Promise.all(usable.map((p) => loadProductWeeks(p.id).catch(() => null)));
       const first = weekFiles.find(Boolean);
@@ -117,7 +121,7 @@ export async function computeStage(stage, week) {
     if (!items.length) return { kind: 'basket', values, colors: new Map(), cap: 0.2, weeks: [], week: null, weekIdx: null, ranking: { list: [], base: null, dearest: null, completeCount: 0 } };
     const latestById = new Map();
     let totals;
-    let weeks = [], pw = { week: null, idx: null };
+    let weeks = recent, pw = { week: null, idx: null };
     if (week) {
       const weeksById = new Map();
       await Promise.all(items.map(async (it) => { try { weeksById.set(it.id, await loadProductWeeks(it.id)); } catch { /* missing file: counts as missing */ } }));

@@ -57,7 +57,7 @@ a:hover { text-decoration: underline; }
 #stage .road.hw { stroke-width: 1.7; stroke: rgba(255, 255, 255, 0.14); }
 #stage .alc-label { fill: rgba(255, 255, 255, 0.22); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; pointer-events: none; text-anchor: middle; }
 #stage .dot { stroke: rgba(255, 255, 255, 0.35); stroke-width: 1; cursor: pointer; transition: fill 420ms var(--ease), stroke 200ms; }
-#stage .dot.empty { fill: rgba(255, 255, 255, 0.04); stroke: rgba(255, 255, 255, 0.22); stroke-dasharray: 2 2; }
+#stage .dot.empty { fill: rgba(255, 255, 255, 0.04); stroke: rgba(255, 255, 255, 0.22); stroke-dasharray: 2 2; opacity: 0.6; }
 #stage .dot.hover { stroke: #fff; stroke-width: 2; }
 #stage .dot.sel { stroke: #fff; stroke-width: 2.5; }
 #stage .dot.dim { opacity: 0.35; }

@@ -18,7 +18,7 @@ Live: https://vdm285.github.io/compa-precio/
 
 - Prices: **PROFECO, Quién es Quién en los Precios**, open data under the Mexican government's free-use terms (Libre Uso MX), rebuilt weekly by a GitHub Actions job. The files are not committed; see `docs/PIPELINES.md` and `docs/research/profeco-qqp-2026-10.md`.
 - Map: borough and municipality shapes from **INEGI**; streets, parks and water © **OpenStreetMap contributors** (ODbL). See `docs/research/geo-cdmx-2026-10.md`.
-- The code is public domain (The Unlicense). The data files keep their own licenses, named above and in `docs/research/licenses-2026-10.md`.
+- The code in this repository is public domain (The Unlicense). The data files are not: price data is PROFECO open data (Creative Commons Attribution 4.0, credit required, dataset name, agency, link and access date as the app shows them); the map geometry under `public/data/geo/` is built from INEGI (free use with credit) and © OpenStreetMap contributors (ODbL, share-alike for the derived file). Keep their credits if you reuse them. Details and quotes: `docs/research/licenses-2026-10.md`. The app is not made or endorsed by PROFECO.
 
 Nothing is invented: no estimated prices, no generated images, no community layer. When PROFECO did not visit a store that week, the map shows a hollow dot and says so.
 

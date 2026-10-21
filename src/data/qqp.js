@@ -24,9 +24,17 @@ export async function loadStage() {
   return { geo, meta, stores };
 }
 
+// products.json carries short keys to stay under its size cap; expand them once here.
+// "S/M" is PROFECO's code for "sin marca" (no brand).
+const noBrand = (b) => (b && !/^s\/m$/i.test(b.trim()) ? b : null);
+export function expandProduct(p) {
+  if (p.id) { p.brand = noBrand(p.brand); return p; }
+  return { id: p.i, group: p.g, name: p.n, brand: noBrand(p.b), presentation: p.p, category: p.c, catalog: p.k, size: p.z || null, stores: p.s, min: p.lo, median: p.md, max: p.hi, pacic: p.pacic ? 1 : 0 };
+}
+
 export async function loadCatalog() {
   const [products, groups] = await Promise.all([getJson('qqp/products.json'), getJson('qqp/groups.json')]);
-  return { products, groups };
+  return { products: products.map(expandProduct), groups };
 }
 
 let indexPromise = null;

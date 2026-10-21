@@ -10,20 +10,24 @@ export function fold(s) {
 }
 
 export function buildSearchIndex(data) {
-  const groups = data.groups.map((g) => ({ kind: 'group', id: g.id, key: fold(g.name), name: g.name, sub: g.category, n: g.products, ref: g }));
-  const products = data.products.map((p) => ({ kind: 'product', id: p.id, key: fold(`${p.name} ${p.brand || ''} ${p.presentation || ''}`), name: `${p.name}${p.brand ? ' · ' + p.brand : ''}`, sub: p.presentation, ref: p }));
-  const stores = data.stores.map((s) => ({ kind: 'store', id: s.id, key: fold(`${s.chain} ${s.name} ${s.address || ''} ${s.municipio || ''}`), name: s.name, sub: `${s.chain}${s.municipio ? ' · ' + s.municipio : ''}`, ref: s }));
+  const groups = data.groups.map((g) => ({ kind: 'group', id: g.id, head: fold(g.name), key: fold(g.name), name: g.name, sub: g.category, n: g.products, ref: g }));
+  const products = data.products.map((p) => ({ kind: 'product', id: p.id, head: fold(`${p.name} ${p.brand || ''}`), key: fold(`${p.name} ${p.brand || ''} ${p.presentation || ''}`), name: `${p.name}${p.brand ? ' · ' + p.brand : ''}`, sub: p.presentation, n: p.stores, ref: p }));
+  const stores = data.stores.map((s) => ({ kind: 'store', id: s.id, head: fold(`${s.chain} ${s.name}`), key: fold(`${s.chain} ${s.name} ${s.giro || ''} ${s.address || ''} ${s.municipio || ''}`), name: s.name, sub: `${s.chain}${s.municipio ? ' · ' + s.municipio : ''}`, n: s.products, ref: s }));
   return { groups, products, stores };
 }
 
+// Every word must appear somewhere; a hit in the name (head) at a word start counts most, a
+// hit only in the presentation or address counts least. Ties break by how many stores carry it.
 function score(entry, words) {
   let sc = 0;
   for (const w of words) {
+    const h = entry.head.indexOf(w);
+    if (h >= 0) { sc += (h === 0 || entry.head[h - 1] === ' ') ? 6 : 3; continue; }
     const i = entry.key.indexOf(w);
     if (i < 0) return -1;
-    sc += (i === 0 || entry.key[i - 1] === ' ') ? 3 : 1; // word start beats substring
+    sc += (i === 0 || entry.key[i - 1] === ' ') ? 1.5 : 0.5;
   }
-  return sc + (entry.n ? Math.min(entry.n, 30) / 30 : 0);
+  return sc + (entry.n ? Math.min(entry.n, 200) / 200 : 0);
 }
 
 export function search(index, query, limits = { groups: 6, products: 8, stores: 5 }) {

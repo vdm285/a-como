@@ -9,6 +9,8 @@ import { t, setLang, getLang, money } from './app/i18n.js';
 import { loadStage, loadCatalog, loadProduct } from './data/qqp.js';
 import { createMap } from './map/map.js';
 import { computeStage } from './app/stage.js';
+import { median, clampDev } from './logic/stats.js';
+import { divergingColor } from './logic/color.js';
 import { buildSearchIndex, search, searchView } from './ui/search.js';
 import { topRight, bottomRight, legend, credit, scrubber, tooltip, toast } from './ui/chrome.js';
 import { storeCard, productCard, groupCard, basketCard, settingsCard } from './ui/cards.js';
@@ -67,6 +69,46 @@ function writeHash() {
   if (location.hash !== next && !(next === '#' && !location.hash)) history.replaceState(null, '', next === '#' ? location.pathname + location.search : next);
 }
 
+// ---------------------------------------------------------------- locations
+// Stores that share a coordinate (the Central de Abasto stalls, a mercado's puestos) are
+// one dot. Its colour is the best value among them in price modes and the median of their
+// indices in the index mode; the tooltip and the card say how many share the spot.
+function buildLocations(stores) {
+  const byKey = new Map();
+  for (const s of stores) {
+    if (s.lat == null || s.lon == null) continue;
+    const key = `${s.lat.toFixed(5)},${s.lon.toFixed(5)}`;
+    let loc = byKey.get(key);
+    if (!loc) { loc = { id: `L${byKey.size}`, lat: s.lat, lon: s.lon, stores: [] }; byKey.set(key, loc); }
+    loc.stores.push(s.id);
+  }
+  return [...byKey.values()];
+}
+function aggregateByLocation(stage) {
+  const colors = new Map(), values = new Map();
+  if (!stage) return { colors, values };
+  for (const loc of state.locations) {
+    const rows = loc.stores.map((sid) => [sid, stage.values.get(sid)]).filter(([, v]) => v);
+    let best = null;
+    if (stage.kind === 'index') {
+      const withV = rows.filter(([, v]) => v.dev != null);
+      if (withV.length) best = { dev: median(withV.map(([, v]) => v.dev)), value: median(withV.map(([, v]) => v.value)), sid: withV.sort((a, b) => a[1].dev - b[1].dev)[0][0], n: withV.length };
+    } else {
+      const withV = rows.filter(([, v]) => v.value != null);
+      const complete = withV.filter(([, v]) => !v.hatched);
+      const pick = (complete.length ? complete : withV).sort((a, b) => a[1].value - b[1].value)[0];
+      if (pick) best = { ...pick[1], sid: pick[0], n: withV.length, hatched: !complete.length };
+    }
+    values.set(loc.id, best);
+    if (!best) colors.set(loc.id, { empty: true });
+    else if (best.hatched) colors.set(loc.id, { hatched: true });
+    else if (best.dev == null) colors.set(loc.id, { empty: true });
+    else colors.set(loc.id, { fill: divergingColor(clampDev(best.dev, stage.cap)) });
+  }
+  return { colors, values };
+}
+const locOf = (storeId) => state.locOf.get(storeId) || null;
+
 // ---------------------------------------------------------------- stage
 async function updateStage() {
   if (!state.data) return;
@@ -75,7 +117,9 @@ async function updateStage() {
     const res = await computeStage(state.stage, state.week);
     if (tok !== ui.stageToken) return;
     ui.stage = res;
-    if (res) map.setColors(res.colors); else map.setColors(null);
+    const agg = aggregateByLocation(res);
+    ui.locValues = agg.values;
+    map.setColors(agg.colors);
   } catch (e) {
     console.error(e);
     if (tok !== ui.stageToken) return;
@@ -86,7 +130,7 @@ async function updateStage() {
 
 function cardSide() {
   if (state.view.kind === 'store') {
-    const xy = map.screenXY(state.view.id);
+    const xy = map.screenXY(locOf(state.view.id));
     const [W] = map.size();
     if (xy) return xy[0] < W / 2 ? 'right' : 'left';
   }
@@ -118,7 +162,7 @@ async function addOwnPrice({ productId, storeId, price }) {
   try {
     const rec = await addOwn({ productId, storeId, price });
     state.own = await listOwn();
-    map.setOwn(new Set(state.own.map((o) => o.storeId)));
+    map.setOwn(new Set(state.own.map((o) => locOf(o.storeId))));
     const s = state.byStore.get(storeId);
     showToast(t('ownSaved', { price: money(rec.price), store: s ? s.name : storeId }));
     persistStorage();
@@ -128,7 +172,7 @@ async function addOwnPrice({ productId, storeId, price }) {
 async function removeOwn(id) {
   await deleteOwn(id);
   state.own = await listOwn();
-  map.setOwn(new Set(state.own.map((o) => o.storeId)));
+  map.setOwn(new Set(state.own.map((o) => locOf(o.storeId))));
   renderChrome();
 }
 
@@ -160,7 +204,9 @@ function cardView() {
       fetch(`${BASE}data/qqp/stores/${v.id}.json`).then((r) => (r.ok && /json/.test(r.headers.get('content-type') || '') ? r.json() : null)).then((j) => { ui.storeFiles.set(v.id, j || { items: [] }); renderChrome(); }).catch(() => { ui.storeFiles.set(v.id, { items: [] }); renderChrome(); });
       file = null;
     }
-    return storeCard({ ...common, store, storeFile: file, byProduct: state.byProduct, byGroup: state.byGroup, stage: ui.stage, own: state.own, filter: ui.storeFilter, onFilter: (q) => { ui.storeFilter = q; renderChrome(); } });
+    const loc = state.byLoc.get(locOf(v.id));
+    const siblings = loc ? loc.stores.filter((id) => id !== v.id).map((id) => ({ store: state.byStore.get(id), val: ui.stage && ui.stage.values ? ui.stage.values.get(id) : null })).filter((x) => x.store).sort((a, b) => ((a.val && a.val.value) ?? Infinity) - ((b.val && b.val.value) ?? Infinity)) : [];
+    return storeCard({ ...common, store, storeFile: file, byProduct: state.byProduct, byGroup: state.byGroup, stage: ui.stage, own: state.own, filter: ui.storeFilter, siblings, onFilter: (q) => { ui.storeFilter = q; renderChrome(); } });
   }
   if (v.kind === 'product') {
     const summary = state.byProduct && state.byProduct.get(v.id);
@@ -181,7 +227,11 @@ function cardView() {
     return groupCard({ ...common, group, members, stage: ui.stage, byStore: state.byStore, byProduct: state.byProduct });
   }
   if (v.kind === 'basket') {
-    return basketCard({ ...common, items: state.basket, byProduct: state.byProduct, byStore: state.byStore, stage: ui.stage && ui.stage.kind === 'basket' ? ui.stage : null, onlyComplete: ui.onlyComplete,
+    if (!ui.pacicGroups && state.data.products.length) {
+      const ids = new Set(state.data.products.filter((p) => p.pacic).map((p) => p.group));
+      ui.pacicGroups = state.data.groups.filter((g) => ids.has(g.id)).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    }
+    return basketCard({ ...common, items: state.basket, byProduct: state.byProduct, byStore: state.byStore, stage: ui.stage && ui.stage.kind === 'basket' ? ui.stage : null, onlyComplete: ui.onlyComplete, pacicGroups: ui.pacicGroups || [],
       onOnlyComplete: (b) => { ui.onlyComplete = b; renderChrome(); },
       onQty: (id, qty) => basketSet(id, qty),
       onClear: () => basketReplace([]),
@@ -192,7 +242,7 @@ function cardView() {
       onPref: (k, val) => { setPref(k, val); if (k === 'lang') { setLang(val); document.title = t('appName'); } if (k === 'labels') map.setLabels(val); renderChrome(); },
       onInstall: async () => { const p = ui.installPrompt; if (!p) return; p.prompt(); const r = await p.userChoice; if (r && r.outcome === 'accepted') { ui.installPrompt = null; showToast(t('installed')); } renderChrome(); },
       onExport: (kind) => { const rows = state.own; const lookup = { product: (id) => state.byProduct.get(id), store: (id) => state.byStore.get(id) }; if (kind === 'csv') download('acomo-mis-precios.csv', ownToCsv(rows, lookup), 'text/csv'); else download('acomo-mis-precios.json', ownToJson(rows)); },
-      onImport: async (f) => { if (!f) return; try { const j = JSON.parse(await f.text()); const n = await importOwn(j.prices || j); state.own = await listOwn(); map.setOwn(new Set(state.own.map((o) => o.storeId))); showToast(`+${n}`); renderChrome(); } catch (e) { showToast(t('loadError')); } } });
+      onImport: async (f) => { if (!f) return; try { const j = JSON.parse(await f.text()); const n = await importOwn(j.prices || j); state.own = await listOwn(); map.setOwn(new Set(state.own.map((o) => locOf(o.storeId)))); showToast(`+${n}`); renderChrome(); } catch (e) { showToast(t('loadError')); } } });
   }
   return nothing;
 }
@@ -205,13 +255,13 @@ function renderChrome() {
     ${searchView({ query: ui.query, results: ui.results, active: ui.active,
       onInput: (q) => { ui.query = q; ui.active = -1; ui.results = ui.searchIndex && q ? search(ui.searchIndex, q) : null; renderChrome(); },
       onClear: () => { ui.query = ''; ui.results = null; ui.active = -1; renderChrome(); },
-      onPick: (e) => { ui.query = ''; ui.results = null; ui.active = -1; if (e.kind === 'group') openGroup(e.id); else if (e.kind === 'product') openProduct(e.id); else { openStore(e.id); map.zoomTo(e.id, 4); } },
+      onPick: (e) => { ui.query = ''; ui.results = null; ui.active = -1; if (e.kind === 'group') openGroup(e.id); else if (e.kind === 'product') openProduct(e.id); else { openStore(e.id); map.zoomTo(locOf(e.id), 4); } },
       onKey: ({ key, event, hover }) => {
         if (hover != null) { if (ui.active !== hover) { ui.active = hover; renderChrome(); } return; }
         const flat = ui.results ? [...ui.results.groups, ...ui.results.products, ...ui.results.stores] : [];
         if (key === 'ArrowDown') { event.preventDefault(); ui.active = Math.min(flat.length - 1, ui.active + 1); renderChrome(); }
         else if (key === 'ArrowUp') { event.preventDefault(); ui.active = Math.max(0, ui.active - 1); renderChrome(); }
-        else if (key === 'Enter') { event.preventDefault(); const e = flat[ui.active >= 0 ? ui.active : 0]; if (e) { ui.query = ''; ui.results = null; ui.active = -1; if (e.kind === 'group') openGroup(e.id); else if (e.kind === 'product') openProduct(e.id); else { openStore(e.id); map.zoomTo(e.id, 4); } } }
+        else if (key === 'Enter') { event.preventDefault(); const e = flat[ui.active >= 0 ? ui.active : 0]; if (e) { ui.query = ''; ui.results = null; ui.active = -1; if (e.kind === 'group') openGroup(e.id); else if (e.kind === 'product') openProduct(e.id); else { openStore(e.id); map.zoomTo(locOf(e.id), 4); } } }
         else if (key === 'Escape') { ui.query = ''; ui.results = null; ui.active = -1; event.target.blur(); renderChrome(); }
       } })}
     ${topRight({ basketCount: state.basket.reduce((n, b) => n + b.qty, 0), basketOn: state.view.kind === 'basket', onBasket: openBasket })}
@@ -219,7 +269,7 @@ function renderChrome() {
     <div class="float bottomleft">${legend({ stage: ui.stage, meta: state.data.meta, hasOwn: state.own.length > 0, onResetStage: resetStage })}${credit({ meta: state.data.meta })}</div>
     ${scrubber({ stage: ui.stage, playing: state.playing, onWeek: (w) => { if (ui.playTimer) togglePlay(); setWeek(w); }, onPlay: togglePlay, onLive: () => { if (ui.playTimer) togglePlay(); setWeek(null); } })}
     ${open ? cardView() : nothing}
-    ${tooltip({ hover: ui.hover, stage: ui.stage, byStore: state.byStore, byProduct: state.byProduct, x: ui.hx, y: ui.hy })}
+    ${tooltip({ loc: ui.hover ? state.byLoc.get(ui.hover) : null, val: ui.hover && ui.locValues ? ui.locValues.get(ui.hover) : null, stage: ui.stage, byStore: state.byStore, byProduct: state.byProduct, x: ui.hx, y: ui.hy })}
     ${toast({ text: ui.toast })}
   `;
   render(tpl, chrome);
@@ -239,18 +289,26 @@ async function boot() {
   state.byStore = new Map(stores.map((s) => [s.id, s]));
   state.byProduct = new Map(); state.byGroup = new Map();
   state.stage = { kind: 'index' };
+  state.locations = buildLocations(stores);
+  state.byLoc = new Map(state.locations.map((l) => [l.id, l]));
+  state.locOf = new Map(); for (const l of state.locations) for (const sid of l.stores) state.locOf.set(sid, l.id);
 
-  map = createMap(stageHost, geo, stores, { motion: () => state.prefs.motion });
+  map = createMap(stageHost, geo, state.locations, { motion: () => state.prefs.motion });
   map.setLabels(state.prefs.labels !== false);
   map.onHover((id, x, y) => { ui.hover = id; ui.hx = x; ui.hy = y; renderChrome(); });
-  map.onClick((id) => { ui.lastStore = id; openStore(id); });
+  map.onClick((id) => {
+    const loc = state.byLoc.get(id); if (!loc) return;
+    const best = ui.locValues && ui.locValues.get(id);
+    const sid = (best && best.sid) || loc.stores[0];
+    ui.lastStore = sid; openStore(sid);
+  });
   map.onBackground(() => { if (ui.query) { ui.query = ''; ui.results = null; } if (state.view.kind !== 'city') closeCard(); else renderChrome(); });
   map.onMove(() => { const z = map.zoom() > 1.05; if (z !== ui.zoomed) { ui.zoomed = z; renderChrome(); } });
   veil.classList.add('off');
   setTimeout(() => veil.remove(), 600);
 
   // own prices
-  try { state.own = await listOwn(); map.setOwn(new Set(state.own.map((o) => o.storeId))); } catch { state.own = []; }
+  try { state.own = await listOwn(); map.setOwn(new Set(state.own.map((o) => locOf(o.storeId)))); } catch { state.own = []; }
 
   // catalog (search needs it; the stage does not)
   loadCatalog().then(({ products, groups }) => {
@@ -274,7 +332,7 @@ async function boot() {
       ui.side = side; ui.showAll = false; ui.storeFilter = '';
       ui.entering = true; renderChrome();
       requestAnimationFrame(() => requestAnimationFrame(() => { ui.entering = false; renderChrome(); }));
-      map.setSelected(state.view.kind === 'store' ? state.view.id : null);
+      map.setSelected(state.view.kind === 'store' ? locOf(state.view.id) : null);
       applyPadding(true);
       writeHash();
       if (state.view.kind === 'basket' && state.basket.length && (!ui.stage || ui.stage.kind !== 'basket')) { state.stage = { kind: 'basket' }; }

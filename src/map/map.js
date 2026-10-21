@@ -16,7 +16,8 @@ function el(name, attrs = {}, parent) {
   return e;
 }
 
-export function createMap(host, geo, stores, { motion = () => true } = {}) {
+// points: [{ id, lat, lon }] — one per map location (co-located stores share a point).
+export function createMap(host, geo, points, { motion = () => true } = {}) {
   const svg = el('svg', { role: 'img', 'aria-label': 'Mapa' }, host);
   const defs = el('defs', {}, svg);
   const pat = el('pattern', { id: 'hatch', patternUnits: 'userSpaceOnUse', width: 4, height: 4, patternTransform: 'rotate(45)' }, defs);
@@ -37,7 +38,7 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
   let atFit = true; // false once the reader zooms or pans by hand
   let selected = null, hovered = null;
   let lastColors = null, ownIds = new Set();
-  const byId = new Map(stores.map((s) => [s.id, s]));
+  const byId = new Map(points.map((s) => [s.id, s]));
   const dotEls = new Map();
   const ringEls = new Map();
   const handlers = { hover: [], click: [], background: [], move: [] };
@@ -91,7 +92,7 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
     layers.dots.innerHTML = '';
     layers.rings.innerHTML = '';
     dotEls.clear(); ringEls.clear();
-    for (const s of stores) {
+    for (const s of points) {
       if (s.lat == null || s.lon == null) continue;
       const p = projection([s.lon, s.lat]);
       if (!p) continue;
@@ -152,7 +153,8 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
     world.setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`);
     const r = DOT_R / Math.sqrt(view.k);
     layers.dots.setAttribute('stroke-width', 1 / view.k);
-    for (const c of dotEls.values()) c.setAttribute('r', r);
+    // a location without data in the current stage recedes: smaller, fainter, still there
+    for (const c of dotEls.values()) c.setAttribute('r', c.classList.contains('empty') ? r * 0.55 : r);
     for (const [id, ring] of ringEls) { ring.setAttribute('r', r + 3 / view.k); ring.setAttribute('stroke-width', 2 / view.k); }
     const halo = layers.halo.firstChild;
     if (halo) { halo.setAttribute('r', r + 7 / view.k); halo.setAttribute('stroke-width', 1 / view.k); }
@@ -302,7 +304,7 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
       animateTo(clampView({ k, x: cx - s._x * k, y: cy - s._y * k }), 600);
     },
     // colors: Map id -> { fill, empty, hatched } ; stores not in the map are drawn empty
-    setColors(colors) { lastColors = colors; applyColors(colors); },
+    setColors(colors) { lastColors = colors; applyColors(colors); applyView(); },
     setDim(ids) {
       for (const [id, c] of dotEls) c.classList.toggle('dim', !!ids && !ids.has(id));
     },

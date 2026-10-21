@@ -46,8 +46,11 @@ const STR = {
     address: 'Dirección',
     visited: 'Visita de PROFECO: {date}',
     products_n: '{n} productos',
+    products_1: '1 producto',
     stores_n: '{n} tiendas',
+    stores_1: '1 tienda',
     weeks_n: '{n} semanas',
+    weeks_1: '1 semana',
     whereCheapest: 'Dónde',
     cityWide: 'En la ciudad',
     min: 'Mín.',
@@ -83,7 +86,7 @@ const STR = {
     about: 'Acerca de',
     aboutText: 'A cómo dibuja cada tienda que vigila PROFECO en la Ciudad de México y su zona metropolitana, con los precios que PROFECO publica cada semana como datos abiertos. No vende nada, no tiene cuentas ni anuncios, y tus propios precios nunca salen de tu navegador.',
     sources: 'Fuentes',
-    sourcePrices: 'Precios: "Quién es Quién en los Precios", PROFECO, datos abiertos del Gobierno de México (Creative Commons Atribución 4.0). Son precios de referencia tomados por PROFECO en una muestra de tiendas; esta app no es de PROFECO ni está avalada por ella. Última semana con datos: {date}.',
+    sourcePrices: 'Precios: "Programa Quién es Quién en los Precios", PROFECO (Procuraduría Federal del Consumidor). Descargado de datos.profeco.gob.mx el {retrieved}. Datos abiertos del Gobierno de México, licencia Creative Commons Atribución 4.0. Son precios de referencia tomados por PROFECO en una muestra de tiendas; esta app no es de PROFECO ni está avalada por ella. Última semana con datos: {date}.',
     sourceMap: 'Mapa: alcaldías y municipios de INEGI; calles, parques y agua © colaboradores de OpenStreetMap (ODbL).',
     code: 'Código abierto en GitHub',
     install: 'Instalar como app',
@@ -124,6 +127,11 @@ const STR = {
     category: 'Categoría',
     zoomHint: 'Rueda para acercar · arrastra para mover',
     reset: 'Centrar mapa',
+    here: 'puestos en este punto',
+    sameSpot: 'En este mismo punto',
+    noCoords: 'PROFECO no publica coordenadas de esta tienda; no aparece en el mapa.',
+    pacicHint: 'La canasta de 24 productos que PROFECO vigila (PACIC). Toca uno y elige la marca y el tamaño.',
+    giro: 'Giro',
   },
   en: {
     appName: 'A cómo',
@@ -169,8 +177,11 @@ const STR = {
     address: 'Address',
     visited: 'PROFECO visit: {date}',
     products_n: '{n} products',
+    products_1: '1 product',
     stores_n: '{n} stores',
+    stores_1: '1 store',
     weeks_n: '{n} weeks',
+    weeks_1: '1 week',
     whereCheapest: 'Where',
     cityWide: 'Across the city',
     min: 'Min',
@@ -206,7 +217,7 @@ const STR = {
     about: 'About',
     aboutText: 'A cómo draws every store PROFECO monitors in Mexico City and its metro area, with the prices PROFECO publishes every week as open data. It sells nothing, has no accounts or ads, and your own prices never leave your browser.',
     sources: 'Sources',
-    sourcePrices: 'Prices: "Quién es Quién en los Precios", PROFECO (Mexico\'s consumer protection agency), Mexican government open data (Creative Commons Attribution 4.0). Reference prices surveyed by PROFECO in a sample of stores; this app is not made or endorsed by PROFECO. Latest week with data: {date}.',
+    sourcePrices: 'Prices: "Programa Quién es Quién en los Precios", PROFECO (Mexico\'s federal consumer protection agency). Downloaded from datos.profeco.gob.mx on {retrieved}. Mexican government open data under Creative Commons Attribution 4.0. Reference prices surveyed by PROFECO in a sample of stores; this app is not made or endorsed by PROFECO. Latest week with data: {date}.',
     sourceMap: 'Map: boroughs and municipalities from INEGI; streets, parks and water © OpenStreetMap contributors (ODbL).',
     code: 'Open source on GitHub',
     install: 'Install as an app',
@@ -247,6 +258,11 @@ const STR = {
     category: 'Category',
     zoomHint: 'Scroll to zoom · drag to pan',
     reset: 'Center map',
+    here: 'stalls at this spot',
+    sameSpot: 'At this same spot',
+    noCoords: 'PROFECO publishes no coordinates for this store; it is not on the map.',
+    pacicHint: 'The 24-product basket PROFECO monitors (PACIC). Tap one and pick the brand and size.',
+    giro: 'Type',
   },
 };
 
@@ -254,6 +270,8 @@ let lang = 'es';
 export function setLang(l) { lang = STR[l] ? l : 'es'; document.documentElement.lang = lang; }
 export function getLang() { return lang; }
 export function t(key, vars) {
+  // singular forms live under "<key>_1" (products_n → products_1) and win when n is 1
+  if (vars && vars.n === 1 && STR[lang] && STR[lang][`${key.replace(/_n$/, '')}_1`]) key = `${key.replace(/_n$/, '')}_1`;
   let s = (STR[lang] && STR[lang][key]) ?? STR.es[key] ?? key;
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
   return s;

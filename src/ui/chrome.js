@@ -60,11 +60,12 @@ export function scrubber({ stage, playing, onWeek, onPlay, onLive }) {
   </div>`;
 }
 
-export function tooltip({ hover, stage, byStore, byProduct, x, y }) {
-  if (!hover || !byStore) return nothing;
-  const s = byStore.get(hover);
+export function tooltip({ loc, val, stage, byStore, byProduct, x, y }) {
+  if (!loc || !byStore) return nothing;
+  const s = byStore.get((val && val.sid) || loc.stores[0]);
   if (!s) return nothing;
-  const v = stage && stage.values ? stage.values.get(hover) : null;
+  const v = val;
+  const shared = loc.stores.length > 1 ? html`<div class="m">${loc.stores.length} ${t('here')}${v && v.n ? ` · ${t('bestHere')}` : ''}</div>` : nothing;
   let line = nothing;
   if (v) {
     if (stage.kind === 'index') line = v.value != null ? html`<div><b class="num">${v.value.toFixed(2)}</b> <span class="s">${v.dev != null ? t('vsMedian', { pct: pct(v.dev, 1) }) : ''}</span></div>` : html`<div class="m">${t('noData')}</div>`;
@@ -77,8 +78,9 @@ export function tooltip({ hover, stage, byStore, byProduct, x, y }) {
   const flip = y < 110;
   return html`<div class="tip" style="left:${left}px;top:${y}px;${flip ? 'transform:translate(-50%,16px)' : ''}">
     <div class="n">${s.name}</div>
-    <div class="s">${s.chain}${s.municipio ? ' · ' + s.municipio : ''}</div>
+    <div class="s">${s.chain}${s.giro && s.giro !== s.chain ? ' · ' + s.giro : ''}${s.municipio ? ' · ' + s.municipio : ''}</div>
     ${line}
+    ${shared}
   </div>`;
 }
 
