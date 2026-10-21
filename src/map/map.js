@@ -31,16 +31,30 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
   const projection = geoMercator();
   const path = geoPath(projection);
   const fitFeature = geo.alcaldias && geo.alcaldias.features.length ? geo.alcaldias : geo.zmvm;
+  const BASE_PAD = 24;
   let pad = { left: 24, right: 24, top: 70, bottom: 60 };
   let view = { k: 1, x: 0, y: 0 };
+  let atFit = true; // false once the reader zooms or pans by hand
   let selected = null, hovered = null;
+  let lastColors = null, ownIds = new Set();
   const byId = new Map(stores.map((s) => [s.id, s]));
   const dotEls = new Map();
   const ringEls = new Map();
   const handlers = { hover: [], click: [], background: [], move: [] };
 
+  // The projection is fitted once to the whole viewport with a small margin; a padding change
+  // (a card opening on one side) becomes a view transform, so the geometry glides instead of
+  // being redrawn, and the reader's own zoom survives.
   function fitProjection() {
-    projection.fitExtent([[pad.left, pad.top], [W - pad.right, H - pad.bottom]], fitFeature);
+    projection.fitExtent([[BASE_PAD, BASE_PAD], [W - BASE_PAD, H - BASE_PAD]], fitFeature);
+  }
+  function fitView(p = pad) {
+    const b = path.bounds(fitFeature);
+    const bw = b[1][0] - b[0][0], bh = b[1][1] - b[0][1];
+    const boxW = Math.max(100, W - p.left - p.right), boxH = Math.max(100, H - p.top - p.bottom);
+    const k = Math.min(boxW / bw, boxH / bh, 1);
+    const cx = p.left + boxW / 2, cy = p.top + boxH / 2;
+    return { k, x: cx - (b[0][0] + bw / 2) * k, y: cy - (b[0][1] + bh / 2) * k };
   }
 
   function drawPolys(layer, fc, cls) {
@@ -95,7 +109,43 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
     drawRoads(layers.roads, geo.roads);
     drawLabels(layers.labels, geo.alcaldias);
     drawDots();
+    applyColors(lastColors);
+    applyOwn(ownIds);
+    applySelected(selected);
     applyView();
+  }
+  function applyColors(colors) {
+    for (const [id, c] of dotEls) {
+      const v = colors && colors.get(id);
+      if (!v || v.empty) { c.classList.add('empty'); c.classList.remove('hatch'); c.style.fill = ''; }
+      else if (v.hatched) { c.classList.remove('empty'); c.classList.add('hatch'); c.style.fill = ''; }
+      else { c.classList.remove('empty', 'hatch'); c.style.fill = v.fill; }
+    }
+  }
+  function applyOwn(ids) {
+    layers.rings.innerHTML = '';
+    ringEls.clear();
+    for (const id of ids || []) {
+      const c = dotEls.get(id);
+      if (!c) continue;
+      ringEls.set(id, el('circle', { cx: c.getAttribute('cx'), cy: c.getAttribute('cy'), r: DOT_R + 3, class: 'ring' }, layers.rings));
+    }
+  }
+  function applySelected(id) {
+    for (const c of dotEls.values()) c.classList.remove('sel');
+    layers.halo.innerHTML = '';
+    const c = id && dotEls.get(id);
+    if (c) {
+      c.classList.add('sel');
+      c.parentNode.appendChild(c);
+      el('circle', { cx: c.getAttribute('cx'), cy: c.getAttribute('cy'), r: DOT_R + 7, class: 'halo' }, layers.halo);
+    }
+  }
+  // Is this store's screen position inside the free (unpadded) area?
+  function inFreeArea(s, v = view) {
+    if (!s || s._x == null) return true;
+    const x = s._x * v.k + v.x, y = s._y * v.k + v.y;
+    return x > pad.left + 20 && x < W - pad.right - 20 && y > pad.top + 20 && y < H - pad.bottom - 20;
   }
 
   function applyView() {
@@ -130,8 +180,9 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
 
   function clampView(v) {
     // keep the fitted extent at least partly on screen
-    const bx = [pad.left * v.k + v.x, (W - pad.right) * v.k + v.x];
-    const by = [pad.top * v.k + v.y, (H - pad.bottom) * v.k + v.y];
+    const b = path.bounds(fitFeature);
+    const bx = [b[0][0] * v.k + v.x, b[1][0] * v.k + v.x];
+    const by = [b[0][1] * v.k + v.y, b[1][1] * v.k + v.y];
     const m = 120;
     if (bx[1] < m) v.x += m - bx[1]; if (bx[0] > W - m) v.x -= bx[0] - (W - m);
     if (by[1] < m) v.y += m - by[1]; if (by[0] > H - m) v.y -= by[0] - (H - m);
@@ -142,6 +193,7 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
   const pointers = new Map();
   let drag = null, pinch = null, lastTap = 0;
   svg.addEventListener('pointerdown', (e) => {
+    if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     svg.setPointerCapture(e.pointerId);
     if (pointers.size === 1) drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false, target: e.target };
@@ -161,13 +213,14 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
       const cx = pinch.cx - rect.left, cy = pinch.cy - rect.top;
       const ncx = (a.x + b.x) / 2 - rect.left, ncy = (a.y + b.y) / 2 - rect.top;
       view = clampView({ k, x: ncx - (cx - pinch.vx) * (k / pinch.k), y: ncy - (cy - pinch.vy) * (k / pinch.k) });
+      atFit = false;
       applyView();
       return;
     }
     if (drag) {
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (!drag.moved && Math.hypot(dx, dy) > 4) drag.moved = true;
-      if (drag.moved) { view = clampView({ k: view.k, x: drag.vx + dx, y: drag.vy + dy }); applyView(); }
+      if (drag.moved) { view = clampView({ k: view.k, x: drag.vx + dx, y: drag.vy + dy }); atFit = false; applyView(); }
       return;
     }
     const id = e.target && e.target.classList && e.target.classList.contains('dot') ? e.target.getAttribute('data-id') : null;
@@ -203,8 +256,10 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
   function zoomAt(clientX, clientY, factor, ms = 260) {
     const rect = host.getBoundingClientRect();
     const px = clientX - rect.left, py = clientY - rect.top;
-    const k = Math.max(K_MIN, Math.min(K_MAX, view.k * factor));
+    const fit = fitView();
+    const k = Math.max(fit.k, Math.min(K_MAX, view.k * factor));
     const f = k / view.k;
+    atFit = false;
     animateTo(clampView({ k, x: px - (px - view.x) * f, y: py - (py - view.y) * f }), ms);
   }
 
@@ -223,57 +278,37 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
       W = host.clientWidth || W; H = host.clientHeight || H;
       fitProjection();
       drawAll();
+      if (atFit) { view = fitView(); applyView(); }
     },
+    // A card opened or closed. At the fit: glide to the new fit. Zoomed by hand: keep the
+    // zoom, and only if the selected store is now under the card, pan it into the free area.
     setPadding(p, animate = true) {
       pad = { ...pad, ...p };
-      fitProjection();
-      // redraw geometry under the new projection; keep the current zoom level
-      const keep = view.k > 1.05 ? { ...view } : { k: 1, x: 0, y: 0 };
-      drawAll();
-      animateTo(keep.k > 1.05 ? clampView(keep) : { k: 1, x: 0, y: 0 }, animate ? 420 : 0);
+      const fit = fitView();
+      if (atFit) { animateTo(fit, animate ? 480 : 0); return; }
+      const s = selected && byId.get(selected);
+      if (s && !inFreeArea(s)) {
+        const cx = pad.left + (W - pad.left - pad.right) / 2, cy = pad.top + (H - pad.top - pad.bottom) / 2;
+        animateTo(clampView({ k: view.k, x: cx - s._x * view.k, y: cy - s._y * view.k }), animate ? 480 : 0);
+      }
     },
-    reset() { animateTo({ k: 1, x: 0, y: 0 }); },
+    reset() { atFit = true; animateTo(fitView()); },
     zoomTo(id, k = 5) {
       const s = byId.get(id);
       if (!s || s._x == null) return;
       // put the store at the center of the free area
       const cx = pad.left + (W - pad.left - pad.right) / 2, cy = pad.top + (H - pad.top - pad.bottom) / 2;
+      atFit = false;
       animateTo(clampView({ k, x: cx - s._x * k, y: cy - s._y * k }), 600);
     },
     // colors: Map id -> { fill, empty, hatched } ; stores not in the map are drawn empty
-    setColors(colors) {
-      for (const [id, c] of dotEls) {
-        const v = colors && colors.get(id);
-        if (!v || v.empty) { c.classList.add('empty'); c.classList.remove('hatch'); c.style.fill = ''; }
-        else if (v.hatched) { c.classList.remove('empty'); c.classList.add('hatch'); c.style.fill = ''; }
-        else { c.classList.remove('empty', 'hatch'); c.style.fill = v.fill; }
-      }
-    },
+    setColors(colors) { lastColors = colors; applyColors(colors); },
     setDim(ids) {
       for (const [id, c] of dotEls) c.classList.toggle('dim', !!ids && !ids.has(id));
     },
-    setSelected(id) {
-      if (selected && dotEls.get(selected)) dotEls.get(selected).classList.remove('sel');
-      selected = id;
-      layers.halo.innerHTML = '';
-      const c = id && dotEls.get(id);
-      if (c) {
-        c.classList.add('sel');
-        c.parentNode.appendChild(c);
-        el('circle', { cx: c.getAttribute('cx'), cy: c.getAttribute('cy'), r: DOT_R + 7, class: 'halo' }, layers.halo);
-      }
-      applyView();
-    },
-    setOwn(ids) {
-      layers.rings.innerHTML = '';
-      ringEls.clear();
-      for (const id of ids || []) {
-        const c = dotEls.get(id);
-        if (!c) continue;
-        ringEls.set(id, el('circle', { cx: c.getAttribute('cx'), cy: c.getAttribute('cy'), r: DOT_R + 3, class: 'ring' }, layers.rings));
-      }
-      applyView();
-    },
+    setSelected(id) { selected = id; applySelected(id); applyView(); },
+    setOwn(ids) { ownIds = new Set(ids || []); applyOwn(ownIds); applyView(); },
+    isAtFit() { return atFit; },
     setLabels(on) { layers.labels.style.display = on ? '' : 'none'; },
     screenXY(id) {
       const s = byId.get(id);
@@ -291,5 +326,7 @@ export function createMap(host, geo, stores, { motion = () => true } = {}) {
 
   fitProjection();
   drawAll();
+  view = fitView();
+  applyView();
   return api;
 }

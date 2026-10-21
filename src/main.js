@@ -157,7 +157,7 @@ function cardView() {
     let file = ui.storeFiles.get(v.id);
     if (file === undefined) {
       ui.storeFiles.set(v.id, null);
-      fetch(`${BASE}data/qqp/stores/${v.id}.json`).then((r) => (r.ok ? r.json() : null)).then((j) => { ui.storeFiles.set(v.id, j || { items: [] }); renderChrome(); }).catch(() => { ui.storeFiles.set(v.id, { items: [] }); renderChrome(); });
+      fetch(`${BASE}data/qqp/stores/${v.id}.json`).then((r) => (r.ok && /json/.test(r.headers.get('content-type') || '') ? r.json() : null)).then((j) => { ui.storeFiles.set(v.id, j || { items: [] }); renderChrome(); }).catch(() => { ui.storeFiles.set(v.id, { items: [] }); renderChrome(); });
       file = null;
     }
     return storeCard({ ...common, store, storeFile: file, byProduct: state.byProduct, byGroup: state.byGroup, stage: ui.stage, own: state.own, filter: ui.storeFilter, onFilter: (q) => { ui.storeFilter = q; renderChrome(); } });
@@ -229,10 +229,11 @@ function renderChrome() {
 async function boot() {
   setLang(state.prefs.lang || ((navigator.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es'));
   document.title = t('appName');
-  veil.querySelector('.msg').textContent = t('loading');
+  const msg = veil.querySelector('.msg');
+  msg.textContent = t('loading');
   let stageData;
   try { stageData = await loadStage(); }
-  catch (e) { console.error(e); veil.querySelector('.msg').className = 'err'; veil.querySelector('.msg').textContent = `${t('loadError')} (${e.message})`; return; }
+  catch (e) { console.error(e); msg.className = 'err'; msg.textContent = `${t('loadError')} (${e.message})`; return; }
   const { geo, meta, stores } = stageData;
   state.data = { geo, meta, stores, products: [], groups: [], index: null };
   state.byStore = new Map(stores.map((s) => [s.id, s]));

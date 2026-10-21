@@ -20,7 +20,7 @@ export function sparkline(series, { w = 364, h = 64, cursor = null, band = true,
     const bot = [...rows].reverse().map((r, j) => { const i = rows.length - 1 - j; return `L${xs[i].toFixed(1)},${y(r[3] ?? r[1]).toFixed(1)}`; }).join('');
     bandPath = `${top}${bot}Z`;
   }
-  const ci = cursor == null ? rows.length - 1 : Math.max(0, Math.min(rows.length - 1, cursor));
+  const ci = cursor == null || cursor < 0 ? rows.length - 1 : Math.min(rows.length - 1, cursor);
   const cur = rows[ci];
   return svg`<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" @click=${onPick ? (e) => { const r = e.currentTarget.getBoundingClientRect(); const i = Math.round(((e.clientX - r.left) / r.width) * (rows.length - 1)); onPick(rows[i][0], i); } : nothing}>
     ${band ? svg`<path class="band" d=${bandPath}/>` : nothing}

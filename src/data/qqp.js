@@ -6,9 +6,11 @@ const BASE = `${import.meta.env.BASE_URL}data/`;
 
 async function getJson(path, { optional = false } = {}) {
   const res = await fetch(BASE + path, { cache: 'default' });
-  if (!res.ok) {
+  // A dev server answers a missing file with the HTML shell and 200; check the type too.
+  const type = res.headers.get('content-type') || '';
+  if (!res.ok || !/json/.test(type)) {
     if (optional) return null;
-    throw new Error(`${path}: HTTP ${res.status}`);
+    throw new Error(`${path}: ${res.ok ? 'not JSON' : 'HTTP ' + res.status}`);
   }
   return res.json();
 }
