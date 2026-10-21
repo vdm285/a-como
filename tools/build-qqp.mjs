@@ -237,7 +237,10 @@ async function download(years, skip) {
 // Extraction: 7z on PATH, then the usual Windows installs, then WinRAR, unrar, bsdtar/tar.
 // ---------------------------------------------------------------------------------------------
 function runs(cmd, args) { const r = spawnSync(cmd, args, { windowsHide: true, encoding: 'utf8' }); return !r.error && (r.status === 0 || r.status === 7) ? r : null; }
-function findExtractor(rar) {
+// Every candidate must prove it can read THIS archive (a listing that shows CSVs): Debian's
+// `7zip` and `p7zip-full` packages run fine but ship without the RAR codec, and GNU tar cannot
+// read RAR at all. Viable candidates are tried in order until one extracts CSVs.
+function findExtractors(rar) {
   const candidates = [];
   if (process.env.QQP_EXTRACTOR) candidates.push({ name: process.env.QQP_EXTRACTOR, kind: '7z' });
   candidates.push({ name: '7z', kind: '7z' }, { name: '7za', kind: '7z' }, { name: '7zz', kind: '7z' });
@@ -248,25 +251,34 @@ function findExtractor(rar) {
   candidates.push({ name: 'unrar', kind: 'unrar' }, { name: 'bsdtar', kind: 'tar' });
   if (process.platform === 'win32') candidates.push({ name: 'C:\\Windows\\System32\\tar.exe', kind: 'tar' });
   candidates.push({ name: 'tar', kind: 'tar' });
+  const listArgs = { '7z': ['l', rar], unrar: ['lb', rar], tar: ['-tf', rar] };
+  const seen = new Set(), viable = [];
   for (const c of candidates) {
+    if (seen.has(c.name)) continue;
+    seen.add(c.name);
     if (c.name.includes('\\') || c.name.includes('/')) { if (!fs.existsSync(c.name)) continue; }
-    if (c.kind === '7z') { if (!runs(c.name, ['i'])) continue; }
-    else if (c.kind === 'unrar') { if (!runs(c.name, [])) continue; }
-    else if (c.kind === 'tar') { const r = runs(c.name, ['-tf', rar]); if (!r || !/\.csv/i.test(r.stdout || '')) continue; } // GNU tar cannot read RAR; libarchive's can
-    return c;
+    const r = runs(c.name, listArgs[c.kind]);
+    if (!r || !/\.csv/i.test(r.stdout || '')) continue;
+    viable.push(c);
   }
-  return null;
+  return viable;
 }
 function extract(rar, outDir) {
-  const ex = findExtractor(rar);
-  if (!ex) throw new Error('no RAR extractor found: install 7-Zip (https://7-zip.org) or set QQP_EXTRACTOR to a 7z executable');
-  fs.mkdirSync(outDir, { recursive: true });
-  let r;
-  if (ex.kind === '7z') r = spawnSync(ex.name, ['x', '-y', `-o${outDir}`, rar], { stdio: ['ignore', 'ignore', 'inherit'], windowsHide: true });
-  else if (ex.kind === 'unrar') r = spawnSync(ex.name, ['x', '-y', '-o+', rar, outDir + path.sep], { stdio: ['ignore', 'ignore', 'inherit'], windowsHide: true });
-  else r = spawnSync(ex.name, ['-xf', rar, '-C', outDir], { stdio: ['ignore', 'ignore', 'inherit'], windowsHide: true });
-  if (r.error || r.status !== 0) throw new Error(`${ex.name} failed (${r.error ? r.error.message : `exit ${r.status}`})`);
-  return ex.name;
+  const viable = findExtractors(rar);
+  if (!viable.length) throw new Error('no RAR extractor can read this archive: install 7-Zip with RAR support (https://7-zip.org), unrar, or libarchive-tools (bsdtar), or set QQP_EXTRACTOR');
+  const failures = [];
+  for (const ex of viable) {
+    fs.rmSync(outDir, { recursive: true, force: true });
+    fs.mkdirSync(outDir, { recursive: true });
+    let r;
+    if (ex.kind === '7z') r = spawnSync(ex.name, ['x', '-y', `-o${outDir}`, rar], { stdio: ['ignore', 'ignore', 'inherit'], windowsHide: true });
+    else if (ex.kind === 'unrar') r = spawnSync(ex.name, ['x', '-y', '-o+', rar, outDir + path.sep], { stdio: ['ignore', 'ignore', 'inherit'], windowsHide: true });
+    else r = spawnSync(ex.name, ['-xf', rar, '-C', outDir], { stdio: ['ignore', 'ignore', 'inherit'], windowsHide: true });
+    if (!r.error && r.status === 0 && listCsvs(outDir).length) return ex.name;
+    failures.push(`${ex.name}: ${r.error ? r.error.message : `exit ${r.status}`}`);
+    log(`warning: ${ex.name} could not extract ${path.basename(rar)}; trying the next extractor`);
+  }
+  throw new Error(`every extractor failed (${failures.join('; ')})`);
 }
 function listCsvs(dir) {
   const out = [];

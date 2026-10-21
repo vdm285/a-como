@@ -1,8 +1,8 @@
 name: Pages
 
 # Builds the site and refreshes the PROFECO data on a schedule. The data is deploy-time only
-# (public/data/qqp/ is gitignored): a failed fetch never fails the deploy, the previous deploy
-# simply keeps serving. See docs/PIPELINES.md.
+# (public/data/qqp/ is gitignored): a failed fetch fails the job before deploying, so the
+# previous deployment keeps serving. See docs/PIPELINES.md.
 on:
   push:
     branches: [main]
@@ -39,8 +39,16 @@ jobs:
           path: data/cache/qqp/raw
           key: qqp-raw-${{ github.run_id }}
           restore-keys: qqp-raw-
+      # bsdtar (libarchive) reads RAR5; Debian's 7zip packages may ship without the RAR codec.
+      # The pipeline proves each extractor on the archive before using it.
+      - run: sudo apt-get install -y --no-install-recommends libarchive-tools
+      # No continue-on-error: if the download or the build of the data fails, or the output breaks
+      # the contract (tools/check-qqp.mjs), the job fails and the previous deployment stays live.
+      # Publishing the app without its data would be worse than publishing last week's data.
       - run: npm run qqp
-        continue-on-error: true
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - run: npm run check
       - run: npm run build
         env:
           VITE_BASE: /compa-precio/
