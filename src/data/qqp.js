@@ -4,13 +4,19 @@
 
 const BASE = `${import.meta.env.BASE_URL}data/`;
 
+// An error flagged offline means "could not be fetched now", never "not in the data".
+function offlineError(message) { const e = new Error(message); e.offline = true; return e; }
 async function getJson(path, { optional = false } = {}) {
-  const res = await fetch(BASE + path, { cache: 'default' });
+  let res;
+  try { res = await fetch(BASE + path, { cache: 'default' }); }
+  catch (e) { if (optional) return null; throw offlineError(`${path}: ${e.message}`); }
   // A dev server answers a missing file with the HTML shell and 200; check the type too.
   const type = res.headers.get('content-type') || '';
   if (!res.ok || !/json/.test(type)) {
     if (optional) return null;
-    throw new Error(`${path}: ${res.ok ? 'not JSON' : 'HTTP ' + res.status}`);
+    const msg = `${path}: ${res.ok ? 'not JSON' : 'HTTP ' + res.status}`;
+    if (res.headers.get('x-acomo-offline') || navigator.onLine === false) throw offlineError(msg);
+    throw new Error(msg);
   }
   return res.json();
 }
@@ -45,11 +51,13 @@ export function loadIndex() {
 
 // visits.json: products recorded per store per week (the survey's rhythm). Optional: an older
 // build without it simply has no rhythm curve.
-let visitsPromise = null;
+let visitsPromise = null, visitsValue;
 export function loadVisits() {
-  if (!visitsPromise) visitsPromise = getJson('qqp/visits.json', { optional: true }).catch(() => null);
+  if (!visitsPromise) visitsPromise = getJson('qqp/visits.json', { optional: true }).catch(() => null).then((v) => { visitsValue = v; return v; });
   return visitsPromise;
 }
+// the visits if they already arrived (the index colours never wait for the timeline's curve)
+export function peekVisits() { return visitsValue; }
 
 // Per-product files are cached in memory with a small LRU (a long session of hopping used to grow
 // the heap without bound); a hit moves the entry to the end.

@@ -5,15 +5,23 @@
 // - Boot data (geometry, meta, stores, catalogue, index, visits): network first with a timeout,
 //   in a cache that is never trimmed, so an offline start always works.
 // - Per-product and per-store files: network first with a timeout, in a small LRU cache.
+// - Install precaches the hashed assets and the boot data, so a first visit can start offline.
 const VERSION = '__BUILD__';
+// the build replaces this with the hashed assets and the boot data (vite.config.js)
+const PRECACHE = /*__PRECACHE__*/ { shell: [], boot: [] };
 const SHELL = `acomo-shell-${VERSION}`;
 const BOOT = 'acomo-boot';
 const DATA = 'acomo-data';
 const DATA_MAX = 300;
 const TIMEOUT = 3000;
 
+// one failed file must not cost the others their copy, so each is added on its own
+const addEach = (name, urls) => caches.open(name).then((c) => Promise.all(urls.map((u) => c.add(u).catch(() => {}))));
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['./', './manifest.webmanifest', './favicon.svg']).catch(() => {})));
+  e.waitUntil(Promise.all([
+    addEach(SHELL, ['./', './manifest.webmanifest', './favicon.svg', ...PRECACHE.shell]),
+    addEach(BOOT, PRECACHE.boot),
+  ]));
   self.skipWaiting();
 });
 
@@ -48,7 +56,8 @@ async function networkFirst(req, cacheName, { lru = false } = {}) {
   } catch {
     const hit = await c.match(req);
     if (hit) { if (lru) { await c.delete(req); await c.put(req, hit.clone()); } return hit; }
-    return new Response('{}', { status: 503, headers: { 'Content-Type': 'application/json' } });
+    // no network and no copy: say so, so the app does not mistake it for missing data
+    return new Response('{}', { status: 503, headers: { 'Content-Type': 'application/json', 'X-Acomo-Offline': '1' } });
   }
 }
 
