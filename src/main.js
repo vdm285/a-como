@@ -23,7 +23,10 @@ const chrome = document.createElement('div'); chrome.id = 'chrome'; app.appendCh
 const tipHost = document.createElement('div'); tipHost.id = 'tiphost'; app.appendChild(tipHost);
 // one polite region announces what changed (a card opened, playback, search results)
 const announcer = document.createElement('div'); announcer.className = 'sr'; announcer.setAttribute('aria-live', 'polite'); app.appendChild(announcer);
-const announce = (text) => { announcer.textContent = ''; setTimeout(() => { announcer.textContent = text; }, 30); };
+// (`still` is asked again when the text is written: a search count must not be spoken after the
+// list was closed in the 30 ms between)
+let announceInner = 0;
+const announce = (text, still = null) => { clearTimeout(announceInner); announcer.textContent = ''; announceInner = setTimeout(() => { if (!still || still()) announcer.textContent = text; }, 30); };
 const veil = document.createElement('div'); veil.className = 'veil'; veil.innerHTML = '<div class="logo">A cómo</div><div class="msg"></div>'; app.appendChild(veil);
 
 const ui = {
@@ -37,14 +40,19 @@ const ui = {
   offer: null, moved: false, catalogReady: false, pendingCheck: false,
   phone: matchMedia('(max-width: 720px)'),
   free: { left: 0, right: innerWidth, h: innerHeight },
-  tlW: 600, tieText: new Map(), tlOpen: false, tlSheetOpen: false, beneath: null, announceWeek: false, padPass: 0,
+  tlW: 600, tieTags: new Map(), tlOpen: false, tlSheetOpen: false, beneath: null, announceWeek: false, padPass: 0,
 };
 let map = null;
 const BASE = import.meta.env.BASE_URL;
 const reducedOS = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const motionOn = () => (state.prefs.motion === undefined || state.prefs.motion === null ? !reducedOS() : state.prefs.motion !== false);
 
-function hideToast() { ui.toast = ''; ui.toastAction = null; renderChrome(); }
+function hideToast() { ui.toast = ''; ui.toastAction = null; ui.basketSnap = null; renderChrome(); }
+async function runToastAction() {
+  const a = ui.toastAction; const back = ui.toastReturn; ui.toastReturn = null; hideToast();
+  if (a) await a.fn();
+  requestAnimationFrame(() => { const target = back && back !== document.body && document.contains(back) ? back : chrome.querySelector('.card h2') || chrome.querySelector('.search input'); if (target) target.focus(); });
+}
 function showToast(text, ms = 2600, action = null, { steal = true } = {}) {
   ui.toast = text; ui.toastAction = action; renderChrome();
   clearTimeout(ui.toastTimer);
@@ -69,7 +77,8 @@ function hashFor(view, week) {
   return '#' + h + (week ? `?w=${week}` : '');
 }
 const urlFor = (hash) => (hash === '#' ? location.pathname + location.search : hash);
-function langFromHash() { const m = location.hash.match(/[?&]lang=(es|en)\b/); return m ? m[1] : null; }
+// ?lang= in the hash or before it (a link may carry either)
+function langFromHash() { const m = location.hash.match(/[?&]lang=(es|en)\b/) || location.search.match(/[?&]lang=(es|en)\b/); return m ? m[1] : null; }
 function parseHash() {
   const raw = decodeURIComponent(location.hash.replace(/^#/, ''));
   const [pathPart, queryPart] = raw.split('?');
@@ -77,7 +86,8 @@ function parseHash() {
   const [kind, id] = pathPart.split('/');
   let strip = false;
   const lang = q.get('lang');
-  if (lang) { if (lang !== getLang() && (lang === 'es' || lang === 'en')) { setLang(lang); setPref('lang', lang); document.title = t('appName'); } strip = true; }
+  // a language from a link is remembered, so a reload keeps it
+  if (lang) { if (lang === 'es' || lang === 'en') { if (lang !== getLang()) { setLang(lang); document.title = t('appName'); } if (state.prefs.lang !== lang) setPref('lang', lang); } strip = true; }
   const items = q.get('items');
   if (items) {
     const merged = new Map();
@@ -209,16 +219,20 @@ function stageTags(stage, locValues) {
       anchor = g.rows.reduce((a, r) => { const p = state.byLoc.get(r[0]), q = state.byLoc.get(a[0]); return p && q && Math.hypot(p.lon - mx, p.lat - my) < Math.hypot(q.lon - mx, q.lat - my) ? r : a; });
     }
     const tg = mk(anchor, kind); const n = storesAt(g.value);
-    if (n > 1) { tg.sub = t('tiedStores', { n }); tg.clickId = `tie:${anchor[0]}`; ui.tieText.set(tg.clickId, tg.text); }
+    if (n > 1) { tg.sub = t('tiedStores', { n }); tg.clickId = `tie:${anchor[0]}`; ui.tieTags.set(tg.clickId, { text: tg.text, n }); }
     return tg;
   };
   // a narrow free area (under 700 px) takes the cheapest and the dearest only (four tags covered a sixth of the data at 1024)
   const narrow = ui.free && ui.free.right - ui.free.left < 700;
   // a "cheap" tag is below the reference and a "dear" one above it (the third-cheapest milk was
-  // the median itself)
-  const cheapGroups = groups.slice(0, Math.min(narrow ? 1 : 3, groups.length - 1)).filter((g) => g.rows[0][1].dev < -0.005);
+  // the median itself). In a chosen week the side is decided against that week's own median
+  // when 3 stores give it (in the April jitomate spike every price was above the recent median,
+  // and the map lost its cheapest tags); the colours keep the one recent reference
+  const wkRef = stage.weekIdx != null && stage.weekN >= MIN_N ? (stage.kind === 'group' ? stage.weekRef : stage.weekMed) : null;
+  const side = (v) => (wkRef ? v.value / wkRef - 1 : v.dev);
+  const cheapGroups = groups.slice(0, Math.min(narrow ? 1 : 3, groups.length - 1)).filter((g) => side(g.rows[0][1]) < -0.005);
   const dearGroup = groups[groups.length - 1];
-  return [...cheapGroups.map((g) => tagOf(g, 'cheap')), ...(dearGroup.rows[0][1].dev > 0.005 ? [tagOf(dearGroup, 'dear')] : [])];
+  return [...cheapGroups.map((g) => tagOf(g, 'cheap')), ...(side(dearGroup.rows[0][1]) > 0.005 ? [tagOf(dearGroup, 'dear')] : [])];
 }
 // own prices shown on the map only for what the map is showing
 function ownForStage(stage) {
@@ -240,7 +254,7 @@ async function updateStage() {
     if (tok !== ui.stageToken) return;
     const subject = res ? `${res.kind}:${res.id || ''}` : '';
     if (subject !== ui.subject) { ui.subject = subject; if (!ui.readerMoved && !map.isAtFit() && state.view.kind !== 'store') { map.reset(); ui.moved = false; } }
-    ui.stage = res;
+    ui.stage = res; ui.stageFailed = null;
     // the address names the week on screen: a typed or stale ?w= is replaced by the week shown
     if (res && state.week && !res.loading && res.weeks && res.weeks.length && (res.weekIdx == null ? null : res.week) !== state.week) { state.week = res.weekIdx == null ? null : res.week; writeHash(false); }
     if (res && res.kind !== 'index') ui.tlOpen = true;
@@ -252,13 +266,21 @@ async function updateStage() {
     const agg = aggregateByLocation(res);
     ui.locValues = agg.values;
     map.setColors(agg.colors);
-    // a new subject keeps the reader's view only while it shows most of the answer: under half of
-    // its coloured points in the free map (a long drag, then another product), the city is refitted
+    // A new subject keeps the reader's view while it shows the answer. A deliberate zoom in (wheel,
+    // pinch, double tap, +) is a neighbourhood the reader chose: kept unless fewer than 3 of the
+    // subject's points are in it. A view at about the city's scale that was only dragged is refitted
+    // when a tenth of the points fall outside. Measured two frames later, after the new card's
+    // padding has moved the view.
     if (subject !== ui.lastFitCheck) {
       ui.lastFitCheck = subject;
-      if (ui.readerMoved && !map.isAtFit() && state.view.kind !== 'store' && res.kind !== 'index') {
+      if (ui.readerMoved && state.view.kind !== 'store' && res.kind !== 'index') {
         const coloured = [...agg.colors].filter(([, c]) => c && !c.empty).map(([id]) => id);
-        if (coloured.length && map.shareInFree(coloured) < 0.5) { ui.readerMoved = false; ui.focusZoom = null; map.reset(); ui.moved = false; }
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (tok !== ui.stageToken || map.isAtFit() || !coloured.length) return;
+          const { n, k } = map.inFreeCount(coloured);
+          const zoomedIn = map.zoom() > map.fitK() * 1.25;
+          if (zoomedIn ? k < Math.min(3, n) : k < n * 0.9) { ui.readerMoved = false; ui.focusZoom = null; map.reset(); ui.moved = false; renderChrome(); }
+        }));
       }
     }
     map.setTags(stageTags(res, agg.values));
@@ -267,8 +289,13 @@ async function updateStage() {
     console.warn('stage could not be computed:', e.message);
     if (tok !== ui.stageToken) return;
     if (e.offline) {
-      // offline is not a fact about the data: keep the link, keep the last stage, say why
+      // offline is not a fact about the data: keep the link and say why. The last subject's
+      // colours, tags and legend go: they were drawn under the new title
+      ui.stageFailed = `${state.stage.kind}:${state.stage.id || ''}`;
+      ui.stage = null; ui.locValues = new Map();
+      map.setColors(new Map()); map.setTags([]); map.setOwn(new Set());
       showToast(t('offlineNotLoaded'), 4000);
+      renderChrome();
     } else if (state.stage.kind !== 'index') {
       state.stage = { kind: 'index' }; state.week = null;
       if (state.view.kind === 'product' || state.view.kind === 'group') state.view = { kind: 'city', id: null };
@@ -308,7 +335,7 @@ function applyPadding(animate = true, pass = 0) {
   // little, it moves above the legend and takes the width up to the card
   if (!phone) {
     const chip = chrome.querySelector('.timeline.collapsed .tl-chip');
-    const need = chip ? chip.getBoundingClientRect().width + 24 : 440;
+    const need = chip ? chip.getBoundingClientRect().width + 24 : 400; // the open strip draws well down to about 400 px
     const right = Math.min(br0 ? br0.left : W, open && ui.side === 'right' && card0 ? card0.left : W);
     const room = right - (lg0 ? lg0.right : 0) - 28;
     document.body.classList.toggle('tl-stack', room < need);
@@ -374,21 +401,22 @@ function openSettings() {
 // A tie tag opens the card that lists the tied stores and takes the reader to them: the rows at
 // that price are scrolled into view and marked for a moment (the whole list is shown if they are
 // below the first rows)
-function showTie(text, tries = 0) {
+// (only the stores' ranking is searched, never the sizes list; the whole ranking is shown when
+// it lists fewer rows than the tie has stores; the tag's own count is announced)
+function showTie(tie, tries = 0) {
   const onCard = !!chrome.querySelector('.card') && state.view.kind === state.stage.kind;
-  if (!onCard) { openStageCard(); if (tries < 8) setTimeout(() => showTie(text, tries + 1), 120); return; }
-  if (!text) return;
+  if (!onCard) { openStageCard(); if (tries < 8) setTimeout(() => showTie(tie, tries + 1), 120); return; }
+  if (!tie) return;
   const norm = (s) => s.replace(/\s+/g, '');
-  const rows = [...chrome.querySelectorAll('.card .rank li')].filter((li) => { const p = li.querySelector('.pr .p'); return p && norm(p.textContent) === norm(text); });
-  if (!rows.length) {
-    if (!ui.showAll && tries < 8) { ui.showAll = true; renderChrome(); requestAnimationFrame(() => showTie(text, tries + 1)); }
-    else if (tries < 8) setTimeout(() => showTie(text, tries + 1), 150);
-    return;
-  }
-  rows[0].scrollIntoView({ block: 'center', behavior: motionOn() ? 'smooth' : 'auto' });
+  const rows = [...chrome.querySelectorAll('.card .rank.stores li')].filter((li) => { const p = li.querySelector('.pr .p'); return p && norm(p.textContent) === norm(tie.text); });
+  if (rows.length < tie.n && !ui.showAll && tries < 8) { ui.showAll = true; renderChrome(); requestAnimationFrame(() => showTie(tie, tries + 1)); return; }
+  if (!rows.length) { if (tries < 8) setTimeout(() => showTie(tie, tries + 1), 150); return; }
+  // a long way is jumped, not scrolled: the marks would fade before a smooth scroll arrived
+  const far = Math.abs(rows[0].getBoundingClientRect().top - innerHeight / 2) > 1500;
+  rows[0].scrollIntoView({ block: 'center', behavior: motionOn() && !far ? 'smooth' : 'auto' });
   for (const li of rows) { li.classList.remove('tie-hl'); void li.offsetWidth; li.classList.add('tie-hl'); }
   setTimeout(() => rows.forEach((li) => li.classList.remove('tie-hl')), 2200);
-  announce(t('tiedStores', { n: rows.length }));
+  announce(t('tiedStores', { n: tie.n }));
 }
 function openStageCard() {
   const s = state.stage;
@@ -495,7 +523,7 @@ function stageTitle() {
 function cardView() {
   const v = state.view;
   const win = recentWindow(state.data.meta);
-  const common = { catalogReady: ui.catalogReady, side: ui.side, entering: ui.entering, win, partial: partialWeeks(state.data.meta), retrieved: retrievedDate(), onClose: closeCard, onOpenStore: openStore, onOpenProduct: openProduct, onOpenGroup: openGroup, showAll: ui.showAll, onShowAll: () => { const first = chrome.querySelectorAll('.card .rank li').length; ui.showAll = true; renderChrome(); requestAnimationFrame(() => { const a = chrome.querySelectorAll('.card .rank li a')[first]; if (a) a.focus({ preventScroll: true }); }); }, selectedStore: v.kind === 'store' ? v.id : ui.lastStore, onPickWeek: (w) => { stopPlay(); setWeek(w); }, onDeleteOwn: removeOwn, onCopyLink: () => copyLink(), byProduct: state.byProduct, byStore: state.byStore };
+  const common = { catalogReady: ui.catalogReady, stageFailed: !!ui.stageFailed && ui.stageFailed === `${state.stage.kind}:${state.stage.id || ''}`, side: ui.side, entering: ui.entering, win, partial: partialWeeks(state.data.meta), retrieved: retrievedDate(), onClose: closeCard, onOpenStore: openStore, onOpenProduct: openProduct, onOpenGroup: openGroup, showAll: ui.showAll, onShowAll: () => { const first = chrome.querySelectorAll('.card .rank li').length; ui.showAll = true; renderChrome(); requestAnimationFrame(() => { const a = chrome.querySelectorAll('.card .rank li a')[first]; if (a) a.focus({ preventScroll: true }); }); }, selectedStore: v.kind === 'store' ? v.id : ui.lastStore, onPickWeek: (w) => { stopPlay(); setWeek(w); }, onDeleteOwn: removeOwn, onCopyLink: () => copyLink(), byProduct: state.byProduct, byStore: state.byStore };
   if (v.kind === 'store') {
     const store = state.byStore.get(v.id);
     if (!store) return nothing;
@@ -540,19 +568,28 @@ function cardView() {
     return basketCard({ ...common, items: state.basket, stage: ui.stage && ui.stage.kind === 'basket' ? ui.stage : null, onlyComplete: ui.onlyComplete, pacicGroups: ui.pacicGroups || [], offer: ui.offer,
       onOnlyComplete: (b) => { ui.onlyComplete = b; renderChrome(); },
       onQty: (id, qty) => {
+        // rows move up under a finger after a removal: a second removal within 450 ms is ignored,
+        // so repeated taps or Enters on one row never take the rows that slide into its place
+        if (qty <= 0 && performance.now() - (ui.lastRemoval || 0) < 450) return;
         const p = state.byProduct.get(id);
         const at = state.basket.findIndex((b) => b.id === id), prev = state.basket.slice();
         basketSet(id, qty);
         if (qty > 0 || at < 0) return;
-        // the focus stays in the list (the next row, else the one before, else the empty note), and
-        // the removal can be undone like a clear
+        ui.lastRemoval = performance.now();
+        // one undo brings back every item removed while its toast is up
+        if (!(ui.toast && ui.basketSnap)) ui.basketSnap = prev;
+        const snap = ui.basketSnap;
+        // the focus stays in the list, on the next item's name (never on its remove button, where
+        // the next Enter would remove it too), else the one before, else the empty note
         requestAnimationFrame(() => {
           if (document.activeElement && document.activeElement !== document.body) return;
-          const rms = chrome.querySelectorAll('.card .bitems .rm');
-          const target = rms[Math.min(at, rms.length - 1)] || chrome.querySelector('#basket-empty') || chrome.querySelector('.card h2');
+          const names = chrome.querySelectorAll('.card .bitems .linkish');
+          const target = names[Math.min(at, names.length - 1)] || chrome.querySelector('#basket-empty') || chrome.querySelector('.card h2');
           if (target) target.focus();
         });
-        showToast(t('removed', { name: p ? p.name : id }), 6500, { label: t('undo'), fn: () => basketReplace(prev) }, { steal: false });
+        const removedN = snap.length - state.basket.length;
+        showToast(removedN > 1 ? t('basketUndoAll', { n: removedN }) : t('removed', { name: p ? p.name : id }), 6500, { label: t('undo'), fn: () => basketReplace(snap) }, { steal: false });
+        ui.basketSnap = snap;
       },
       onClear: () => { const prev = state.basket.slice(); basketReplace([]); showToast(t('cleared'), 6500, { label: t('undo'), fn: () => basketReplace(prev) }); requestAnimationFrame(() => { const n = chrome.querySelector('#basket-empty'); if (n && !(document.activeElement && document.activeElement.classList.contains('toast-btn'))) n.focus(); }); },
       onOfferUse: () => { const n = ui.offer.length; basketReplace(ui.offer); ui.offer = null; announce(t('sharedReplaced', { n })); renderChrome(); requestAnimationFrame(() => { const h = chrome.querySelector('.card h2'); if (h) h.focus(); }); },
@@ -604,7 +641,10 @@ function runSearch(q) {
   ui.results = ui.searchIndex && q ? search(ui.searchIndex, q) : q ? { groups: [], products: [], stores: [], total: -1 } : null;
   clearTimeout(ui.announceTimer);
   const res = ui.results;
-  if (res) ui.announceTimer = setTimeout(() => announce(res.total === -1 ? t('loadingCatalog') : res.total === 0 ? t('noResults') : t('nResults', { n: res.total })), 500);
+  // the count is spoken only while that list is still the one open (Escape, ✕, a map tap or a
+  // blur close it without passing through here)
+  const open = () => ui.results === res && !!ui.query;
+  if (res) ui.announceTimer = setTimeout(() => { if (open()) announce(res.total === -1 ? t('loadingCatalog') : res.total === 0 ? t('noResults') : t('nResults', { n: res.total }), open); }, 500);
 }
 
 // the tooltip: re-rendered only when the hovered or keyboard-active dot changes; a move over the same dot only moves it
@@ -629,9 +669,11 @@ function renderChrome() {
   b.toggle('no-motion', !motionOn());
   const flat = flatResults(ui.results);
   const narrow = innerWidth < 520 || (ui.phone.matches);
-  const tlCollapsed = !!ui.stage && ((ui.stage.kind === 'index' && !ui.tlOpen && ui.stage.weekIdx == null) || (ui.phone.matches && open && !ui.tlSheetOpen));
+  // (on a phone with a card, the strip's state is the sheet's: the index chip opened nothing)
+  const tlShown = ui.phone.matches && open ? ui.tlSheetOpen : ui.tlOpen;
+  const tlCollapsed = !!ui.stage && ((ui.stage.kind === 'index' && !tlShown && ui.stage.weekIdx == null) || (ui.phone.matches && open && !ui.tlSheetOpen));
   const tpl = html`
-    ${searchView({ query: ui.query, results: ui.results, active: ui.active, placeholder: narrow ? t('searchPhShort') : t('searchPh'),
+    ${searchView({ query: ui.query, results: ui.results, active: ui.active, placeholder: narrow ? (innerWidth < 340 ? t('searchPhTiny') : t('searchPhShort')) : t('searchPh'),
       onInput: (q) => { runSearch(q); renderChrome(); },
       onClear: () => { clearTimeout(ui.announceTimer); ui.query = ''; ui.results = null; ui.active = -1; renderChrome(); requestAnimationFrame(() => { const inp = chrome.querySelector('.search input'); if (inp) inp.focus(); }); },
       onPick: pickResult,
@@ -646,13 +688,13 @@ function renderChrome() {
       onBlur: () => setTimeout(() => { if (!chrome.querySelector('.search').contains(document.activeElement) && ui.results) { ui.results = null; renderChrome(); } }, 150),
       onFocus: () => { if (ui.query && !ui.results && ui.searchIndex) { runSearch(ui.query); renderChrome(); } } })}
     ${topRight({ basketCount: state.basket.length, basketOn: state.view.kind === 'basket', onBasket: openBasket })}
-    ${toast({ text: ui.toast, action: ui.toastAction && ui.toastAction.label, onAction: async () => { const a = ui.toastAction; const back = ui.toastReturn; ui.toastReturn = null; hideToast(); if (a) await a.fn(); requestAnimationFrame(() => { const target = back && back !== document.body && document.contains(back) ? back : chrome.querySelector('.card h2') || chrome.querySelector('.search input'); if (target) target.focus(); }); }, onFocus: () => clearTimeout(ui.toastTimer), onBlur: () => { if (ui.toastAction) { clearTimeout(ui.toastTimer); ui.toastTimer = setTimeout(hideToast, 4000); } } })}
+    ${toast({ text: ui.toast, action: ui.toastAction && ui.toastAction.label, onAction: runToastAction, onFocus: () => clearTimeout(ui.toastTimer), onBlur: () => { if (ui.toastAction) { clearTimeout(ui.toastTimer); ui.toastTimer = setTimeout(hideToast, 4000); } } })}
     ${open ? cardView() : nothing}
     <div class="float bottomleft">${legend({ stage: ui.stage, title: stageTitle(), hasOwn: !!(ui.stage && ownForStage(ui.stage).length), onResetStage: resetStage, onTitle: state.stage.kind !== 'index' && !['product', 'group', 'basket'].includes(state.view.kind) ? openStageCard : null })}${credit({ retrieved: retrievedDate() })}</div>
     ${weekNumeral(ui.stage)}
     ${timeline({ stage: ui.stage, width: ui.tlW, compact: ui.phone.matches || innerHeight < 620 || innerWidth < 1100, playing: ui.playing, collapsed: tlCollapsed,
       onFold: ui.phone.matches && open && ui.tlSheetOpen ? () => { ui.tlSheetOpen = false; renderChrome(); requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c) c.focus(); applyPadding(); }); } : null,
-      onExpand: () => { if (ui.phone.matches && open) { ui.tlSheetOpen = true; leaveFullSheet(innerHeight < 700); } else ui.tlOpen = true; renderChrome(); requestAnimationFrame(() => { const s = chrome.querySelector('.tl-svg'); if (s) s.focus(); applyPadding(); }); },
+      onExpand: () => { if (ui.phone.matches && open) { ui.tlSheetOpen = true; leaveFullSheet(document.body.classList.contains('sheet-full') ? innerHeight < 700 : undefined); } else ui.tlOpen = true; renderChrome(); requestAnimationFrame(() => { const s = chrome.querySelector('.tl-svg'); if (s) s.focus(); applyPadding(); }); },
       onWeek: (w) => { stopPlay(); ui.announceWeek = true; setWeek(w); },
       // on the index, "Reciente" also folds the strip back into its chip
       onLive: () => { stopPlay(); ui.announceWeek = true; if (ui.phone.matches && open && ui.tlSheetOpen) { ui.tlSheetOpen = false; requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c && ui.keyboard) c.focus(); applyPadding(); }); } if (ui.stage && ui.stage.kind === 'index') { ui.tlOpen = false; requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c && ui.keyboard) c.focus(); applyPadding(); }); } if (state.week) setWeek(null); else renderChrome(); },
@@ -685,6 +727,8 @@ function observeTimeline() {
 async function boot() {
   // Spanish first, always; English is a setting (or ?lang=en, read before anything is written)
   setLang(langFromHash() || state.prefs.lang || 'es');
+  // ?lang= before the hash: remembered, then dropped from the address
+  { const sp = new URLSearchParams(location.search); const l = sp.get('lang'); if (l === 'es' || l === 'en') { setPref('lang', l); sp.delete('lang'); const rest = sp.toString(); history.replaceState(history.state, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`); } }
   if (state.prefs.tags === undefined) state.prefs.tags = true;
   document.title = t('appName');
   const msg = veil.querySelector('.msg');
@@ -712,7 +756,7 @@ async function boot() {
   });
   map.onClick((id) => {
     ui.tapShield = performance.now();
-    if (typeof id === 'string' && id.startsWith('tie:')) { showTie(ui.tieText.get(id)); return; }
+    if (typeof id === 'string' && id.startsWith('tie:')) { showTie(ui.tieTags.get(id)); return; }
     const loc = state.byLoc.get(id); if (!loc) return;
     const best = ui.locValues && ui.locValues.get(id);
     openStore((best && best.sid) || loc.stores[0], 'map');
@@ -724,7 +768,8 @@ async function boot() {
   // the reader moved the map (a drag or a wheel, not a tap): a new subject then keeps their view
   map.onMove(() => { const moved = !map.isAtFit(); if (!moved) ui.readerMoved = false; if (moved !== ui.moved) { ui.moved = moved; renderChrome(); } });
   stageHost.addEventListener('pointerdown', (e) => { ui.pressAt = [e.clientX, e.clientY]; }, { passive: true });
-  window.addEventListener('pointerup', (e) => { if (ui.pressAt && Math.hypot(e.clientX - ui.pressAt[0], e.clientY - ui.pressAt[1]) > 60) ui.readerMoved = true; ui.pressAt = null; }, { passive: true });
+  // (a drag in the full sheet's thin strip is not a view the reader chose to keep)
+  window.addEventListener('pointerup', (e) => { if (ui.pressAt && Math.hypot(e.clientX - ui.pressAt[0], e.clientY - ui.pressAt[1]) > 60 && !document.body.classList.contains('sheet-full')) ui.readerMoved = true; ui.pressAt = null; }, { passive: true });
   stageHost.addEventListener('dblclick', () => { ui.readerMoved = true; });
   stageHost.addEventListener('wheel', () => { ui.readerMoved = true; }, { passive: true });
   stageHost.addEventListener('keydown', (e) => { if (['+', '-', '=', '_'].includes(e.key)) ui.readerMoved = true; });
@@ -814,6 +859,8 @@ async function boot() {
     if (e.defaultPrevented) return;
     const ae = document.activeElement;
     const inInput = ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName);
+    // Ctrl+Z (Cmd+Z) takes the undo a toast offers, wherever the focus is (outside a text field)
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && ui.toastAction && !inInput) { e.preventDefault(); runToastAction(); return; }
     if (e.key === 'Escape') {
       if (inInput) { const emptySearch = ae.matches('.search input') && !ae.value; if (!emptySearch) { ae.blur(); return; } clearTimeout(ui.announceTimer); }
       if (state.view.kind !== 'city') closeCard();
@@ -840,7 +887,8 @@ async function boot() {
     const dy = e.clientY - sheetDrag.y, b = document.body.classList;
     const grip = sheetDrag.grip; sheetDrag = null;
     if (dy < -24 || (grip && Math.abs(dy) < 6 && !b.contains('sheet-full'))) { b.add('sheet-full'); b.remove('sheet-peek'); ui.tlSheetOpen = false; renderChrome(); }
-    else if (dy > 24 || (grip && Math.abs(dy) < 6)) { if (b.contains('sheet-full')) b.remove('sheet-full'); else b.add('sheet-peek'); }
+    // leaving the full sheet returns to the height the card opened at (peek on short phones)
+    else if (dy > 24 || (grip && Math.abs(dy) < 6)) { if (b.contains('sheet-full')) leaveFullSheet(innerHeight < 700); else b.add('sheet-peek'); }
     else return;
     // the gesture's click must not reach the map that now lies under the finger
     ui.tapShield = performance.now();

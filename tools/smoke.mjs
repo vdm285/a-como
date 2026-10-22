@@ -321,6 +321,31 @@ try {
     check('1024: the folded timeline blocks no dot beside its chip', r === 0, r);
     await ctx.close();
   }
+  // round 6: a cold shared basket throws nothing while it loads; search; rows; a dear week's tags
+  {
+    const { ctx, page, errors } = await fresh({ width: 375, height: 812, isMobile: true, hasTouch: true });
+    await page.goto(`${BASE}#c?items=leche-ultrapasteurizada-a3d941:1,huevo-f2ba30:1`, { waitUntil: 'domcontentloaded' });
+    await sleep(4000);
+    check('a cold shared basket loads without console errors', errors.length === 0, errors.slice(0, 2));
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await fresh();
+    await open(page);
+    const q = async (s) => { await page.click('.search input', { clickCount: 3 }); await page.keyboard.press('Backspace'); await page.type('.search input', s); await sleep(450); return page.evaluate(() => [...document.querySelectorAll('.search .list .h, .search .list .empty, .search .list .item .n')].map((e) => e.textContent.trim())); };
+    await q('leche entera'); await page.keyboard.press('Enter'); await sleep(1500);
+    check('"leche entera" opens a UHT carton, not powdered milk', /leche-ultrapasteurizada/.test(page.url()), page.url().split('#')[1]);
+    await page.goto(`${BASE}#`); await sleep(1000);
+    const o = await q('oxxo tlalpan');
+    check('a chain with no store in the place says so', o.some((x) => /Ninguna tienda Oxxo/.test(x)), o.slice(0, 3));
+    await page.goto(`${BASE}#p/jitomate-3532af?w=2026-04-20`); await sleep(3000);
+    const tags = await page.$$eval('#stage .tag', (ts) => ts.map((t) => t.getAttribute('class')));
+    check('a week dearer than the recent median still tags its cheapest stores', tags.some((c) => /cheap/.test(c)), tags);
+    await page.goto(`${BASE}#p/a-s-d320dd`); await sleep(2500);
+    const band = await page.evaluate(() => [...document.querySelectorAll('.card .rank.stores li a.row')].slice(0, 10).map((a) => Math.round(a.getBoundingClientRect().right - a.querySelector('.pr').getBoundingClientRect().right)));
+    check('product rows leave no dead band right of the prices', band.length > 0 && band.every((b) => b <= 8), band);
+    await ctx.close();
+  }
 } finally {
   await browser.close();
 }

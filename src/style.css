@@ -363,7 +363,7 @@ body.tl-stack .timeline.collapsed, body.tl-stack.card-left .timeline.collapsed {
 /* toast */
 .toast { position: absolute; z-index: 10; width: max-content; bottom: calc(var(--tlh, 110px) + 26px); left: var(--fcx, 50%); transform: translateX(-50%); background: var(--glass-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 9px 16px; font-size: 13px; box-shadow: var(--shadow); opacity: 0; transition: opacity 200ms; pointer-events: none; max-width: calc(100vw - 32px); text-align: center; }
 .toast.on { opacity: 1; pointer-events: auto; }
-.toast-btn { margin-left: 10px; padding: 3px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 12.5px; }
+.toast-btn { flex-shrink: 0; padding: 3px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 12.5px; }
 
 /* loading veil */
 .veil { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; background: var(--stage); color: var(--ink-3); font-size: 14px; transition: opacity 500ms var(--ease); }
@@ -479,7 +479,8 @@ body.tl-stack .numeral .nwhat, body.tl-stack .numeral .nref { display: none; }
 body.no-motion .card, body.no-motion #stage .dot, body.no-motion .veil, body.no-motion .race-row, body.no-motion .race-whisk, body.no-motion .race-dot, body.no-motion .toast { transition: none; }
 /* a product row's second price line wraps between its parts (date · unit price · chip) instead of
    widening the column until the store's name is cut: "$1,416.67/100 ml" left 85 px for the name */
-.rank .pr.wrapu { max-width: 45%; }
+/* (the cap is on the column, not the cell: a capped cell in an auto column left a dead band) */
+.rank a.row:has(.pr.wrapu) { grid-template-columns: 10px minmax(0, 1fr) fit-content(45%); }
 .rank .pr.wrapu .u { white-space: normal; }
 .rank .pr .d, .rank .pr .flag { white-space: nowrap; }
 /* the rows a tie tag points to, marked for a moment */
@@ -490,8 +491,13 @@ body.no-motion .rank li.tie-hl a.row { animation: none; background: rgba(255, 25
    given back as a negative margin) */
 @media (pointer: coarse) {
   .ltitle { padding-block: 11px; margin-block: -11px; }
-  .card .bitems .linkish { display: inline-block; padding-block: 5px; margin-block: -5px; }
+  .card .bitems .linkish { display: block; padding: 13px 0 9px; margin-block: -5px; }
   .credit a { display: inline-block; padding-block: 12px; margin-block: -12px; }
   .card .chip { min-height: 40px; }
   .toast-btn { min-height: 40px; }
 }
+/* a toast with an undo is one line: its text shortens, the button keeps its size */
+.toast { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.toast.has-action .toast-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the reset button's place is kept while it is hidden, so the layout never depends on it */
+.bottomright .reset.slot { visibility: hidden; pointer-events: none; }

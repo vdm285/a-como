@@ -2,6 +2,74 @@
 
 The state of the code, dated, newest first. `docs/VISION.md` is the direction; this file is what exists. Read `AGENTS.md` first.
 
+## 2026-10-22, afternoon — sixth round: what the verification of round 5 found (the owner still asleep)
+
+### State in one paragraph
+
+Six fresh agents verified round 5 on the live site (verdicts in `data/cache/verify5/result.json`, gitignored): 22 fixed, 19 partial, 1 regressed, 1 not fixed, and 41 new reports, none serious. Two were my own regressions: the product rows' price column (the 45 % cap sat on the cell, not on the grid column, so the column kept its full width and left a dead band) and "leche entera" opening Nido powdered milk (a whole word in a brand had come to outrank one in the presentation). This round answers nearly all of it. Unit tests 110/110; smoke 67/67 (5 new, one of which catches a shadowed helper that only the screenshot tool's console check had seen); `data/cache/r6/verify.mjs` 24/24; the round-5 script still 25/27 with the same two known items. Bundle: 210 kB JS / 75 kB gzip.
+
+### What the round found and what changed
+
+| Found (measured) | Fixed by |
+|---|---|
+| Product rows: the capped price cell sat in an uncapped column (dead band of 55–118 px, names still cut, unit lines on 3 lines starting with "·") | The column is capped (`fit-content(45%)`), and each separator stays with the part before it: names 149 px at 375, 0 of 10 cut, no band |
+| "leche entera", "whole milk" opened Nido powdered milk; "chile verde" a dried guajillo | A whole word of the presentation scores like one of the brand |
+| A chain named with a place where it has no store listed other chains (Enter opened a Mega Soriana for "bodega aurrera coacalco") or its own-label products | "Ninguna tienda Oxxo en Tlalpan; estas son otras de Oxxo:" and that chain's stores |
+| "la", "de" made a store search; "pan" listed Pañales and "pineapple" a medicine (ñ folded to n) | A chain search needs a word of 4 letters or more; ñ is kept, and a name typed without it still finds it ("pina" leads with Piña) |
+| Cut store lists said nothing ("walmart": 5 of 46) | "Tiendas · 5 de 46" |
+| A cold generic product still listed every member "en otra unidad" while it loaded; the legend called the empty rings "sin precio reciente" | The card waits for the stage's unit; the legend says "Cargando…" |
+| In a past week the member rows showed recent prices beside that week's counts; the member that set the hero could show no price | Each member's median price that week, under "mediana esa semana" |
+| A week with no price for a product with recent prices said "Sin precio reciente. Último dato: 28 ago" (6,690 product-weeks) | "sin dato esa semana" |
+| A near-equal plateau still got a note ($628.50 one week inside twelve at $629.00; 186 product notes) | A plateau is 3 weeks within 1 % |
+| Light weeks were left out of the card's sentence but drawn in the line | They are faint dots, like thin weeks; the sentence says "semanas completas con 3 tiendas o más" |
+| A narrow strip said "mediana semanal y rango" over faint dots only (51 products under 1100 px) | The caption is judged on the weeks drawn |
+| The trend sentence existed only under a hero (56 products never showed it) | It shows whenever the curve exists |
+| Peak notes were drawn across the dashed reference line | Above the dot, else below, else no note |
+| A thin tie named one store by order; the flagged count was added to every hero, before the date | A thin tie is "empatada en las 2 tiendas con precio"; the flagged count only in a thin hero, after the date, worded to stand alone |
+| "N solo en otra unidad" counted stores left out for size or for few stores | "N solo en otra presentación" |
+| A shared point whose only price is flagged said "el más barato" | "el único con precio" |
+| In a dear week the map lost its cheap tags (4,630 product-weeks), in a cheap week its dear tag | The side of a tag is decided against that week's median; the colours keep the recent reference |
+| A neighbourhood zoom (k 2.3–5) was thrown away by the next product | A deliberate zoom in is kept unless fewer than 3 of the subject's points are in it; a city-scale view that was only dragged is refitted when a tenth of the points fall outside; measured after the new card's padding |
+| A store opened from the edge of a zoomed map: closing reversed the shift but not the re-centring (69 of 132 cycles returned exactly) | The view before the store card is remembered and restored on close unless the reader moved the map; the west-edge case returns exactly |
+| Phone: a store picked by search was zoomed only if its dot was already in the free map (the card's padding cancelled the zoom 2 ms after it started) | The padding builds on the running animation's end |
+| Every week step ran a 480 ms camera animation to the same view (33 redraws of tags and labels) | A target equal to the view draws once: 3 transform writes per step |
+| Tag widths: each week's new prices forced a layout per tag | Measured on a canvas with the tags' computed fonts |
+| 1280: after a zoom the reset button overlapped the timeline, and the next pass stacked the timeline over the city | The reset button's place is always kept, and the open strip stays on one row down to 400 px |
+| Repeated − on one basket item removed the rows that moved into its place (the basket emptied); the undo restored only the last step and could not be reached by keyboard | A second removal within 450 ms is ignored; focus goes to the next item's name; one undo restores every removal while it shows; Ctrl+Z takes it |
+| Phone: grip back at 360x640 returned a 52dvh sheet instead of the peek; the chip threw away a peek sheet; the index chip with a card did nothing; a drag in the full sheet's strip counted as the reader's view | Each fixed |
+| A tie tag in a group marked a size row and spoke "11"; with fewer rows listed than tied stores it showed only those | Only the stores' ranking is searched; the whole list opens; the tag's own count is spoken |
+| Offline, an unvisited product showed "Cargando…" forever under the previous product's legend, tags and colours | "todavía no se ha descargado en este dispositivo", and the stage is cleared |
+| A stale result count could still be spoken after a map tap, a blur, or within 25 ms of Escape | The count is spoken only while its list is still open |
+| `?lang=en` before the hash was ignored, and a link's language was not remembered | Both read, remembered and stripped |
+| Smaller: the placeholder cut at 320 px; a 40 px tall window broke the map (NaN); a hovered incomplete store stayed small; a label could sit up to 6.6 px outside its alcaldía; a group with no comparable sizes had a timeline that silently undid every week | Each fixed |
+
+### Decisions taken while the owner slept (continued; each with its one-line reversal)
+
+26. **A store card opened over a moved map returns to that view when it closes**, unless the reader moved the map meanwhile. Reverse: `savedView` / `restoreView` in `src/map/map.js`.
+27. **A new subject keeps a deliberate zoom** (unless fewer than 3 of its points are in it) and refits a dragged city-scale view that leaves a tenth of the points out (replaces decision 18's "under half"). Reverse: the `zoomedIn` test in `updateStage` (`src/main.js`).
+28. **In a past week, cheap and dear tags are judged against that week's median**; the colours keep the one recent reference. Reverse: `wkRef` in `stageTags`.
+29. **Light weeks are faint dots on the timeline**, like thin weeks, so the line and the card's sentence describe the same weeks. Reverse: `!stage.partial.has(r[0])` in `solidRow` (`src/ui/chrome.js`).
+30. **A plateau is 3 weeks within 1 %**, not 3 weeks at the same cent. Reverse: `times()` in `timeline()`.
+31. **The flagged count appears only in a thin hero.** Reverse: `flagged` in `heroOf` (`src/ui/cards.js`).
+32. **Basket removals**: a second removal within 450 ms is ignored, focus goes to the next item's name, one undo restores all, Ctrl+Z takes any undo. Reverse: `onQty` in `src/main.js`.
+33. **The reset button's place is always kept** and the open timeline stays on one row down to 400 px. Reverse: the `.reset.slot` span in `bottomRight` and `need` in `applyPadding`.
+34. **Search keeps ñ**, a chain search needs a word of 4 letters or more, and a chain absent from the named place is said so. Reverse: `fold()`, `chainWords` and the `chainAll` branch in `src/ui/search.js`.
+
+### Not done
+
+- Labels: names still blink out where a panel covers every spot (Tláhuac beside a card); one-step pushes during a pan remain (decision 25).
+- Play at 4× CPU still has long tasks of 400–800 ms (the stage computation per week, not the tags).
+- English: a phrase with one unknown word ("cooking oil") still finds nothing; dropping unknown words would need care.
+- A tap on the phone map still focuses the map element (no ring, no announcement; the next arrow key starts the walk).
+- The OSM credit link's hit area is 38.5 px at the bottom edge of the screen.
+
+### Verified, and how
+
+- `npm test` 110/110; `npm run build`; `node tools/smoke.mjs` 67/67 against a fresh dev server.
+- `data/cache/r6/verify.mjs`: 24 measured checks for this round, 24 pass.
+- `data/cache/r5/verify.mjs` again: 25/27, the same two known items.
+- `tools/shots.mjs` plus three captures (1280 with a card, the phone's medicine rows, a group's past week), read by eye; the shots tool's console check caught a helper shadowed by a local name in the basket card, fixed and now pinned by smoke.
+
 ## 2026-10-22, day — fifth round: what the second verification of round 4 found (the owner still asleep)
 
 ### State in one paragraph

@@ -54,7 +54,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   let pad = { left: 24, right: 24, top: 80, bottom: 90 };
   let view = { k: 1, x: 0, y: 0 };
   let atFit = true; // false once the reader zooms or pans by hand
-  let selected = null, hovered = null;
+  let selected = null, hovered = null, userMoves = 0, savedView = null, restoreView = null;
   let lastColors = null, ownIds = new Set(), tags = [], labelsOn = true, obstacles = [], placedTags = [], active = null;
   const byId = new Map(located.map((s) => [s.id, s]));
   const dotEls = new Map();
@@ -64,7 +64,9 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
 
   // The projection is fitted once to the whole viewport; a padding change (a card opening on
   // one side) becomes a view transform, so the geometry glides instead of being redrawn.
-  function fitProjection() { projection.fitExtent([[BASE_PAD, BASE_PAD], [W - BASE_PAD, H - BASE_PAD]], frameFeature); }
+  // (a host smaller than the padding would give a degenerate projection and NaN everywhere)
+  const MIN_SIDE = 2 * BASE_PAD + 60;
+  function fitProjection() { projection.fitExtent([[BASE_PAD, BASE_PAD], [Math.max(W, MIN_SIDE) - BASE_PAD, Math.max(H, MIN_SIDE) - BASE_PAD]], frameFeature); }
   function frameBounds() {
     const b = path.bounds(frameFeature);
     const mx = (b[1][0] - b[0][0]) * 0.03, my = (b[1][1] - b[0][1]) * 0.03;
@@ -75,6 +77,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     const bw = b[1][0] - b[0][0], bh = b[1][1] - b[0][1];
     const boxW = Math.max(80, W - p.left - p.right), boxH = Math.max(60, H - p.top - p.bottom);
     const k = Math.min(boxW / bw, boxH / bh, 1.6);
+    if (!(k > 0) || !Number.isFinite(k)) return { ...view };
     const cx = p.left + boxW / 2, cy = p.top + boxH / 2;
     return { k, x: cx - (b[0][0] + bw / 2) * k, y: cy - (b[0][1] + bh / 2) * k };
   }
@@ -185,6 +188,11 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   }
   // on-screen radius: grows gently with zoom (k^0.15) so stacked neighbours separate
   const screenR = (t = 0) => DOT_R * (0.8 + 0.5 * t) * Math.pow(Math.max(view.k, 0.3), 0.15);
+  // an incomplete (hatched) store is small and faint, except while it is selected or hovered
+  function setR(c) {
+    const empty = c.classList.contains('empty'), small = c.classList.contains('hatch') && !c.classList.contains('sel') && !c.classList.contains('hover');
+    c.setAttribute('r', (empty ? DOT_R * 0.45 * Math.pow(Math.max(view.k, 0.3), 0.15) : small ? screenR(0) * 0.7 : screenR(c._t || 0)) / view.k);
+  }
   let frame = 0;
   function scheduleView() { if (!frame) frame = requestAnimationFrame(() => { frame = 0; applyView(); }); }
   function applyView() {
@@ -192,8 +200,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     for (const c of dotEls.values()) {
       if (c._rk === view.k) continue; // a pan does not change any radius
       c._rk = view.k;
-      const empty = c.classList.contains('empty'), hatch = c.classList.contains('hatch');
-      c.setAttribute('r', (empty ? DOT_R * 0.45 * Math.pow(Math.max(view.k, 0.3), 0.15) : hatch && !c.classList.contains('sel') ? screenR(0) * 0.7 : screenR(c._t || 0)) / view.k);
+      setR(c);
     }
     for (const [id, ring] of ringEls) { const c = dotEls.get(id); const r = c ? Number(c.getAttribute('r')) : DOT_R / view.k; ring.setAttribute('r', r + 3 / view.k); }
     const halo = layers.halo.firstChild;
@@ -237,7 +244,10 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
         for (let c = c0; c <= c1; c++) bits[r * N + c] = 1;
       }
     }
-    it._mask = { x0, y0, cw, ch, N, bits };
+    // eroded by one cell: a spot on a cell the border crosses could sit a few pixels outside
+    const inner = new Uint8Array(N * N);
+    for (let r = 1; r < N - 1; r++) for (let c = 1; c < N - 1; c++) { const i = r * N + c; inner[i] = bits[i] & bits[i - 1] & bits[i + 1] & bits[i - N] & bits[i + N]; }
+    it._mask = { x0, y0, cw, ch, N, bits: inner };
     return it._mask;
   }
   const insideMask = (m, x, y) => { const c = Math.floor((x - m.x0) / m.cw), r = Math.floor((y - m.y0) / m.ch); return c >= 0 && r >= 0 && c < m.N && r < m.N && m.bits[r * m.N + c] === 1; };
@@ -311,22 +321,29 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   // a tag's text is measured once (it is drawn in screen pixels, so its width never changes with
   // the view); measuring on every frame forced a layout per tag and stalled playback for a second
   const textWidths = new Map();
+  // Widths come from a canvas with the tags' computed fonts (read once from a probe), so a week's
+  // new prices cost no layout: each step brought new texts and the SVG probe forced one per tag.
+  let tagFonts = null;
+  const canvasCtx = document.createElement('canvas').getContext('2d');
   function measureTag(tg) {
     const key = `${tg.text}|${tg.sub || ''}`;
     if (textWidths.has(key)) return textWidths.get(key);
-    const probe = el('g', { class: 'tag' }, tagsG);
-    const p1 = el('text', { class: 'tag-price', x: 0, y: 0 }, probe); p1.textContent = tg.text;
+    if (!tagFonts) {
+      const probe = el('g', { class: 'tag' }, tagsG);
+      const f = (cls) => { const n = el('text', { class: cls, x: 0, y: 0 }, probe); n.textContent = 'x'; const s = getComputedStyle(n); return `${s.fontStyle} ${s.fontWeight} ${s.fontSize} ${s.fontFamily}`; };
+      tagFonts = { price: f('tag-price'), sub: f('tag-sub') };
+      probe.remove();
+    }
+    const w = (txt, font) => { canvasCtx.font = font; return canvasCtx.measureText(txt).width; };
     let sub = tg.sub || '';
-    const p2 = sub ? el('text', { class: 'tag-sub', x: 0, y: 0 }, probe) : null;
-    if (p2) { p2.textContent = sub; while (p2.getComputedTextLength() > 172 && sub.length > 4) { sub = sub.slice(0, -2); p2.textContent = `${sub}…`; } sub = p2.textContent; }
-    const out = { tw: Math.max(p1.getComputedTextLength(), p2 ? p2.getComputedTextLength() : 0), sub };
-    probe.remove();
+    if (sub && w(sub, tagFonts.sub) > 172) { while (sub.length > 4 && w(`${sub}…`, tagFonts.sub) > 172) sub = sub.slice(0, -2); sub = `${sub}…`; }
+    const out = { tw: Math.max(w(tg.text, tagFonts.price), sub ? w(sub, tagFonts.sub) : 0), sub };
     if (textWidths.size > 400) textWidths.clear();
     textWidths.set(key, out);
     return out;
   }
   // a width taken before Manrope arrived was the fallback font's
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { textWidths.clear(); drawTags(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { textWidths.clear(); tagFonts = null; drawTags(); });
   function drawTags() {
     tagsG.innerHTML = '';
     placedTags = [];
@@ -367,11 +384,15 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   }
 
   // ---- animation on the wall clock (the pane throttles frames; never accumulate deltas) ----
+  // (a target equal to the view draws once instead of animating: every week step asked for the
+  // same fit and redrew the tags and labels 33 times)
   let anim = null;
   function animateTo(target, ms = 520) {
     if (anim) cancelAnimationFrame(anim.raf);
+    anim = null;
     setHover(null);
-    if (!motion() || ms === 0) { view = { ...target }; applyView(); return; }
+    const same = Math.abs(target.k - view.k) < 1e-4 && Math.abs(target.x - view.x) < 0.5 && Math.abs(target.y - view.y) < 0.5;
+    if (!motion() || ms === 0 || same) { view = { ...target }; applyView(); return; }
     const from = { ...view }, t0 = performance.now();
     const step = () => {
       const u = Math.min(1, (performance.now() - t0) / ms);
@@ -380,7 +401,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       applyView();
       if (u < 1) anim.raf = requestAnimationFrame(step); else anim = null;
     };
-    anim = { raf: requestAnimationFrame(step) };
+    anim = { raf: requestAnimationFrame(step), target: { ...target } };
   }
 
   function clampView(v) {
@@ -433,14 +454,14 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       const cx = pinch.cx - rect.left, cy = pinch.cy - rect.top;
       const ncx = (a.x + b.x) / 2 - rect.left, ncy = (a.y + b.y) / 2 - rect.top;
       view = clampView({ k, x: ncx - (cx - pinch.vx) * (k / pinch.k), y: ncy - (cy - pinch.vy) * (k / pinch.k) });
-      atFit = false;
+      atFit = false; userMoves++;
       scheduleView();
       return;
     }
     if (drag) {
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (!drag.moved && Math.hypot(dx, dy) > 5) { drag.moved = true; setHover(null); }
-      if (drag.moved) { view = clampView({ k: view.k, x: drag.vx + dx, y: drag.vy + dy }); atFit = false; scheduleView(); }
+      if (drag.moved) { view = clampView({ k: view.k, x: drag.vx + dx, y: drag.vy + dy }); atFit = false; userMoves++; scheduleView(); }
       return;
     }
     if (e.pointerType !== 'mouse') return; // no hover on touch
@@ -488,15 +509,15 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     const px = clientX - rect.left, py = clientY - rect.top;
     const k = Math.max(kMin(), Math.min(K_MAX, view.k * factor));
     const f = k / view.k;
-    atFit = false;
+    atFit = false; userMoves++;
     animateTo(clampView({ k, x: px - (px - view.x) * f, y: py - (py - view.y) * f }), ms);
   }
 
   function setHover(id, x, y) {
     if (hovered === id) { if (id) for (const h of handlers.hover) h(id, x, y); return; }
-    if (hovered && dotEls.get(hovered)) dotEls.get(hovered).classList.remove('hover');
+    if (hovered && dotEls.get(hovered)) { const o = dotEls.get(hovered); o.classList.remove('hover'); setR(o); }
     hovered = id;
-    if (id && dotEls.get(id)) { dotEls.get(id).classList.add('hover'); layers.dots.appendChild(dotEls.get(id)); }
+    if (id && dotEls.get(id)) { const c = dotEls.get(id); c.classList.add('hover'); setR(c); layers.dots.appendChild(c); }
     for (const h of handlers.hover) h(id, x, y);
   }
 
@@ -566,7 +587,9 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   const api = {
     svg,
     resize() {
-      W = host.clientWidth || W; H = host.clientHeight || H;
+      const nw = host.clientWidth || W, nh = host.clientHeight || H;
+      if (nw < MIN_SIDE || nh < MIN_SIDE) return; // keep the last good layout until the host is usable
+      W = nw; H = nh;
       fitProjection();
       labelCache.clear(); for (const it of labelItems) { it._near = null; it._mask = null; } // world coordinates change with the projection
       drawAll();
@@ -577,19 +600,27 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     // The view follows the free area's centre the same way when a card opens and when it closes
     // (a store card too: skipping the shift on open slid the view on close, and buried the side of
     // the city under the card); then a selected store the shift left covered is centred.
+    // A store card opened over a moved map remembers that view, and closing it returns there
+    // unless the reader moved the map meanwhile (the shift and the re-centring of the open were
+    // only half undone by the close). The base is a running animation's end, not its current
+    // frame (a search's zoom was cancelled by the card's padding 2 ms after it started).
     setPadding(p, animate = true) {
       const before = { x: pad.left + (W - pad.left - pad.right) / 2, y: pad.top + (H - pad.top - pad.bottom) / 2 };
       pad = { ...pad, ...p };
       if (atFit) { animateTo(fitView(), animate ? 480 : 0); return; }
+      if (restoreView) { const v = restoreView; restoreView = null; animateTo(clampView(v), animate ? 480 : 0); return; }
+      const base = anim && anim.target ? anim.target : view;
       const after = { x: pad.left + (W - pad.left - pad.right) / 2, y: pad.top + (H - pad.top - pad.bottom) / 2 };
-      let target = Math.abs(after.x - before.x) > 40 || Math.abs(after.y - before.y) > 40 ? clampView({ k: view.k, x: view.x + after.x - before.x, y: view.y + after.y - before.y }) : view;
+      let target = Math.abs(after.x - before.x) > 40 || Math.abs(after.y - before.y) > 40 ? clampView({ k: base.k, x: base.x + after.x - before.x, y: base.y + after.y - before.y }) : base;
       const s = selected && byId.get(selected);
       if (s && s._x != null) {
         const x = s._x * target.k + target.x, y = s._y * target.k + target.y;
-        if (!(x > pad.left + 16 && x < W - pad.right - 16 && y > pad.top + 16 && y < H - pad.bottom - 16)) target = clampView({ k: view.k, x: after.x - s._x * view.k, y: after.y - s._y * view.k });
+        if (!(x > pad.left + 16 && x < W - pad.right - 16 && y > pad.top + 16 && y < H - pad.bottom - 16)) target = clampView({ k: base.k, x: after.x - s._x * base.k, y: after.y - s._y * base.k });
       }
+      if (target === base && anim) return; // the running animation already ends there
       if (target !== view) animateTo(target, animate ? 480 : 0); else applyView();
     },
+    fitK() { return fitView().k; },
     reset() { atFit = true; animateTo(fitView()); },
     // centre a location in the free area; k is a multiple of the fit scale
     zoomTo(id, kRel = 4) {
@@ -600,8 +631,13 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       atFit = false;
       animateTo(clampView({ k, x: cx - s._x * k, y: cy - s._y * k }), 650);
     },
-    // the share of these locations inside the free area at the current view
-    shareInFree(ids) { let n = 0, k = 0; for (const id of ids) { const s = byId.get(id); if (!s || s._x == null) continue; n++; if (api.inFreeArea(id)) k++; } return n ? k / n : 1; },
+    // how many of these locations the view shows in the free area (at a running animation's end)
+    inFreeCount(ids) {
+      const v = anim && anim.target ? anim.target : view;
+      let n = 0, k = 0;
+      for (const id of ids) { const s = byId.get(id); if (!s || s._x == null) continue; n++; const x = s._x * v.k + v.x, y = s._y * v.k + v.y; if (x > pad.left + 16 && x < W - pad.right - 16 && y > pad.top + 16 && y < H - pad.bottom - 16) k++; }
+      return { n, k };
+    },
     inFreeArea(id) {
       const s = byId.get(id);
       if (!s || s._x == null) return true;
@@ -610,7 +646,11 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     },
     // colors: Map id -> { fill, t, empty, hatched }; t (0..1) is the strength of the signal
     setColors(colors) { lastColors = colors; if (applyColors(colors)) applyView(); },
-    setSelected(id) { selected = id; applySelected(id); applyView(); },
+    setSelected(id) {
+      if (id && !selected) savedView = atFit ? null : { view: { ...(anim && anim.target ? anim.target : view) }, moves: userMoves };
+      if (!id && selected) { restoreView = savedView && savedView.moves === userMoves && !atFit ? savedView.view : null; savedView = null; }
+      selected = id; applySelected(id); applyView();
+    },
     setOwn(ids) { ownIds = new Set(ids || []); applyOwn(ownIds); applyView(); },
     // tags: [{ id, text, sub, color, kind }] in priority order
     setTags(list) { tags = list || []; drawTags(); },

@@ -266,9 +266,15 @@ export async function computeStage(stage, week) {
     if (week && bySize.length) {
       pw = pickWeek(recentWeeks, week);
       const best = bestAt(pw.week);
-      // the member list says what this week used: its stores that week and why one was left out
+      // the member list says what this week used: each member's stores and median price that week,
+      // and why one was left out (a recent price beside a week's count read as that week's)
       const counts = countsAt(pw.week), ok = usableAt(pw.week);
-      memberWeekN = new Map(bySize.map((p, i) => [p.id, counts[i]]));
+      memberWeekN = new Map(bySize.map((p, i) => {
+        const wf = weekFiles[i]; const col = wf ? wf.weeks.indexOf(pw.week) : -1;
+        const prices = col < 0 ? [] : Object.values(wf.stores).map((arr) => arr[col]).filter((v) => v != null);
+        const price = median(prices);
+        return [p.id, { n: counts[i], price, per: price != null ? perUnit(price, p.size, unit) : null }];
+      }));
       for (const [pid, why] of [...excluded]) if (why === 'few') excluded.delete(pid);
       if (ok.size < bySize.length) for (const p of bySize) if (!ok.has(p.id)) excluded.set(p.id, 'fewWeek');
       weekRef = median([...best.values()].map((b) => b.per)); weekN = best.size;
@@ -283,7 +289,7 @@ export async function computeStage(stage, week) {
     const curve = bySize.length ? { kind: 'group', unit, rows: recentWeeks.map((w) => { const v = [...bestAt(w).values()].map((b) => b.per); const [lo, hi] = minMax(v); return [w, median(v), lo, hi, v.length]; }) } : null;
     const live = [...values.values()].filter((v) => v.value != null).map((v) => v.value);
     const [lo, hi] = minMax(live);
-    return { ...base, kind: 'group', id: stage.id, values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind: 'recent', tooFew, weekRef, weekN, ...far, excluded, memberWeekN, n: refN, otherN: [...otherRecent.keys()].filter((sid) => !bestRecent.has(sid)).length, lo, hi, unit, dim, members, usable, curve, failed, total: members.length };
+    return { ...base, kind: 'group', id: stage.id, values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind: 'recent', tooFew, weekRef, weekN, ...far, excluded, memberWeekN, noWeeks: !bySize.length, n: refN, otherN: [...otherRecent.keys()].filter((sid) => !bestRecent.has(sid)).length, lo, hi, unit, dim, members, usable, curve, failed, total: members.length };
   }
 
   // ---------------------------------------------------------------- basket
