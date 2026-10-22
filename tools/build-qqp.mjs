@@ -464,7 +464,7 @@ async function main() {
   const warn = (m) => { warnings.push(m); log('warning:', m); };
 
   // overrides (curation)
-  let ov = { excludeStores: [], excludeProducts: [], excludeCategories: [], fixCoords: {}, fixSizes: {}, renameChains: {}, notes: '' };
+  let ov = { excludeStores: [], excludeProducts: [], excludeCategories: [], fixCoords: {}, fixSizes: {}, renameChains: {}, unplaceStores: {}, notes: '' };
   try { ov = { ...ov, ...JSON.parse(fs.readFileSync(OVERRIDES_FILE, 'utf8')) }; log(`overrides: ${ov.excludeStores.length} stores, ${ov.excludeProducts.length} products, ${ov.excludeCategories.length} categories excluded; ${Object.keys(ov.fixCoords).length} coordinate fixes; ${Object.keys(ov.fixSizes || {}).length} size fixes; ${Object.keys(ov.renameChains).length} chain renames`); }
   catch (e) { log(`no usable overrides file (${e.message}); continuing without`); }
   const excludeStores = new Set(ov.excludeStores), excludeProducts = new Set(ov.excludeProducts);
@@ -575,7 +575,7 @@ async function main() {
   if (!rows.n) { log('no rows for the city; nothing written'); return 1; }
 
   // 3. stores: ids, display values, coordinates, overrides
-  const report = { builtFor: city.id, coords: { nullCoords: [], outsideBox: [], suspectedSwapped: [], fixed: [] }, duplicateNames: [], chainVariants: [], lastSeenWithoutProducts: [], sizesFixed: [], fixSizesUnused: [], unparsedPresentations: [], priceOutliers: [], oversize: { storeFiles: [], weeksWindowReduced: [], productFiles: [], recentWeeks: null }, excluded: { stores: [], storesNoCoords: [], storesNoProducts: 0, products: 0, categories: 0, stale: 0 } };
+  const report = { builtFor: city.id, coords: { nullCoords: [], outsideBox: [], suspectedSwapped: [], fixed: [], unplaced: [] }, duplicateNames: [], chainVariants: [], lastSeenWithoutProducts: [], sizesFixed: [], fixSizesUnused: [], unparsedPresentations: [], priceOutliers: [], oversize: { storeFiles: [], weeksWindowReduced: [], productFiles: [], recentWeeks: null }, excluded: { stores: [], storesNoCoords: [], storesNoProducts: 0, products: 0, categories: 0, stale: 0 } };
   const storeOut = new Array(stores.length).fill(null);
   const storeKeep = new Uint8Array(stores.length);
   const idSeen = new Map();
@@ -605,10 +605,13 @@ async function main() {
     }
     const nk = `${normKey(chainRaw)}|${normKey(name)}`;
     if (!byChainName.has(nk)) byChainName.set(nk, []); byChainName.get(nk).push({ id, addr });
+    // a store whose PROFECO point is provably another store's keeps its prices but gets no dot (unplaceStores)
+    const unplace = ov.unplaceStores && ov.unplaceStores[id];
+    if (unplace) { report.coords.unplaced.push({ id, name, raw, why: unplace }); lat = null; lon = null; }
     // the app is a map: a store without a usable position is left out until curation fixes it (fixCoords)
-    if (lat == null) { report.excluded.storesNoCoords.push(id); continue; }
+    if (lat == null && !unplace) { report.excluded.storesNoCoords.push(id); continue; }
     storeKeep[i] = 1;
-    storeOut[i] = { id, chain, format, name, address: addr, municipio: s.muni.best(), state: s.state.best(), lat: lat == null ? null : Number(lat.toFixed(6)), lon: lon == null ? null : Number(lon.toFixed(6)), giro: canon(labels.giro, s.giro.best()), firstSeen: dayToIso(s.first), lastSeen: dayToIso(s.last), products: 0, recentProducts: 0, lastVisitProducts: 0, index: { latest: null, latestWeek: null, series: [] } };
+    storeOut[i] = { id, chain, format, name, address: addr, municipio: s.muni.best(), state: s.state.best(), lat: lat == null ? null : Number(lat.toFixed(6)), lon: lon == null ? null : Number(lon.toFixed(6)), giro: canon(labels.giro, s.giro.best()), firstSeen: dayToIso(s.first), lastSeen: dayToIso(s.last), products: 0, recentProducts: 0, lastVisitProducts: 0, index: { latest: null, latestWeek: null, series: [] }, ...(unplace ? { unplaced: true } : {}) };
   }
   for (const [, arr] of byChainName) if (arr.length > 1) report.duplicateNames.push(arr);
   // products: ids, display values, size, overrides

@@ -56,7 +56,8 @@ for (const s of stores) {
   for (const k of ['id', 'chain', 'name', 'lastSeen']) if (s[k] == null) fail(`stores.json: ${s.id || '?'} missing ${k}`);
   if (storeIds.has(s.id)) fail(`stores.json: duplicate id ${s.id}`);
   storeIds.add(s.id);
-  if (s.lat == null || s.lon == null) { noCoords++; warn(`stores.json: ${s.id} (${s.name}) has no coordinates`); }
+  if (s.unplaced) { if (s.lat != null || s.lon != null) fail(`stores.json: ${s.id} is unplaced but has coordinates`); }
+  else if (s.lat == null || s.lon == null) { noCoords++; warn(`stores.json: ${s.id} (${s.name}) has no coordinates`); }
   else if (!(s.lat > 18.9 && s.lat < 20.0 && s.lon > -99.6 && s.lon < -98.5)) { noCoords++; warn(`stores.json: ${s.id} (${s.name}) coordinates outside the metro box: ${s.lat}, ${s.lon}`); }
   if (!s.index || s.index.latest == null) noIndex++;
   if (s.index && s.index.latest != null && !(meta.weeks || []).includes(s.index.latestWeek)) fail(`stores.json: ${s.id} index.latestWeek ${s.index.latestWeek} is not a week of the data`);
