@@ -11,7 +11,7 @@ import { sparkline } from './spark.js';
 import { median, minMax, deviation } from '../logic/stats.js';
 import { perUnit, sizeLabel, DIM } from '../logic/unit.js';
 import { fold } from './search.js';
-import { giroLabel, storeIndexWords, refText } from './chrome.js';
+import { giroLabel, storeIndexWords, refText, trendText } from './chrome.js';
 import { isFar } from '../logic/stats.js';
 
 const MIN_N = 3; // a chip or a flag needs a median from at least this many stores
@@ -32,8 +32,33 @@ function chipOrFlag(dev, ok = true, far = null, farKind = 'recent') {
 }
 const swColor = (dev) => (dev == null ? 'transparent' : dev < -0.005 ? 'var(--cheaper)' : dev > 0.005 ? 'var(--dearer)' : 'var(--mid)');
 // how many rows share the lowest value: a tie is said as a tie, never as one store's win
-const tiesAtMin = (rows, key) => (rows.length ? rows.filter((r) => Math.abs(r[key] - rows[0][key]) < 0.005).length : 0);
-const cheapestLine = (n, name) => (n > 1 ? t('tiedCheapest', { n }) : `${t('cheapestHere')} · ${name}`);
+// The hero of a subject card. The cheapest price that is not flagged "revísalo"; a tie said as a
+// tie, dated with the span of the tied stores' dates; under 3 stores no superlative, only the count.
+function heroOf(rows, key, nameOf, { thinKey = 'storesWithPrice', dateOf = (r) => [r.date, r.date] } = {}) {
+  if (!rows.length) return null;
+  const fair = rows.filter((r) => !r.far);
+  if (!fair.length) return { best: null, allFar: true };
+  const best = fair[0];
+  const tied = fair.filter((r) => Math.abs(r[key] - best[key]) < 0.005);
+  const ds = tied.flatMap((r) => dateOf(r)).filter(Boolean).sort();
+  const dateText = !ds.length ? '' : ds[0] === ds[ds.length - 1] ? fdate(ds[0]) : fspan(ds[0], ds[ds.length - 1]);
+  let line;
+  if (rows.length < MIN_N) line = t(thinKey, { n: rows.length });
+  else if (tied.length > 1) line = t('tiedCheapest', { n: tied.length });
+  else line = `${t('cheapestHere')} · ${nameOf(best)}`;
+  return { best, line, dateText };
+}
+// A store's name in a row: the chain is on the line below, so the row leads with the branch
+// ("Bodega Aurrera Sucursal Tacubaya" read "Bodega Aurrera Sucur…" in every row of a tie)
+export function branchName(st) {
+  const name = String((st && st.name) || '').replace(/\s+Sucursal\s+/i, ' ').trim();
+  const chain = String((st && st.chain) || '');
+  if (chain && fold(name).startsWith(`${fold(chain)} `)) {
+    const rest = name.slice(chain.length).trim();
+    if (rest.length >= 2 && !/^\(?\d+\)?$/.test(rest)) return rest;
+  }
+  return name;
+}
 const fmtInt = (n) => new Intl.NumberFormat(getLang() === 'en' ? 'en-US' : 'es-MX').format(n);
 
 // a whole row as a real link to its route: Enter opens, middle-click opens a tab, a screen reader
@@ -103,7 +128,8 @@ export function priceStrip({ rows, ref, refLabel, ownPrice, onPick, selected, un
   const lineY = (i) => i * rowH + 26;
   const OFF = [0, -1, 1, -2, 2];
   const axisLabels = [];
-  const minV = Math.min(...vals), maxV = Math.max(...vals);
+  const fairVals = rows.filter((r) => !r.far).map((r) => r.value);
+  const minV = Math.min(...(fairVals.length ? fairVals : vals)), maxV = Math.max(...(fairVals.length ? fairVals : vals));
   if (flat) axisLabels.push({ x: W / 2, text: t('allAt', { n: vals.length, price: money(minV) + unitSuffix }), anchor: 'middle', cls: 'mid' });
   else {
     const refX = ref != null ? x(ref) : null;
@@ -115,7 +141,7 @@ export function priceStrip({ rows, ref, refLabel, ownPrice, onPick, selected, un
   return svg`<svg class="strip" viewBox="0 0 ${W} ${H}" role="img" aria-label=${t('stripAria')}>
     ${kinds.map((k, i) => svg`<text class="strip-k" x=${padL} y=${i * rowH + 10}>${t(`kind_${k}`)} · ${counts.get(k)}</text><line class="strip-row" x1=${padL} x2=${W - padR} y1=${lineY(i)} y2=${lineY(i)}></line>`)}
     ${ref != null && !flat ? svg`<line class="strip-ref" x1=${x(ref)} x2=${x(ref)} y1="12" y2=${H - axisH + 2}></line>` : nothing}
-    ${placed.map((p) => svg`<circle class="strip-dot ${selected === p.sid ? 'sel' : ''}" cx=${p.cx} cy=${lineY(p.row) + OFF[p.k] * STEP} r=${R} style="fill:${p.color}" @click=${() => onPick(p.sid)}><title>${p.name} · ${money(p.value)}${unitSuffix} · ${fdate(p.date)}</title></circle>`)}
+    ${placed.map((p) => svg`<circle class="strip-dot ${selected === p.sid ? 'sel' : ''} ${p.far ? 'far' : ''}" cx=${p.cx} cy=${lineY(p.row) + OFF[p.k] * STEP} r=${R} style="fill:${p.color}" @click=${() => onPick(p.sid)}><title>${p.name} · ${money(p.value)}${unitSuffix} · ${fdate(p.date)}</title></circle>`)}
     ${ownPrice != null ? svg`<line class="strip-own" x1=${x(ownPrice)} x2=${x(ownPrice)} y1="12" y2=${H - axisH + 2}></line>` : nothing}
     ${axisLabels.map((a) => svg`<text class="strip-ax ${a.cls || ''}" x=${a.x} y=${H - 3} text-anchor=${a.anchor}>${a.text}</text>`)}
   </svg>`;
@@ -132,6 +158,7 @@ export function storeCard(c) {
   const items = storeFile ? storeFile.items : null;
   const pharmacy = /farmacia/i.test(`${store.giro || ''} ${store.chain || ''}`);
   let recentRows = [], olderRows = [], wins = [], losses = [];
+  const split = { n: 0, a: 0, b: 0, c: 0 };
   if (items && byProduct) {
     for (const [pid, price, date] of items) {
       const p = byProduct.get(pid);
@@ -140,6 +167,7 @@ export function storeCard(c) {
       const dev = recent && p.median != null && (p.stores ?? 0) >= MIN_N ? deviation(price, p.median) : null;
       (recent ? recentRows : olderRows).push({ p, price, date, dev });
     }
+    for (const r of recentRows) { if (r.dev == null || isFar(1 + r.dev, 1)) continue; split.n++; if (r.dev < -0.005) split.a++; else if (r.dev > 0.005) split.c++; else split.b++; }
     const eligible = recentRows.filter((r) => r.dev != null && !isFar(1 + r.dev, 1) && (pharmacy || !/medicamento/i.test(r.p.category || '')));
     wins = [...eligible].sort((a, b) => a.dev - b.dev).slice(0, 5).filter((r) => r.dev < -0.02);
     losses = [...eligible].sort((a, b) => b.dev - a.dev).slice(0, 5).filter((r) => r.dev > 0.02);
@@ -174,6 +202,7 @@ export function storeCard(c) {
       </section>` : nothing}
       <section>
         <h3>${t('indexCardTitle')}</h3>
+        ${split.n ? html`<div class="refline split">${t('indexSplit', { span: fspan(win.from, win.to, true), n: split.n, a: split.a, b: split.b, c: split.c })}</div>` : nothing}
         ${latestIdx ? html`<div class="hero"><span class="big">${storeIndexWords(latestIdx[1])}</span></div>
           <div class="muted">${t(Math.abs(latestIdx[1] - 1) < 0.005 ? 'indexSubAt' : 'indexSub', { date: fdate(latestIdx[0]) })}${latestIdx[0] < win.fromWeek ? html` · <span class="flag">${t('notRecent')}</span>` : nothing}</div>`
           : html`<div class="note">${t('reasonFew')}</div>`}
@@ -231,18 +260,20 @@ export function productCard(c) {
   const ownByStore = new Map(); for (const o of ownHere) if (!ownByStore.has(o.storeId)) ownByStore.set(o.storeId, o);
   const latestOwn = ownHere[0];
   const when = mine ? (weekMode ? t('week', { date: fdate(mine.week) }) : t('recentSpan', { span: fspan(win.from, win.to) })) : '';
-  const best = ranked[0];
-  const unitSfx = unit ? '' : '';
+  const hero = heroOf(ranked, 'price', (r) => r.s.name);
+  const best = hero && hero.best;
   const sizeInPres = summary.size && summary.presentation && fold(summary.presentation).startsWith(fold(sizeLabel(summary.size, getLang())).split(' ')[0]);
   return html`<div class="card ${c.side} ${c.entering ? 'enter' : ''}" role="dialog" aria-labelledby="card-title">
     ${head({ id: 'card-title', kicker: group ? group.name : summary.category, onKicker: group ? () => c.onOpenGroup(group.id) : null, title: `${summary.name}${summary.brand ? ' · ' + summary.brand : ''}`, sub: `${summary.presentation || ''}${summary.size && !sizeInPres ? ' · ' + sizeLabel(summary.size, getLang()) : ''}`, onClose: c.onClose })}
     <div class="body">
       <section>
         <h3>${t('cityWide')} · ${when}</h3>
+        ${hero && hero.allFar ? html`<div class="note">${t('allFlagged')}</div>` : nothing}
         ${best ? html`<div class="hero"><span class="big num">${money(best.price)}${unitInline(best.price, summary.size, unit) ? html`<small> · ${unitInline(best.price, summary.size, unit)}</small>` : nothing}</span></div>
-          <div class="unitline">${cheapestLine(tiesAtMin(ranked, 'price'), best.s.name)} · ${fdate(best.date)}</div>
-          <div class="refline">${weekMode ? html`${weekMedOk ? html`${t('weekMedian')}: <b class="num">${money(mine.weekMed)}</b> · ` : nothing}${t('storesThisWeek', { n: ranked.length })}${recentRef && refText(mine) ? html` · ${refText(mine)}` : nothing}` : refText(mine) || nothing}</div>`
-          : html`<div class="note">${t('noRecentPrice')}${summary.last ? html` ${t('lastData', { date: fdate(summary.last) })}` : nothing}</div>`}
+          <div class="unitline">${hero.line} · ${hero.dateText}</div>
+          <div class="refline">${weekMode ? html`${weekMedOk ? html`${t('weekMedian')}: <b class="num">${money(mine.weekMed)}</b> · ` : nothing}${t('storesThisWeek', { n: ranked.length })}${recentRef && refText(mine) ? html` · ${refText(mine)}` : nothing}` : refText(mine) || nothing}</div>
+          ${mine && trendText(mine) ? html`<div class="muted trend">${trendText(mine)}</div>` : nothing}`
+          : hero && hero.allFar ? nothing : html`<div class="note">${t('noRecentPrice')}${summary.last ? html` ${t('lastData', { date: fdate(summary.last) })}` : nothing}</div>`}
         ${ranked.length > 1 ? html`<div class="stripwrap">${priceStrip({ rows: ranked.map((r) => ({ ...r, value: r.price, name: r.s.name })), ref: okChip ? ref : null, refLabel: weekMode && recentRef ? `${t('recentWord')} ` : '', ownPrice: latestOwn ? latestOwn.price : null, onPick: c.onOpenStore, selected: c.selectedStore })}</div>` : nothing}
         <div class="actions">
           <button class="btn ${inBasket ? 'on' : ''}" @click=${c.onToggleBasket}>${inBasket ? I.check() : I.plus()}${inBasket ? t('inBasket') : t('addToBasket')}</button>
@@ -254,7 +285,7 @@ export function productCard(c) {
         ${!mine ? html`<div class="muted">${t('loadingCard')}</div>` : ranked.length === 0 ? html`<div class="note">${weekMode ? t('noVisitWeek') : t('noRecentPrice')}</div>` : html`
           <ul class="rank">${ranked.slice(0, limit).map((r) => rowLink(`#t/${r.sid}`, () => c.onOpenStore(r.sid), `${r.s.name}, ${money(r.price)}, ${fdate(r.date)}`, html`
             <span class="sw" style="background:${r.color}"></span>
-            <div class="nm"><div class="n">${r.s.name}</div><div class="s">${r.s.chain}${r.s.municipio ? ' · ' + r.s.municipio : ''}${ownByStore.has(r.sid) ? html` · <span class="own">${t('ownMark')} ${money(ownByStore.get(r.sid).price)}</span>` : nothing}</div></div>
+            <div class="nm"><div class="n">${branchName(r.s)}</div><div class="s">${r.s.chain}${r.s.municipio ? ' · ' + r.s.municipio : ''}${ownByStore.has(r.sid) ? html` · <span class="own">${t('ownMark')} ${money(ownByStore.get(r.sid).price)}</span>` : nothing}</div></div>
             <div class="pr"><div class="p num">${money(r.price)}</div><div class="u">${fdate(r.date, true)}${unitInline(r.price, summary.size, unit) ? ` · ${unitInline(r.price, summary.size, unit)}` : ''}${okChip ? html` · ${chipOrFlag(r.dev, okChip, r.far, mine.farKind)}` : nothing}</div></div>`, c.selectedStore === r.sid))}</ul>
           ${ranked.length > limit ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: ranked.length - limit })}</button>` : nothing}`}
       </section>
@@ -290,22 +321,26 @@ export function groupCard(c) {
   ranked.sort((a, b) => a.value - b.value);
   const limit = showAll ? ranked.length : 10;
   const pLimit = showAll ? sized.length : 12;
-  const best = ranked[0];
+  const hero = heroOf(ranked, 'value', (r) => r.s.name);
+  const best = hero && hero.best;
   const bestP = best && byProduct.get(best.pid);
+  const excluded = (mine && mine.excluded) || new Map();
   const weekMode = mine && mine.weekIdx != null;
   const memberRow = (p, per, label) => rowLink(`#p/${p.id}`, () => c.onOpenProduct(p.id), `${p.brand || p.name}, ${p.presentation || ''}`, html`
     <span class="sw" style="background:${per != null && mine && mine.ref && okChip ? swColor(deviation(per, mine.ref)) : 'transparent'}"></span>
-    <div class="nm"><div class="n">${p.brand || p.name}</div><div class="s">${p.presentation || ''} · ${p.stores ? t('storesRecentShort', { n: p.stores }) : t('noRecentShort')}</div></div>
+    <div class="nm"><div class="n">${p.brand || p.presentation || p.name}</div><div class="s">${p.brand ? `${p.presentation || ''} · ` : ''}${p.stores ? t('storesRecentShort', { n: p.stores }) : t('noRecentShort')}${excluded.has(p.id) ? html` · <span class="out">${t(excluded.get(p.id) === 'size' ? 'memberOutSize' : 'memberOutFew')}</span>` : nothing}</div></div>
     <div class="pr">${per != null ? html`<div class="p num">${money(per)}<small class="pu">/${label}</small></div>${Math.abs(per - p.median) > 0.005 ? html`<div class="u">${money(p.median)} ${t('label')}</div>` : nothing}` : p.median != null ? html`<div class="p num">${money(p.median)}</div><div class="u">${t('label')}</div>` : nothing}</div>`);
   return html`<div class="card ${c.side} ${c.entering ? 'enter' : ''}" role="dialog" aria-labelledby="card-title">
     ${head({ id: 'card-title', kicker: group.category, title: group.name, sub: `${t('products_n', { n: members.length })}${mine && unit ? ` · ${t('groupStoresLine', { n: mine.n, unit: unitName(unit) })}${mine.otherN ? ` · ${t('groupOtherLine', { n: mine.otherN })}` : ''}` : ''}`, onClose: c.onClose })}
     <div class="body">
+      ${hero && hero.allFar ? html`<section><div class="note">${t('allFlagged')}</div></section>` : nothing}
       ${unit && best ? html`<section>
         <h3>${t('cheapestPerUnit')} · ${weekMode ? t('week', { date: fdate(mine.week) }) : t('recentSpan', { span: fspan(win.from, win.to) })}</h3>
         <div class="hero"><span class="big num">${money(best.value)}<small>/${uShort}</small></span></div>
-        <div class="unitline">${cheapestLine(tiesAtMin(ranked, 'value'), best.s.name)} · ${fdate(best.date)}</div>
+        <div class="unitline">${hero.line} · ${hero.dateText}</div>
         ${bestP ? html`<div class="muted">${bestP.brand || bestP.name} ${bestP.presentation || ''} · ${money(best.price)}</div>` : nothing}
         <div class="refline">${weekMode && mine.weekRef != null && mine.weekN >= MIN_N ? html`${t('weekRefGroup', { ref: `${money(mine.weekRef)}/${uShort}`, n: mine.weekN })} · ` : nothing}${refText(mine)}</div>
+        ${trendText(mine) ? html`<div class="muted trend">${trendText(mine)}</div>` : nothing}
         ${ranked.length > 1 ? html`<div class="stripwrap">${priceStrip({ rows: ranked.map((r) => ({ ...r, value: r.value, name: r.s.name })), ref: okChip ? mine.ref : null, refLabel: weekMode ? `${t('recentWord')} ` : '', onPick: c.onOpenStore, selected: c.selectedStore, unitSuffix: `/${uShort}` })}</div>` : nothing}
         <div class="actions">${copyBtn(c)}</div>
       </section>` : nothing}
@@ -320,7 +355,7 @@ export function groupCard(c) {
         <h3>${t('ranking')} · ${t('perUnit', { unit: unitName(unit) })}${weekMode && okChip ? html` · ${t('vsRecentShort')}` : nothing}</h3>
         ${!mine ? html`<div class="muted">${t('loadingCard')}</div>` : ranked.length === 0 ? html`<div class="note">${t('noRecentPrice')}</div>` : html`<ul class="rank">${ranked.slice(0, limit).map((r) => { const p = byProduct.get(r.pid); return rowLink(`#t/${r.sid}`, () => c.onOpenStore(r.sid), `${r.s.name}, ${money(r.value)} / ${unitName(unit)}`, html`
           <span class="sw" style="background:${r.color}"></span>
-          <div class="nm"><div class="n">${r.s.name}</div><div class="s">${p ? `${p.brand || p.name} · ${p.presentation || ''} · ${money(r.price)}` : ''}</div></div>
+          <div class="nm"><div class="n">${branchName(r.s)}</div><div class="s">${r.s.municipio ? `${r.s.municipio} · ` : ''}${p ? `${p.brand || p.name} · ${p.presentation || ''} · ${money(r.price)}` : ''}</div></div>
           <div class="pr"><div class="p num">${money(r.value)}<small class="pu">/${uShort}</small></div><div class="u">${fdate(r.date, true)}${okChip ? html` · ${chipOrFlag(r.dev, true, r.far, mine.farKind)}` : nothing}</div></div>`, c.selectedStore === r.sid); })}</ul>
         ${ranked.length > limit ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: ranked.length - limit })}</button>` : nothing}`}
         ${sourceLine(c.retrieved, '')}
@@ -351,10 +386,9 @@ function chainRace(chains) {
 export function basketCard(c) {
   const { items, byProduct, byStore, stage, onlyComplete, showAll, win, offer } = c;
   const ranking = stage && stage.kind === 'basket' ? stage.ranking : null;
-  const okChip = !!(stage && !stage.tooFew);
+  const okChip = !!(stage && !stage.tooFew && stage.ref != null);
   const list = ranking ? (onlyComplete ? ranking.list.filter((r) => r.complete) : ranking.list) : [];
   const limit = showAll ? list.length : 12;
-  const best = ranking && ranking.list.find((r) => r.complete);
   const chains = new Map();
   if (ranking) for (const r of ranking.list) {
     if (!r.complete) continue;
@@ -367,11 +401,14 @@ export function basketCard(c) {
   const weekMode = !!(stage && stage.weekIdx != null);
   const when = weekMode ? t('week', { date: fdate(stage.week) }) : t('recentSpan', { span: fspan(win.from, win.to) });
   const completeRows = ranking ? ranking.list.filter((r) => r.complete) : [];
+  const bHero = heroOf(completeRows, 'total', (r) => (byStore.get(r.storeId) ? byStore.get(r.storeId).name : ''), { thinKey: 'completeStores', dateOf: (r) => [r.dateMin || r.date, r.date] });
+  const best = bHero && bHero.best;
   const units = items.reduce((n, b) => n + b.qty, 0);
   return html`<div class="card ${c.side} ${c.entering ? 'enter' : ''}" role="dialog" aria-labelledby="card-title">
     ${head({ id: 'card-title', kicker: t('basket'), title: items.length ? `${t('products_n', { n: items.length })}${units !== items.length ? ` · ${t('units_n', { n: units })}` : ''}` : t('basketEmptyTitle'), sub: ranking && ranking.completeCount ? t('completeStores', { n: ranking.completeCount }) : '', onClose: c.onClose })}
     <div class="body">
-      ${offer ? html`<section class="offer">
+      ${offer && !c.catalogReady ? html`<section class="offer"><div class="note">${t('sharedLoading')}</div></section>` : nothing}
+      ${offer && c.catalogReady ? html`<section class="offer">
         <div class="note">${t('sharedBasket', { n: offer.length })}</div>
         <ul class="bitems">${offer.map((it) => { const p = byProduct.get(it.id); return html`<li><div><div class="n">${p ? p.name + (p.brand ? ' · ' + p.brand : '') : it.id}</div><div class="s">${p ? p.presentation || '' : ''}</div></div><span class="num">× ${it.qty}</span><span></span></li>`; })}</ul>
         <div class="actions"><button class="btn" @click=${c.onOfferUse}>${t('offerUse')}</button><button class="btn ghost" @click=${c.onOfferMerge}>${t('offerMerge')}</button><button class="btn ghost" @click=${c.onOfferDismiss}>${t('offerDismiss')}</button></div>
@@ -379,26 +416,27 @@ export function basketCard(c) {
       ${items.length === 0 ? html`<section><div class="note" id="basket-empty" tabindex="-1">${t('basketEmpty')}</div></section>
       ${c.pacicGroups && c.pacicGroups.length ? html`<section><h3>${t('canasta')} · PACIC</h3><div class="note" style="margin-bottom:8px">${t('pacicHint', { n: c.pacicGroups.length })}</div><div class="chips">${c.pacicGroups.map((g) => html`<button class="chip" @click=${() => c.onOpenGroup(g.id)}>${g.name}</button>`)}</div></section>` : nothing}` : html`
       <section>
+        <h3>${t('rankingBasket')} · ${when}${weekMode && okChip && stage.refKind === 'recent' ? html` · ${t('vsRecentShort')}` : nothing}</h3>
+        ${best ? html`<div class="hero"><span class="big num">${money(best.total)}</span></div>
+          <div class="unitline">${bHero.line}${bHero.dateText ? ` · ${bHero.dateText}` : ''}</div>
+          ${ranking.base != null && ranking.completeCount >= MIN_N && ranking.base > best.total ? html`<div class="refline">${t(weekMode ? 'savingsMedianWeek' : 'savingsMedian', { amount: money(ranking.base - best.total), n: ranking.completeCount, median: money(ranking.base) })}</div>` : nothing}` : html`<div class="note">${onlyComplete ? t('noCompleteStore') : t('noCompleteStoreAll')}</div>`}
+        ${chainRace(chainList)}
+        <div class="chips" style="margin:10px 0 8px"><button class="chip ${!onlyComplete ? 'on' : ''}" aria-pressed=${!onlyComplete ? 'true' : 'false'} @click=${() => c.onOnlyComplete(false)}>${t('allStores')}</button><button class="chip ${onlyComplete ? 'on' : ''}" aria-pressed=${onlyComplete ? 'true' : 'false'} @click=${() => c.onOnlyComplete(true)}>${t('onlyComplete')}</button></div>
+        ${!ranking ? html`<div class="muted">${t('loadingCard')}</div>` : list.length === 0 ? html`<div class="note">${t('noCompleteStore')}</div>` : html`<ul class="rank">${list.slice(0, limit).map((r) => { const s = byStore.get(r.storeId); return rowLink(`#t/${r.storeId}`, () => c.onOpenStore(r.storeId), `${s ? s.name : r.storeId}, ${money(r.total)}`, html`
+          <span class="sw ${r.complete ? '' : 'hatch'}" style="background:${r.complete ? (okChip ? swColor(r.dev) : 'var(--mid)') : ''}"></span>
+          <div class="nm"><div class="n">${s ? branchName(s) : r.storeId}</div><div class="s">${s ? s.chain + (s.municipio ? ' · ' + s.municipio : '') : ''}${r.dateMin && r.date ? ` · ${r.dateMin === r.date ? fdate(r.date, true) : fspan(r.dateMin, r.date, true)}` : ''}</div></div>
+          <div class="pr"><div class="p num">${money(r.total)}</div><div class="u">${r.complete ? (okChip ? devChip(r.dev) : nothing) : html`<span class="miss">${r.missing.length === 1 ? t('missingOne') : t('missing', { n: r.missing.length })}</span>`}</div></div>`, c.selectedStore === r.storeId, r.complete ? '' : 'partial'); })}</ul>
+        ${list.length > limit ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: list.length - limit })}</button>` : nothing}`}
+        ${sourceLine(c.retrieved, '')}
+      </section>
+      <section>
+        <h3>${t('yourList')}</h3>
         <ul class="bitems">${repeat(items, (it) => it.id, (it) => { const p = byProduct.get(it.id); const name = p ? p.name + (p.brand ? ' · ' + p.brand : '') : it.id; return html`<li>
           <div><a class="n linkish" href=${`#p/${it.id}`} @click=${(e) => { e.preventDefault(); c.onOpenProduct(it.id); }}>${name}</a><div class="s">${p && p.median != null ? html`<b class="num nowrap">${money(p.median)}</b> · ` : nothing}${p ? (p.presentation || '') : ''}${p && p.median != null ? ` · ${t('storesRecentShort', { n: p.stores })}` : p ? ` · ${t('noRecentShort')}` : ''}</div></div>
           <div class="qty"><button @click=${() => c.onQty(it.id, it.qty - 1)} aria-label=${`${t('less')}: ${name}`}>−</button><span class="num" aria-label=${t('qty')}>${it.qty}</span><button @click=${() => c.onQty(it.id, it.qty + 1)} ?disabled=${it.qty >= 99} aria-label=${`${t('more1')}: ${name}`}>+</button></div>
           <button class="rm" @click=${() => c.onQty(it.id, 0)} title=${t('removeFromBasket')} aria-label=${`${t('removeFromBasket')}: ${name}`}>${I.x()}</button>
         </li>`; })}</ul>
         <div class="actions">${copyBtn(c)}<button class="btn ghost" @click=${c.onClear}>${I.trash()}${t('clear')}</button></div>
-      </section>
-      <section>
-        <h3>${t('rankingBasket')} · ${when}${weekMode && okChip ? html` · ${t('vsRecentShort')}` : nothing}</h3>
-        ${best ? html`<div class="hero"><span class="big num">${money(best.total)}</span></div>
-          <div class="unitline">${cheapestLine(tiesAtMin(completeRows, 'total'), byStore.get(best.storeId) ? byStore.get(best.storeId).name : '')}${best.dateMin && best.date ? ` · ${best.dateMin === best.date ? fdate(best.date) : fspan(best.dateMin, best.date)}` : ''}</div>
-          ${ranking.base != null && ranking.completeCount >= MIN_N && ranking.base > best.total ? html`<div class="refline">${t(weekMode ? 'savingsMedianWeek' : 'savingsMedian', { amount: money(ranking.base - best.total), n: ranking.completeCount, median: money(ranking.base) })}</div>` : nothing}` : html`<div class="note">${onlyComplete ? t('noCompleteStore') : t('noCompleteStoreAll')}</div>`}
-        ${chainRace(chainList)}
-        <div class="chips" style="margin:10px 0 8px"><button class="chip ${!onlyComplete ? 'on' : ''}" aria-pressed=${!onlyComplete ? 'true' : 'false'} @click=${() => c.onOnlyComplete(false)}>${t('allStores')}</button><button class="chip ${onlyComplete ? 'on' : ''}" aria-pressed=${onlyComplete ? 'true' : 'false'} @click=${() => c.onOnlyComplete(true)}>${t('onlyComplete')}</button></div>
-        ${!ranking ? html`<div class="muted">${t('loadingCard')}</div>` : list.length === 0 ? html`<div class="note">${t('noCompleteStore')}</div>` : html`<ul class="rank">${list.slice(0, limit).map((r) => { const s = byStore.get(r.storeId); return rowLink(`#t/${r.storeId}`, () => c.onOpenStore(r.storeId), `${s ? s.name : r.storeId}, ${money(r.total)}`, html`
-          <span class="sw ${r.complete ? '' : 'hatch'}" style="background:${r.complete ? (okChip ? swColor(r.dev) : 'var(--mid)') : ''}"></span>
-          <div class="nm"><div class="n">${s ? s.name : r.storeId}</div><div class="s">${s ? s.chain + (s.municipio ? ' · ' + s.municipio : '') : ''}${r.dateMin && r.date ? ` · ${r.dateMin === r.date ? fdate(r.date, true) : fspan(r.dateMin, r.date, true)}` : ''}</div></div>
-          <div class="pr"><div class="p num">${money(r.total)}</div><div class="u">${r.complete ? (okChip ? devChip(r.dev) : nothing) : html`<span class="miss">${r.missing.length === 1 ? t('missingOne') : t('missing', { n: r.missing.length })}</span>`}</div></div>`, c.selectedStore === r.storeId, r.complete ? '' : 'partial'); })}</ul>
-        ${list.length > limit ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: list.length - limit })}</button>` : nothing}`}
-        ${sourceLine(c.retrieved, '')}
       </section>`}
     </div>
   </div>`;

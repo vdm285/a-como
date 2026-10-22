@@ -192,11 +192,17 @@ function stageTags(stage, locValues) {
   // a handful of stores among hundreds of rings: tag them all so they can be found
   if (rows.length <= 5) return rows.map((r) => mk(r, 'cheap'));
   if (rows[0][1].value === rows[rows.length - 1][1].value) return [];
+  // equal prices are one group; a group of several is one tag that says how many stores share the
+  // price (three tags on three of 34 tied stores named them by file order)
+  const groups = [];
+  for (const r of rows) { const g = groups[groups.length - 1]; if (g && Math.abs(g.value - r[1].value) < 0.005) g.rows.push(r); else groups.push({ value: r[1].value, rows: [r] }); }
+  const storesAt = (value) => [...stage.values.values()].filter((v) => v.value != null && !v.far && !v.hatched && Math.abs(v.value - value) < 0.005).length;
+  const tagOf = (g, kind) => { const tg = mk(g.rows[0], kind); const n = storesAt(g.value); if (n > 1) tg.sub = t('tiedStores', { n }); return tg; };
   // a narrow free area (under 700 px) takes the cheapest and the dearest only (four tags covered a sixth of the data at 1024)
   const narrow = ui.free && ui.free.right - ui.free.left < 700;
-  const cheap = rows.slice(0, narrow ? 1 : 3);
-  const dear = rows[rows.length - 1];
-  return [...cheap.map((r) => mk(r, 'cheap')), ...(dear[1].value > cheap[cheap.length - 1][1].value ? [mk(dear, 'dear')] : [])];
+  const cheapGroups = groups.slice(0, Math.min(narrow ? 1 : 3, groups.length - 1));
+  const dearGroup = groups[groups.length - 1];
+  return [...cheapGroups.map((g) => tagOf(g, 'cheap')), tagOf(dearGroup, 'dear')];
 }
 // own prices shown on the map only for what the map is showing
 function ownForStage(stage) {
@@ -216,12 +222,14 @@ async function updateStage() {
   try {
     const res = await computeStage(state.stage, state.week);
     if (tok !== ui.stageToken) return;
+    const subject = res ? `${res.kind}:${res.id || ''}` : '';
+    if (subject !== ui.subject) { ui.subject = subject; if (!ui.readerMoved && !map.isAtFit() && state.view.kind !== 'store') { map.reset(); ui.moved = false; } }
     ui.stage = res;
     if (res && res.kind !== 'index') ui.tlOpen = true;
     if (ui.announceWeek && res && !ui.playing) {
       ui.announceWeek = false;
       const wv = weekValue(res);
-      announce(res.weekIdx == null ? t('recentSpan', { span: fspan(res.win.from, res.win.to) }) : `${t('week', { date: fdate(res.week) })}${wv ? `, ${wv.what} ${money(wv.value)}` : ''}`);
+      announce(res.weekIdx == null ? t('recentSpan', { span: fspan(res.win.from, res.win.to) }) : `${t('week', { date: fdate(res.week) })}${res.partial.has(res.week) ? `, ${t('partialWeek')}` : ''}${wv ? `, ${wv.what} ${money(wv.value)}` : ''}`);
     }
     const agg = aggregateByLocation(res);
     ui.locValues = agg.values;
@@ -286,11 +294,14 @@ function applyPadding(animate = true, pass = 0) {
     pad = { left: 16, right: 16, top, bottom: H - lowest + 10 };
   } else {
     const cardW = card ? card.width + 28 : 0;
-    const bottom = tl ? H - tl.top + 14 : 70;
+    const stacked = document.body.classList.contains('tl-stack');
+    const chipStacked = stacked && !!chrome.querySelector('.timeline.collapsed');
+    // a folded chip above the legend sits in the legend's column: it must not reserve the whole bottom band
+    const bottom = tl && !chipStacked ? H - tl.top + 14 : 70;
     let left = open && ui.side === 'left' ? cardW + 14 : 28;
     // the legend stack takes the bottom-left corner: keep the stores to its right (the city is taller than wide)
     // (with the timeline stacked above it, the bottom padding already clears it)
-    if (lg && !document.body.classList.contains('tl-stack')) left = Math.max(left, lg.right + 14);
+    if (lg && (!stacked || chipStacked)) left = Math.max(left, lg.right + 14, chipStacked && tl ? tl.right + 14 : 0);
     pad = { left, right: open && ui.side === 'right' ? cardW + 14 : 28, top: (search ? search.bottom : 60) + 16, bottom };
     // the week numeral is a corner too: beside the city when there is room, above it when not
     if (num) {
@@ -306,6 +317,7 @@ function applyPadding(animate = true, pass = 0) {
   bs.setProperty('--brw', `${br ? Math.round(br.width) : 0}px`);
   bs.setProperty('--tlh', `${tl ? Math.round(H - tl.top) : 0}px`);
   bs.setProperty('--tlb', `${tl ? Math.round(tl.bottom) : 60}px`);
+  bs.setProperty('--numh', `${num && phone ? Math.round(num.height) + 6 : 0}px`);
   map.setPadding(pad, animate);
   map.setObstacles([search, tl, card, lg, br, tr, num].filter(Boolean).map((r) => [r.left - 4, r.top - 4, r.right + 4, r.bottom + 4]));
   if (ui.stage && ui.locValues) map.setTags(stageTags(ui.stage, ui.locValues));
@@ -315,7 +327,7 @@ function applyPadding(animate = true, pass = 0) {
 }
 
 // ---------------------------------------------------------------- actions
-function openStore(id) { ui.lastStore = id; setView('store', id); }
+function openStore(id, from = 'card') { ui.lastStore = id; ui.storeFrom = from; setView('store', id); }
 function openProduct(id) { state.stage = { kind: 'product', id }; setView('product', id); }
 function openGroup(id) { state.stage = { kind: 'group', id }; setView('group', id); }
 function openBasket() { if (state.basket.length) state.stage = { kind: 'basket' }; if (state.view.kind === 'basket') closeCard(); else setView('basket'); }
@@ -341,14 +353,16 @@ function closeCard() {
     if (history.state && history.state.prev === hashFor(b, state.week)) { history.back(); return; }
     setView(b.kind, b.id); return;
   }
-  if (state.view.kind === 'store' && state.stage.kind !== 'index') { openStageCard(); return; }
+  if (state.view.kind === 'store' && state.stage.kind !== 'index' && ui.storeFrom !== 'map') { openStageCard(); return; }
+  if (state.view.kind === 'store' && ui.storeFrom === 'map' && ui.keyboard) ui.opener = stageHost.querySelector('svg');
   if (history.state && history.state.prev === hashFor({ kind: 'city' }, state.week)) { history.back(); return; }
   ui.replaceNext = true;
   setView('city');
 }
 function resetStage() {
   stopPlay();
-  if (document.activeElement && document.activeElement.closest && document.activeElement.closest('.timeline')) requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c) c.focus(); });
+  const ae = document.activeElement;
+  if (ae && ae.closest && (ae.closest('.timeline') || ae.closest('.legend'))) requestAnimationFrame(() => requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip') || chrome.querySelector('.legend .ltitle') || chrome.querySelector('.search input'); if (c) c.focus(); }));
   const wasStageCard = ['product', 'group', 'basket'].includes(state.view.kind);
   state.stage = { kind: 'index' }; state.week = null; ui.tlOpen = false;
   if (wasStageCard) closeCard(); else { writeHash(false); notify('stage'); }
@@ -428,7 +442,7 @@ function stageTitle() {
 function cardView() {
   const v = state.view;
   const win = recentWindow(state.data.meta);
-  const common = { side: ui.side, entering: ui.entering, win, partial: partialWeeks(state.data.meta), retrieved: retrievedDate(), onClose: closeCard, onOpenStore: openStore, onOpenProduct: openProduct, onOpenGroup: openGroup, showAll: ui.showAll, onShowAll: () => { const first = chrome.querySelectorAll('.card .rank li').length; ui.showAll = true; renderChrome(); requestAnimationFrame(() => { const a = chrome.querySelectorAll('.card .rank li a')[first]; if (a) a.focus({ preventScroll: true }); }); }, selectedStore: v.kind === 'store' ? v.id : ui.lastStore, onPickWeek: (w) => { stopPlay(); setWeek(w); }, onDeleteOwn: removeOwn, onCopyLink: () => copyLink(), byProduct: state.byProduct, byStore: state.byStore };
+  const common = { catalogReady: ui.catalogReady, side: ui.side, entering: ui.entering, win, partial: partialWeeks(state.data.meta), retrieved: retrievedDate(), onClose: closeCard, onOpenStore: openStore, onOpenProduct: openProduct, onOpenGroup: openGroup, showAll: ui.showAll, onShowAll: () => { const first = chrome.querySelectorAll('.card .rank li').length; ui.showAll = true; renderChrome(); requestAnimationFrame(() => { const a = chrome.querySelectorAll('.card .rank li a')[first]; if (a) a.focus({ preventScroll: true }); }); }, selectedStore: v.kind === 'store' ? v.id : ui.lastStore, onPickWeek: (w) => { stopPlay(); setWeek(w); }, onDeleteOwn: removeOwn, onCopyLink: () => copyLink(), byProduct: state.byProduct, byStore: state.byStore };
   if (v.kind === 'store') {
     const store = state.byStore.get(v.id);
     if (!store) return nothing;
@@ -473,7 +487,7 @@ function cardView() {
     return basketCard({ ...common, items: state.basket, stage: ui.stage && ui.stage.kind === 'basket' ? ui.stage : null, onlyComplete: ui.onlyComplete, pacicGroups: ui.pacicGroups || [], offer: ui.offer,
       onOnlyComplete: (b) => { ui.onlyComplete = b; renderChrome(); },
       onQty: (id, qty) => { const p = state.byProduct.get(id); basketSet(id, qty); if (qty <= 0 && p) announce(t('removed', { name: p.name })); },
-      onClear: () => { const prev = state.basket.slice(); basketReplace([]); showToast(t('cleared'), 6500, { label: t('undo'), fn: () => basketReplace(prev) }); requestAnimationFrame(() => { const n = chrome.querySelector('#basket-empty'); if (n) n.focus(); }); },
+      onClear: () => { const prev = state.basket.slice(); basketReplace([]); showToast(t('cleared'), 6500, { label: t('undo'), fn: () => basketReplace(prev) }); requestAnimationFrame(() => { const n = chrome.querySelector('#basket-empty'); if (n && !(document.activeElement && document.activeElement.classList.contains('toast-btn'))) n.focus(); }); },
       onOfferUse: () => { const n = ui.offer.length; basketReplace(ui.offer); ui.offer = null; announce(t('sharedReplaced', { n })); renderChrome(); requestAnimationFrame(() => { const h = chrome.querySelector('.card h2'); if (h) h.focus(); }); },
       onOfferMerge: () => { const n = ui.offer.length; for (const it of ui.offer) basketAdd(it.id, it.qty); ui.offer = null; announce(t('sharedMerged', { n })); renderChrome(); requestAnimationFrame(() => { const h = chrome.querySelector('.card h2'); if (h) h.focus(); }); },
       onOfferDismiss: () => { ui.offer = null; renderChrome(); requestAnimationFrame(() => { const h = chrome.querySelector('.card h2'); if (h) h.focus(); }); },
@@ -501,7 +515,8 @@ function runSearch(q) {
   ui.query = q; ui.active = -1;
   ui.results = ui.searchIndex && q ? search(ui.searchIndex, q) : q ? { groups: [], products: [], stores: [], total: -1 } : null;
   clearTimeout(ui.announceTimer);
-  if (ui.results) ui.announceTimer = setTimeout(() => announce(ui.results.total === -1 ? t('loadingCatalog') : ui.results.total === 0 ? t('noResults') : t('nResults', { n: ui.results.total })), 500);
+  const res = ui.results;
+  if (res) ui.announceTimer = setTimeout(() => announce(res.total === -1 ? t('loadingCatalog') : res.total === 0 ? t('noResults') : t('nResults', { n: res.total })), 500);
 }
 
 // the tooltip: re-rendered only when the hovered or keyboard-active dot changes; a move over the same dot only moves it
@@ -537,7 +552,8 @@ function renderChrome() {
         if (key === 'ArrowDown') { event.preventDefault(); ui.active = Math.min(flat.length - 1, ui.active + 1); renderChrome(); }
         else if (key === 'ArrowUp') { event.preventDefault(); ui.active = Math.max(0, ui.active - 1); renderChrome(); }
         else if (key === 'Enter') { event.preventDefault(); const e = flat[ui.active >= 0 ? ui.active : 0]; if (e) pickResult(e); else if (!ui.catalogReady && ui.query) ui.pendingPick = true; }
-        else if (key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (ui.query) { ui.query = ''; ui.results = null; ui.active = -1; renderChrome(); } else event.target.blur(); }
+        // Escape clears a query; on an empty box it falls through to the window, which steps the stage back
+        else if (key === 'Escape' && ui.query) { event.preventDefault(); event.stopPropagation(); ui.query = ''; ui.results = null; ui.active = -1; renderChrome(); }
       },
       onBlur: () => setTimeout(() => { if (!chrome.querySelector('.search').contains(document.activeElement) && ui.results) { ui.results = null; renderChrome(); } }, 150),
       onFocus: () => { if (ui.query && !ui.results && ui.searchIndex) { runSearch(ui.query); renderChrome(); } } })}
@@ -550,7 +566,7 @@ function renderChrome() {
       onExpand: () => { if (ui.phone.matches && open) ui.tlSheetOpen = true; else ui.tlOpen = true; renderChrome(); requestAnimationFrame(() => { const s = chrome.querySelector('.tl-svg'); if (s) s.focus(); applyPadding(); }); },
       onWeek: (w) => { stopPlay(); ui.announceWeek = true; setWeek(w); },
       // on the index, "Reciente" also folds the strip back into its chip
-      onLive: () => { stopPlay(); ui.announceWeek = true; if (ui.stage && ui.stage.kind === 'index') { ui.tlOpen = false; requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c && ui.keyboard) c.focus(); applyPadding(); }); } if (state.week) setWeek(null); else renderChrome(); },
+      onLive: () => { stopPlay(); ui.announceWeek = true; if (ui.phone.matches && open) ui.tlSheetOpen = false; if (ui.stage && ui.stage.kind === 'index') { ui.tlOpen = false; requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c && ui.keyboard) c.focus(); applyPadding(); }); } if (state.week) setWeek(null); else renderChrome(); },
       onPlay: togglePlay, onStep: (d) => { ui.announceWeek = true; stepWeek(d); } })}
     ${bottomRight({ settingsOn: state.view.kind === 'settings', onSettings: openSettings, onReset: () => { map.reset(); ui.moved = false; renderChrome(); requestAnimationFrame(() => { const s = chrome.querySelector('.settings-btn'); if (s) s.focus(); }); }, moved: ui.moved })}
   `;
@@ -608,10 +624,15 @@ async function boot() {
   map.onClick((id) => {
     const loc = state.byLoc.get(id); if (!loc) return;
     const best = ui.locValues && ui.locValues.get(id);
-    openStore((best && best.sid) || loc.stores[0]);
+    openStore((best && best.sid) || loc.stores[0], 'map');
   });
   map.onBackground(() => { if (ui.query) { ui.query = ''; ui.results = null; } if (state.view.kind !== 'city') closeCard(); else renderChrome(); });
-  map.onMove(() => { const moved = !map.isAtFit(); if (moved !== ui.moved) { ui.moved = moved; renderChrome(); } });
+  // the reader moved the map (a drag or a wheel, not a tap): a new subject then keeps their view
+  map.onMove(() => { const moved = !map.isAtFit(); if (!moved) ui.readerMoved = false; else if (ui.pointerHeld) ui.readerMoved = true; if (moved !== ui.moved) { ui.moved = moved; renderChrome(); } });
+  stageHost.addEventListener('pointerdown', () => { ui.pointerHeld = true; }, { passive: true });
+  window.addEventListener('pointerup', () => { ui.pointerHeld = false; }, { passive: true });
+  stageHost.addEventListener('wheel', () => { ui.readerMoved = true; }, { passive: true });
+  stageHost.addEventListener('keydown', (e) => { if (['+', '-', '=', '_'].includes(e.key)) ui.readerMoved = true; });
   veil.classList.add('off');
   setTimeout(() => veil.remove(), 600);
   if (!navigator.onLine) showToast(t('offlineStart'), 4000);
@@ -647,7 +668,10 @@ async function boot() {
     }
     if (kinds.has('view')) {
       const wasOpen = !!chrome.querySelector('.card');
-      if (!wasOpen && state.view.kind !== 'city') ui.opener = ui.opener || document.activeElement;
+      const ae0 = document.activeElement;
+      if (!wasOpen && state.view.kind !== 'city') ui.opener = ui.opener || (ae0 && ae0 !== document.body ? ae0 : null);
+      // the phone sheet opens at its normal height for every new card
+      document.body.classList.remove('sheet-full');
       ui.side = cardSide(); ui.showAll = false; ui.storeFilter = '';
       if (state.view.kind === 'city') ui.tlSheetOpen = false;
       ui.entering = motionOn(); renderChrome();
@@ -664,7 +688,7 @@ async function boot() {
         const h = chrome.querySelector('.card h2');
         if (h) { if (!(ui.offer && state.view.kind === 'basket')) announce(h.textContent); if (ui.keyboard) h.focus({ preventScroll: true }); }
         else if (state.view.kind === 'city' && ui.keyboard && (!document.activeElement || document.activeElement === document.body || !document.contains(document.activeElement))) {
-          const back = ui.opener && document.contains(ui.opener) ? ui.opener : chrome.querySelector('.search input');
+          const back = ui.opener && ui.opener !== document.body && document.contains(ui.opener) ? ui.opener : chrome.querySelector('.search input');
           if (back) back.focus({ preventScroll: true });
           ui.opener = null;
         }

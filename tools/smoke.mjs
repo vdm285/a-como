@@ -241,6 +241,40 @@ try {
     check('1024: no coloured dot under the timeline', under === 0, under);
     await ctx.close();
   }
+  // 7c. round 4: the hero never crowns a flagged price; ties on the map; search for shoppers
+  {
+    const { ctx, page } = await fresh();
+    await open(page, 'p/papa-973c78');
+    await page.waitForFunction(() => document.querySelector('.card .unitline') && document.querySelectorAll('.card .rank a.row').length > 3, { timeout: 15000 }).catch(() => {});
+    const r = await page.evaluate(() => {
+      const hero = (document.querySelector('.card .hero .big') || {}).textContent || '';
+      const flagged = [...document.querySelectorAll('.card .rank a.row')].filter((a) => /revísalo/.test(a.textContent)).map((a) => a.querySelector('.p').textContent.trim());
+      return { hero: hero.trim().split(/\s/)[0], flagged };
+    });
+    check('the hero is never a flagged price', !!r.hero && !r.flagged.includes(r.hero), r);
+    await page.goto(`${BASE}#p/refresco-2cfe2f`, { waitUntil: 'networkidle2' });
+    await page.waitForFunction(() => document.querySelectorAll('#stage .tag').length >= 2, { timeout: 15000 }).catch(() => {});
+    const tieTag = await page.$$eval('#stage .tag .tag-sub', (els) => els.map((e) => e.textContent));
+    check('a tie on the map is one tag that says so', tieTag.some((x) => /empatada en \d+ tiendas/.test(x)), tieTag);
+    await page.goto(`${BASE}`, { waitUntil: 'networkidle2' });
+    await page.waitForSelector('#stage .dot');
+    await page.type('.search input', 'huevos');
+    await page.waitForFunction(() => document.querySelectorAll('.search .list .item').length > 0, { timeout: 15000 }).catch(() => {});
+    check('search finds a plural', (await count(page, '.search .list .item')) > 0);
+    await page.click('.search .clear');
+    await page.type('.search input', 'leche');
+    await page.waitForFunction(() => document.querySelectorAll('.search .list .item').length > 0, { timeout: 15000 }).catch(() => {});
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => /#g\//.test(location.hash), { timeout: 15000 }).catch(() => {});
+    check('"leche" and Enter opens UHT milk, not evaporated', /leche-ultrapasteurizada/.test(page.url()), page.url().split('#')[1]);
+    await page.goto(`${BASE}#c?items=agua-sin-3c992d:1,frijol-85f207:1`, { waitUntil: 'networkidle2' });
+    await sleep(2500);
+    await page.evaluate(() => { location.hash = '#c?w=2026-03-09'; });
+    await sleep(2000);
+    const ctl = await page.evaluate(() => [...document.querySelectorAll('.timeline .step, .timeline .play')].map((b) => b.disabled));
+    check('a basket week no store completes keeps the timeline alive', ctl.length > 0 && ctl.filter(Boolean).length <= 1, ctl);
+    await ctx.close();
+  }
   // 8. phone: the sheet leaves map visible, no horizontal overflow
   {
     const { ctx, page } = await fresh({ width: 375, height: 812, deviceScaleFactor: 2, isMobile: true, hasTouch: true });

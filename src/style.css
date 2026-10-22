@@ -60,7 +60,7 @@ a:hover { text-decoration-color: var(--ink); }
 #stage .alc-label { fill: rgba(255, 255, 255, 0.5); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: var(--stage); stroke-width: 3px; stroke-linejoin: round; }
 #stage .dot { stroke: rgba(8, 12, 18, 0.92); stroke-width: 1.25px; vector-effect: non-scaling-stroke; cursor: pointer; transition: fill 420ms var(--ease); }
 #stage .dot.empty { fill: none; stroke: rgba(255, 255, 255, 0.42); stroke-width: 1px; }
-#stage .dot.hatch { fill: url(#hatch); stroke: rgba(255, 255, 255, 0.55); stroke-width: 1px; }
+#stage .dot.hatch { fill: url(#hatch); stroke: rgba(255, 255, 255, 0.35); stroke-width: 1px; opacity: 0.6; }
 #stage .dot.hover { stroke: #fff; stroke-width: 2px; }
 #stage .dot.sel { stroke: #fff; stroke-width: 2.5px; }
 #stage .ring { fill: none; stroke: var(--own); stroke-width: 2px; vector-effect: non-scaling-stroke; pointer-events: none; }
@@ -165,7 +165,7 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 .timeline .step:hover:not(:disabled) { background: var(--line); color: var(--ink); }
 .timeline .step:disabled { opacity: 0.3; }
 .timeline .step svg { width: 14px; height: 14px; }
-.timeline .tl-label { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.timeline .tl-label { font-size: 13px; font-weight: 700; white-space: nowrap; flex: none; }
 .timeline .tl-pill { flex: none; font-size: 11px; font-weight: 700; color: var(--own); border: 1px solid rgba(242, 193, 78, 0.45); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
 .timeline .play:disabled { opacity: 0.35; }
 .timeline .tl-cap { margin-left: auto; padding-left: 8px; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -185,6 +185,9 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 .tl-note { fill: var(--ink-2); font-size: 10.5px; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: rgba(14, 19, 28, 0.9); stroke-width: 3px; stroke-linejoin: round; }
 .tl-note.ref { fill: var(--accent); fill-opacity: 0.8; }
 .tl-peak { fill: var(--ink-2); }
+.tl-thin { fill: var(--ink-3); opacity: 0.7; }
+.strip-dot.far { stroke: var(--own); stroke-width: 1.4; }
+.search .item .tag.old { color: var(--own); border-color: rgba(242, 193, 78, 0.4); }
 .tl-cursor { stroke: var(--accent); stroke-width: 1.5; }
 .tl-knob { fill: var(--accent); stroke: var(--stage); stroke-width: 2; }
 .tl-live { flex: none; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.05); color: var(--ink-3); font-size: 12px; font-weight: 700; }
@@ -232,7 +235,7 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 .card .refline { margin-top: 6px; color: var(--ink-2); font-size: 13px; line-height: 1.45; }
 .card .refline b { color: var(--ink); }
 .card .hero .delta { font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); }
-.card .muted { color: var(--ink-3); font-size: 12.5px; margin-top: 3px; }
+.card .muted { color: var(--ink-3); font-size: 13px; margin-top: 3px; }
 .card .src { margin-top: 10px; }
 .card .note { color: var(--ink-2); font-size: 13px; line-height: 1.5; }
 .card .flag { color: var(--own); font-weight: 700; }
@@ -267,8 +270,9 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 .rank .sw { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); }
 .rank .sw.hatch { background: repeating-linear-gradient(45deg, rgba(255,255,255,.55) 0 1px, transparent 1px 3px); }
 .rank .nm { min-width: 0; }
-.rank .nm .n { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rank .nm .s { font-size: 12.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank .nm .n { font-weight: 600; font-size: 14px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.rank .nm .s { font-size: 13px; color: var(--ink-3); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.rank .nm .s .out { color: var(--ink-3); font-style: italic; }
 .rank .pr { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
 .rank .pr .p { font-weight: 800; font-size: 15px; white-space: nowrap; }
 .rank .pr .p .pu { font-size: 11.5px; font-weight: 600; color: var(--ink-3); margin-left: 1px; }
@@ -437,8 +441,9 @@ body.tl-stack .numeral .nwhat, body.tl-stack .numeral .nref { display: none; }
 
   .bottomleft { bottom: calc(10px + var(--sab)); left: calc(10px + var(--sal)); }
   .bottomright { bottom: calc(10px + var(--sab)); right: calc(10px + var(--sar)); }
-  body.card-right .bottomright, body.card-left .bottomleft { right: calc(10px + var(--sar)); left: calc(10px + var(--sal)); }
-  body.card-left .bottomright { right: calc(10px + var(--sar)); }
+  body.card-left .bottomleft, body.card-right .bottomleft { left: calc(10px + var(--sal)); right: auto; }
+  body.card-left .bottomright, body.card-right .bottomright { right: calc(10px + var(--sar)); left: auto; }
+  body.sheet-full .bottomleft, body.sheet-full .numeral { display: none; }
   .legend { width: min(300px, calc(100vw - 76px)); padding: 8px 12px; }
   .legend .lx { width: 40px; height: 40px; margin: -8px -8px -8px 0; }
   .credit { max-width: calc(100vw - 80px); font-size: 11px; }
@@ -454,7 +459,7 @@ body.tl-stack .numeral .nwhat, body.tl-stack .numeral .nref { display: none; }
   body:not(.no-card) .credit { display: none; }
   .tip { display: none; }
   /* toasts sit under the timeline when the sheet is up (they covered the whole map strip) */
-  .toast { left: 50%; bottom: auto; top: calc(var(--tlb, 110px) + 8px); }
+  .toast { left: 50%; bottom: auto; top: calc(var(--tlb, 110px) + var(--numh, 0px) + 8px); }
   body.no-card .toast { top: auto; bottom: calc(var(--lgh, 140px) + 16px); }
 }
 

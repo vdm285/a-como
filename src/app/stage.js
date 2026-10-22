@@ -204,7 +204,15 @@ export async function computeStage(stage, week) {
     // before the catalogue arrives there is nothing to compute (and nothing must be memoised)
     if (!group || !members.length) return { ...base, kind: 'group', id: stage.id, loading: true, values, colors: new Map(), cap: 0.2, weeks: recentWeeks, axisWeeks: recentWeeks, week: null, weekIdx: null, ref: null, refN: 0, tooFew: false, members: [], usable: [], curve: null };
     const { unit, dim } = groupUnit(group, members);
-    const usable = dim ? members.filter((p) => p.size && p.size.unit === dim && p.size.value > 0) : [];
+    // the comparison set: members in the group's dimension, sold in at least 3 stores, within a third
+    // to three times the median member size; the others are listed with the reason, never compared
+    const inDim = dim ? members.filter((p) => p.size && p.size.unit === dim && p.size.value > 0) : [];
+    const medSize = median(inDim.map((p) => p.size.value));
+    const excluded = new Map();
+    const bySize = inDim.filter((p) => { if (medSize && (p.size.value < medSize / 3 || p.size.value > medSize * 3)) { excluded.set(p.id, 'size'); return false; } return true; });
+    let usable = bySize.filter((p) => (p.storesAll ?? p.stores ?? 0) >= MIN_N);
+    if (usable.length) for (const p of bySize) { if (!usable.includes(p)) excluded.set(p.id, 'few'); }
+    else usable = bySize; // no member reaches 3 stores: keep them all rather than compare nothing
     const usableIds = new Set(usable.map((p) => p.id));
     // every member's file: usable ones set the prices; the others tell why a store is empty
     const files = await Promise.all(members.map((p) => loadProduct(p.id).catch(() => null)));
@@ -257,7 +265,7 @@ export async function computeStage(stage, week) {
     const curve = usable.length ? { kind: 'group', unit, rows: recentWeeks.map((w) => { const v = [...bestAt(w).values()].map((b) => b.per); const [lo, hi] = minMax(v); return [w, median(v), lo, hi, v.length]; }) } : null;
     const live = [...values.values()].filter((v) => v.value != null).map((v) => v.value);
     const [lo, hi] = minMax(live);
-    return { ...base, kind: 'group', id: stage.id, values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind: 'recent', tooFew, weekRef, weekN, ...far, n: refN, otherN: [...otherRecent.keys()].filter((sid) => !bestRecent.has(sid)).length, lo, hi, unit, dim, members, usable, curve, failed, total: members.length };
+    return { ...base, kind: 'group', id: stage.id, values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind: 'recent', tooFew, weekRef, weekN, ...far, excluded, n: refN, otherN: [...otherRecent.keys()].filter((sid) => !bestRecent.has(sid)).length, lo, hi, unit, dim, members, usable, curve, failed, total: members.length };
   }
 
   // ---------------------------------------------------------------- basket
@@ -277,9 +285,9 @@ export async function computeStage(stage, week) {
     }));
     const recentTotals = basketLatest(items, latestById, storeIds);
     const recentRanking = rankBasket(recentTotals);
-    const ref = recentRanking.base;
-    const refN = recentRanking.completeCount;
-    const cap = capFor(`c:${sig}`, [...recentTotals.values()].filter((r) => r.complete).map((r) => deviation(r.total, ref)));
+    let ref = recentRanking.base;
+    let refN = recentRanking.completeCount, refKind = 'recent';
+    let cap = capFor(`c:${sig}`, [...recentTotals.values()].filter((r) => r.complete).map((r) => deviation(r.total, ref)));
     const weeksById = new Map();
     await Promise.all(items.map(async (it) => { try { weeksById.set(it.id, await loadProductWeeks(it.id)); } catch { /* counted as missing */ } }));
     // the axis is fixed to the last 26 weeks of the data; every item is read by date
@@ -295,6 +303,11 @@ export async function computeStage(stage, week) {
       pw = pickWeek(weeks, week);
       totals = basketAtWeek(items, weeksById, storeIds, pw.week);
       ranking = rankBasket(totals);
+      // no recent reference: the week is compared with itself, and the legend says so
+      if (ref == null && ranking.base != null) {
+        ref = ranking.base; refN = ranking.completeCount; refKind = 'week';
+        cap = capFor(`c:${sig}:${pw.week}`, ranking.list.filter((r) => r.complete).map((r) => deviation(r.total, ref)));
+      }
       // weekly totals are compared with the recent reference, like every other stage
       for (const r of ranking.list) r.dev = r.complete ? deviation(r.total, ref) : null;
       for (const [, r] of totals) r.dev = r.complete ? deviation(r.total, ref) : null;
@@ -306,7 +319,7 @@ export async function computeStage(stage, week) {
     }
     const weekMed = pw.idx != null ? ranking.base : null, weekN = pw.idx != null ? ranking.completeCount : 0;
     const tooFew = ref != null && gate(values, refN);
-    return { ...base, kind: 'basket', values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind: 'recent', tooFew, weekMed, weekN, ranking, curve: { kind: 'basket', rows: curveRows }, failed, total: items.length };
+    return { ...base, kind: 'basket', values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind, tooFew, weekMed, weekN, ranking, anyComplete: curveRows.some((r) => r[4] > 0) || recentRanking.completeCount > 0, curve: { kind: 'basket', rows: curveRows }, failed, total: items.length };
   }
   return null;
 }

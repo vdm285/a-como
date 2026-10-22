@@ -12,7 +12,7 @@
 // - Alcaldía labels sit above the dots with a knockout halo, are sized in screen pixels, and
 //   colliding labels are dropped.
 
-import { geoMercator, geoPath, geoCentroid } from 'd3-geo';
+import { geoMercator, geoPath, geoCentroid, geoContains } from 'd3-geo';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const DOT_R = 5;          // on-screen radius at the fit, for a median-coloured dot
@@ -106,7 +106,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       const c = projection(geoCentroid(f));
       if (!c) continue;
       const area = path.area(f);
-      labelItems.push({ x: c[0], y: c[1], name: (f.properties && f.properties.name) || '', area });
+      labelItems.push({ x: c[0], y: c[1], name: (f.properties && f.properties.name) || '', area, f });
     }
     labelItems.sort((a, b) => b.area - a.area); // big alcaldías win collisions
   }
@@ -150,7 +150,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
         c.style.fill = ''; c._t = 0;
       } else {
         c.classList.remove('empty', 'hatch');
-        c.style.fill = st; c._t = Math.min(1, Math.abs(v.t || 0));
+        c.style.fill = st; c._t = Math.min(1, Math.max(0, -(v.t || 0)));
       }
       if (was === undefined || (was === 'e') !== (st === 'e') || st !== 'e') c._rk = null; // radius depends on state and strength
     }
@@ -190,8 +190,8 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     for (const c of dotEls.values()) {
       if (c._rk === view.k) continue; // a pan does not change any radius
       c._rk = view.k;
-      const empty = c.classList.contains('empty');
-      c.setAttribute('r', (empty ? DOT_R * 0.45 * Math.pow(Math.max(view.k, 0.3), 0.15) : screenR(c._t || 0)) / view.k);
+      const empty = c.classList.contains('empty'), hatch = c.classList.contains('hatch');
+      c.setAttribute('r', (empty ? DOT_R * 0.45 * Math.pow(Math.max(view.k, 0.3), 0.15) : hatch ? screenR(0) * 0.7 : screenR(c._t || 0)) / view.k);
     }
     for (const [id, ring] of ringEls) { const c = dotEls.get(id); const r = c ? Number(c.getAttribute('r')) : DOT_R / view.k; ring.setAttribute('r', r + 3 / view.k); }
     const halo = layers.halo.firstChild;
@@ -203,6 +203,10 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   }
 
   // ---- labels in screen space, collision-culled ----
+  // candidate offsets for a label, nearest the centroid first (in label-height units)
+  const LABEL_OFFSETS = [];
+  for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) LABEL_OFFSETS.push([dx, dy]);
+  LABEL_OFFSETS.sort((a, b) => Math.hypot(a[0], a[1] * 1.4) - Math.hypot(b[0], b[1] * 1.4));
   // dots inside a screen box (any dot: a name over rings reads as fragments too)
   function dotsIn(box, pad = 2) {
     let n = 0;
@@ -211,21 +215,31 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   }
   function drawLabels() {
     labelsG.innerHTML = '';
-    if (!labelsOn || view.k > 4.5) return;
+    if (!labelsOn) return;
     // a city drawn smaller than its own names gets none
     { const fb = frameBounds(); if ((fb[1][0] - fb[0][0]) * view.k < 200) return; }
     const placed = [...obstacles, ...placedTags];
     const size = W < 520 ? 9 : 10.5;
     const hit = (box, b) => !(box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3]);
+    // a screen point inside the label's own alcaldía?
+    const inside = (feature, sx, sy) => { const ll = projection.invert([(sx - view.x) / view.k, (sy - view.y) / view.k]); return !!ll && geoContains(feature, ll); };
     for (const it of labelItems) {
-      const x = it.x * view.k + view.x, y = it.y * view.k + view.y;
+      const cx = it.x * view.k + view.x, cy = it.y * view.k + view.y;
       const w = it.name.length * size * 0.7 + 6, h = size + 4;
-      const box = [x - w / 2, y - h / 2, x + w / 2, y + h / 2];
-      if (box[0] < 4 || box[2] > W - 4 || box[1] < 4 || box[3] > H - 4) continue;
-      if (placed.some((b) => hit(box, b))) continue;
-      if (dotsIn(box) > 2) continue;
-      placed.push(box);
-      const t = el('text', { x, y, class: 'alc-label' }, labelsG);
+      // the centroid first, then nearby spots inside the alcaldía, preferring the emptiest one
+      let best = null, bestCost = Infinity;
+      for (const [dx, dy] of LABEL_OFFSETS) {
+        const x = cx + dx * size * 1.6, y = cy + dy * size * 1.4;
+        const box = [x - w / 2, y - h / 2, x + w / 2, y + h / 2];
+        if (box[0] < 4 || box[2] > W - 4 || box[1] < 4 || box[3] > H - 4) continue;
+        if (placed.some((b) => hit(box, b))) continue;
+        if (!inside(it.f, x, y)) continue;
+        const cost = dotsIn(box) * 4 + Math.hypot(dx, dy);
+        if (cost < bestCost) { best = { x, y, box }; bestCost = cost; if (cost === 0) break; }
+      }
+      if (!best || dotsIn(best.box) > 2) continue;
+      placed.push(best.box);
+      const t = el('text', { x: best.x, y: best.y, class: 'alc-label' }, labelsG);
       t.style.fontSize = `${size}px`;
       t.textContent = it.name;
     }
@@ -470,8 +484,11 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     // A card opened or closed (or the chrome moved). At the fit: glide to the new fit. Zoomed by
     // hand: keep the zoom, and only if the selected store is now covered, pan it into view.
     setPadding(p, animate = true) {
+      const before = { x: pad.left + (W - pad.left - pad.right) / 2, y: pad.top + (H - pad.top - pad.bottom) / 2 };
       pad = { ...pad, ...p };
       if (atFit) { animateTo(fitView(), animate ? 480 : 0); return; }
+      const after = { x: pad.left + (W - pad.left - pad.right) / 2, y: pad.top + (H - pad.top - pad.bottom) / 2 };
+      if (Math.abs(after.x - before.x) > 40 && !selected) { animateTo(clampView({ k: view.k, x: view.x + after.x - before.x, y: view.y + after.y - before.y }), animate ? 480 : 0); return; }
       const s = selected && byId.get(selected);
       if (s && !api.inFreeArea(selected)) {
         const cx = pad.left + (W - pad.left - pad.right) / 2, cy = pad.top + (H - pad.top - pad.bottom) / 2;
