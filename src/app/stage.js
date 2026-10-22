@@ -217,7 +217,11 @@ export async function computeStage(stage, week) {
     else usable = bySize; // no member reaches 3 stores: keep them all rather than compare nothing
     const usableIds = new Set(usable.map((p) => p.id));
     // every member's file: usable ones set the prices; the others tell why a store is empty
-    const files = await Promise.all(members.map((p) => loadProduct(p.id).catch(() => null)));
+    // a member that could not be fetched offline makes the whole subject "not downloaded": its
+    // counts would otherwise read as facts ("0 tiendas", "ninguna semana tuvo 3 tiendas")
+    let offline = null;
+    const files = await Promise.all(members.map((p) => loadProduct(p.id).catch((e) => { if (e && e.offline) offline = e; return null; })));
+    if (offline) throw offline;
     const failed = files.filter((f) => !f).length;
     const bestRecent = new Map(), otherRecent = new Map(), lastSeen = new Map();
     members.forEach((p, i) => {
@@ -267,14 +271,19 @@ export async function computeStage(stage, week) {
       pw = pickWeek(recentWeeks, week);
       const best = bestAt(pw.week);
       // the member list says what this week used: each member's stores and median price that week,
-      // and why one was left out (a recent price beside a week's count read as that week's)
+      // and why one was left out (a recent price beside a week's count read as that week's). The
+      // members in another unit or with no size are listed too, each in its own unit
       const counts = countsAt(pw.week), ok = usableAt(pw.week);
-      memberWeekN = new Map(bySize.map((p, i) => {
-        const wf = weekFiles[i]; const col = wf ? wf.weeks.indexOf(pw.week) : -1;
+      const rest = members.filter((p) => !bySize.includes(p));
+      const restFiles = await Promise.all(rest.map((p) => loadProductWeeks(p.id).catch(() => null)));
+      const own = (p) => (!p.size ? null : p.size.unit === dim ? unit : p.size.unit === 'pza' ? 'pza' : p.size.unit === 'ml' ? 'l' : 'kg');
+      const entry = (p, wf, n) => {
+        const col = wf ? wf.weeks.indexOf(pw.week) : -1;
         const prices = col < 0 ? [] : Object.values(wf.stores).map((arr) => arr[col]).filter((v) => v != null);
         const price = median(prices);
-        return [p.id, { n: counts[i], price, per: price != null ? perUnit(price, p.size, unit) : null }];
-      }));
+        return [p.id, { n: n ?? prices.length, price, per: price != null && own(p) ? perUnit(price, p.size, own(p)) : null }];
+      };
+      memberWeekN = new Map([...bySize.map((p, i) => entry(p, weekFiles[i], counts[i])), ...rest.map((p, i) => entry(p, restFiles[i]))]);
       for (const [pid, why] of [...excluded]) if (why === 'few') excluded.delete(pid);
       if (ok.size < bySize.length) for (const p of bySize) if (!ok.has(p.id)) excluded.set(p.id, 'fewWeek');
       weekRef = median([...best.values()].map((b) => b.per)); weekN = best.size;
@@ -298,15 +307,18 @@ export async function computeStage(stage, week) {
     if (!items.length) return { ...base, kind: 'basket', values, colors: new Map(), cap: 0.2, weeks: [], axisWeeks: [], week: null, weekIdx: null, ref: null, ranking: { list: [], base: null, dearest: null, completeCount: 0 }, curve: null };
     const sig = basketSignature(items);
     const latestById = new Map();
-    let failed = 0;
+    // (an item that could not be fetched offline makes the basket "not downloaded": no store can
+    // be said to have everything when one item's prices are missing)
+    let failed = 0, offline = null;
     await Promise.all(items.map(async (it) => {
       try {
         const f = await loadProduct(it.id);
         const latest = {};
         for (const [sid, o] of Object.entries(f.latest || {})) if (inWindow(o[1], win)) latest[sid] = o;
         latestById.set(it.id, { latest });
-      } catch { failed++; }
+      } catch (e) { failed++; if (e && e.offline) offline = e; }
     }));
+    if (offline) throw offline;
     const recentTotals = basketLatest(items, latestById, storeIds);
     const recentRanking = rankBasket(recentTotals);
     let ref = recentRanking.base;

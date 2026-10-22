@@ -321,6 +321,9 @@ const STR = {
     basketUndoAll: "Quitaste {n} productos",
     onlyPricedHere: "el único con precio",
     medianThatWeek: "mediana esa semana",
+    trendPointNear: "{price} ({n} semanas a menos de 1 % de él, la última el {date})",
+    onlyFlaggedHere: "solo precios marcados «revísalo»; el menor",
+    noUnitRings: "sin tamaños comparables: no se compara por unidad",
   },
   en: {
     appName: 'A cómo',
@@ -638,6 +641,9 @@ const STR = {
     basketUndoAll: "Removed {n} products",
     onlyPricedHere: "the only one with a price",
     medianThatWeek: "that week's median",
+    trendPointNear: "{price} ({n} weeks within 1 % of it, the latest {date})",
+    onlyFlaggedHere: "only prices flagged “check it”; the lowest",
+    noUnitRings: "no comparable sizes: not compared per unit",
   },
 };
 

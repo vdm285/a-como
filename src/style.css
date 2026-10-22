@@ -491,7 +491,7 @@ body.no-motion .rank li.tie-hl a.row { animation: none; background: rgba(255, 25
    given back as a negative margin) */
 @media (pointer: coarse) {
   .ltitle { padding-block: 11px; margin-block: -11px; }
-  .card .bitems .linkish { display: block; padding: 13px 0 9px; margin-block: -5px; }
+  .card .bitems .linkish { display: block; padding-block: 11px; margin-block: -11px; position: relative; z-index: 1; }
   .credit a { display: inline-block; padding-block: 12px; margin-block: -12px; }
   .card .chip { min-height: 40px; }
   .toast-btn { min-height: 40px; }
@@ -499,5 +499,16 @@ body.no-motion .rank li.tie-hl a.row { animation: none; background: rgba(255, 25
 /* a toast with an undo is one line: its text shortens, the button keeps its size */
 .toast { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .toast.has-action .toast-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* the reset button's place is kept while it is hidden, so the layout never depends on it */
-.bottomright .reset.slot { visibility: hidden; pointer-events: none; }
+/* (on a phone the name already has 8 px above and 4 px below: the hit area grows by the rest) */
+@media (pointer: coarse) and (max-width: 720px) { .card .bitems .linkish { padding: 13px 0 9px; margin-block: -5px; } }
+/* desktop: the reset button stands above the settings button, so the corner's width (and the
+   timeline beside it) never depends on whether the map was moved */
+@media (min-width: 721px) { .bottomright { flex-direction: column; align-items: flex-end; } }
+@media (max-width: 720px) {
+  /* the numeral keeps one line: a wrapped light-week note moved the city on every step */
+  .numeral .nsub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  /* the strip's label gives way so its fold button stays on the strip */
+  .timeline .tl-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* the undo toast may take two lines on a phone: it is the only place that names what went */
+  .toast.has-action .toast-text { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+}

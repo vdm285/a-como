@@ -26,7 +26,7 @@ export function topRight({ basketCount, basketOn, onBasket }) {
 
 export function bottomRight({ settingsOn, onSettings, onReset, moved }) {
   return html`<div class="float bottomright">
-    ${moved ? html`<button class="pill icon-btn reset" @click=${onReset} title=${t('reset')} aria-label=${t('reset')}>${I.center()}</button>` : html`<span class="pill icon-btn reset slot" aria-hidden="true"></span>`}
+    ${moved ? html`<button class="pill icon-btn reset" @click=${onReset} title=${t('reset')} aria-label=${t('reset')}>${I.center()}</button>` : nothing}
     <button class="pill icon-btn settings-btn ${settingsOn ? 'on' : ''}" @click=${onSettings} title=${t('settings')} aria-label=${t('settings')} aria-expanded=${settingsOn ? 'true' : 'false'}>${I.cog()}</button>
   </div>`;
 }
@@ -72,7 +72,7 @@ export function legend({ stage, title, hasOwn, onResetStage, onTitle }) {
   const noneComplete = stage.kind === 'basket' && stage.ranking && !stage.ranking.completeCount && stage.ranking.list.length > 0;
   const noScale = !index && stage.ref == null;
   // (a stage still loading makes no claim about the empty rings)
-  const emptyRows = stage.loading ? [] : index
+  const emptyRows = stage.loading ? [] : stage.noWeeks ? [t('noUnitRings')] : index
     ? (stage.weekIdx == null ? [t('emptyIndexFew'), t('emptyIndexStale', { span: fspan(stage.win.from, stage.win.to, true) })] : [t('emptyIndexWeek')])
     : stage.kind === 'basket' ? [stage.weekIdx == null ? t('emptyBasketRecent') : t('noVisitWeek')]
     : [stage.weekIdx == null ? t('emptyPriceRecent') : t('noVisitWeek')];
@@ -132,8 +132,14 @@ export function trendText(stage) {
   const hiV = Math.max(...vals), loV = Math.min(...vals);
   if (!(loV > 0) || hiV / loV - 1 < 0.1) return '';
   const unit = stage.kind === 'group' && stage.unit ? `/${unitName(stage.unit, true)}` : '';
-  // a value that holds for several weeks is dated to its latest week, with the count
-  const point = (v) => { const at = rows.filter((r) => Math.abs(r[1] - v) < 0.005); const last = at[at.length - 1][0]; return at.length > 1 ? t('trendPointMany', { price: money(v) + unit, n: at.length, date: fdate(last, true) }) : t('trendPoint', { price: money(v) + unit, date: fdate(last, true) }); };
+  // a value that holds for several weeks is dated to its latest week, with the count; weeks
+  // within 1 % of it are a plateau too (the strip counts them so), said as "near" it
+  const point = (v) => {
+    const at = rows.filter((r) => Math.abs(r[1] - v) < 0.005), near = rows.filter((r) => Math.abs(r[1] / v - 1) <= 0.01);
+    if (near.length >= 3 && near.length > at.length) return t('trendPointNear', { price: money(v) + unit, n: near.length, date: fdate(near[near.length - 1][0], true) });
+    const last = at[at.length - 1][0];
+    return at.length > 1 ? t('trendPointMany', { price: money(v) + unit, n: at.length, date: fdate(last, true) }) : t('trendPoint', { price: money(v) + unit, date: fdate(last, true) });
+  };
   return t('trendLine', { since: fdate(rows[0][0], 'monthYear'), hi: point(hiV), lo: point(loV) });
 }
 
@@ -341,7 +347,8 @@ export function tooltipText(loc, val, stage, byStore, byProduct) {
   const st = byStore.get((val && val.sid) || loc.stores[0]);
   const shared = loc.stores.length > 1;
   const priced = val && val.value != null;
-  const name = shared ? `${nHereText(loc, byStore)}${st && priced && stage && stage.kind !== 'index' ? `, ${t(val.n === 1 ? 'onlyPricedHere' : 'cheapestOfThem')}: ${st.name}` : ''}` : st ? st.name : '';
+  // (a point whose only prices are flagged has no "cheapest": a flagged price is never one)
+  const name = shared ? `${nHereText(loc, byStore)}${st && priced && stage && stage.kind !== 'index' ? `, ${t(val.n === 1 ? 'onlyPricedHere' : val.far ? 'onlyFlaggedHere' : 'cheapestOfThem')}: ${st.name}` : ''}` : st ? st.name : '';
   if (!priced) return `${name}. ${reasonText(val)}`;
   if (stage.kind === 'index') return `${name}. ${storeIndexWords(val.value)}${val.week ? `, ${t('week', { date: fdate(val.week) })}` : ''}`;
   const unit = stage.kind === 'group' && stage.unit ? ` / ${unitName(stage.unit)}` : '';
@@ -375,7 +382,7 @@ export function tooltip({ loc, val, stage, byStore, byProduct, x, y, free, own }
   const flip = y < 130;
   return html`<div class="tip" style="left:${left}px;top:${y}px;${flip ? 'transform:translate(-50%,16px)' : ''}">
     <div class="n">${shared ? nHereText(loc, byStore) : s.name}</div>
-    <div class="s">${shared ? (stage.kind === 'index' ? '' : `${t(val && val.n === 1 ? 'onlyPricedHere' : 'cheapestOfThem')}: ${s.name}`) : `${s.chain}${giroLabel(s) ? ' · ' + giroLabel(s) : ''}${s.municipio ? ' · ' + s.municipio : ''}`}</div>
+    <div class="s">${shared ? (stage.kind === 'index' ? '' : `${t(val && val.n === 1 ? 'onlyPricedHere' : val && val.far ? 'onlyFlaggedHere' : 'cheapestOfThem')}: ${s.name}`) : `${s.chain}${giroLabel(s) ? ' · ' + giroLabel(s) : ''}${s.municipio ? ' · ' + s.municipio : ''}`}</div>
     ${line}
     ${ownLine}
   </div>`;

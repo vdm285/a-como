@@ -54,7 +54,13 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   let pad = { left: 24, right: 24, top: 80, bottom: 90 };
   let view = { k: 1, x: 0, y: 0 };
   let atFit = true; // false once the reader zooms or pans by hand
-  let selected = null, hovered = null, userMoves = 0, savedView = null, restoreView = null;
+  let selected = null, hovered = null, userMoves = 0, savedView = null, restoreView = null, userZoomed = false;
+  // a view saved under one padding, moved by the change of the free area's centre since
+  const shiftFor = (v, p0) => {
+    const c0 = { x: p0.left + (W - p0.left - p0.right) / 2, y: p0.top + (H - p0.top - p0.bottom) / 2 };
+    const c1 = { x: pad.left + (W - pad.left - pad.right) / 2, y: pad.top + (H - pad.top - pad.bottom) / 2 };
+    return { k: v.k, x: v.x + c1.x - c0.x, y: v.y + c1.y - c0.y };
+  };
   let lastColors = null, ownIds = new Set(), tags = [], labelsOn = true, obstacles = [], placedTags = [], active = null;
   const byId = new Map(located.map((s) => [s.id, s]));
   const dotEls = new Map();
@@ -362,7 +368,8 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       const w = Math.ceil(tw) + 16, h = tg.sub ? 36 : 22;
       // above, below and beside the dot, at three leader lengths: the nearest spot that covers no data wins
       const spots = [];
-      for (const d of [10, 30, 56]) spots.push([x + d, y - h - d], [x - w - d, y - h - d], [x + d, y + d], [x - w - d, y + d], [x + d + 8, y - h / 2], [x - w - d - 8, y - h / 2]);
+      // (two longer leaders before a tag is given up: a week's dearest price vanished at 1440)
+      for (const d of [10, 30, 56, 90, 130]) spots.push([x + d, y - h - d], [x - w - d, y - h - d], [x + d, y + d], [x - w - d, y + d], [x + d + 8, y - h / 2], [x - w - d - 8, y - h / 2]);
       let spot = null, spotCost = Infinity;
       for (const [bx, by] of spots) {
         const box = [bx, by, bx + w, by + h];
@@ -454,7 +461,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       const cx = pinch.cx - rect.left, cy = pinch.cy - rect.top;
       const ncx = (a.x + b.x) / 2 - rect.left, ncy = (a.y + b.y) / 2 - rect.top;
       view = clampView({ k, x: ncx - (cx - pinch.vx) * (k / pinch.k), y: ncy - (cy - pinch.vy) * (k / pinch.k) });
-      atFit = false; userMoves++;
+      atFit = false; userMoves++; userZoomed = true;
       scheduleView();
       return;
     }
@@ -509,7 +516,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     const px = clientX - rect.left, py = clientY - rect.top;
     const k = Math.max(kMin(), Math.min(K_MAX, view.k * factor));
     const f = k / view.k;
-    atFit = false; userMoves++;
+    atFit = false; userMoves++; userZoomed = true;
     animateTo(clampView({ k, x: px - (px - view.x) * f, y: py - (py - view.y) * f }), ms);
   }
 
@@ -535,7 +542,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     if (id && !api.inFreeArea(id)) {
       const p = byId.get(id);
       const cx = pad.left + (W - pad.left - pad.right) / 2, cy = pad.top + (H - pad.top - pad.bottom) / 2;
-      atFit = false;
+      atFit = false; userMoves++; // a keyboard walk that pans is the reader moving the map
       view = clampView({ k: view.k, x: cx - p._x * view.k, y: cy - p._y * view.k });
       applyView();
     }
@@ -607,8 +614,10 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     setPadding(p, animate = true) {
       const before = { x: pad.left + (W - pad.left - pad.right) / 2, y: pad.top + (H - pad.top - pad.bottom) / 2 };
       pad = { ...pad, ...p };
-      if (atFit) { animateTo(fitView(), animate ? 480 : 0); return; }
-      if (restoreView) { const v = restoreView; restoreView = null; animateTo(clampView(v), animate ? 480 : 0); return; }
+      if (atFit) { restoreView = null; animateTo(fitView(), animate ? 480 : 0); return; }
+      // the view a store card opened over comes back, moved by however much the free area's centre
+      // differs from then (closing it into another card must not put the city under that card)
+      if (restoreView) { const r = restoreView; restoreView = null; animateTo(clampView(shiftFor(r.view, r.pad)), animate ? 480 : 0); return; }
       const base = anim && anim.target ? anim.target : view;
       const after = { x: pad.left + (W - pad.left - pad.right) / 2, y: pad.top + (H - pad.top - pad.bottom) / 2 };
       let target = Math.abs(after.x - before.x) > 40 || Math.abs(after.y - before.y) > 40 ? clampView({ k: base.k, x: base.x + after.x - before.x, y: base.y + after.y - before.y }) : base;
@@ -621,14 +630,19 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       if (target !== view) animateTo(target, animate ? 480 : 0); else applyView();
     },
     fitK() { return fitView().k; },
-    reset() { atFit = true; animateTo(fitView()); },
+    // a zoom the reader made (wheel, pinch, double tap, + and −), as opposed to one the app made
+    userZoomed() { return userZoomed && !atFit; },
+    // the view now, to come back to after a passing layout (the phone's full sheet)
+    snapshot() { return { view: { ...(anim && anim.target ? anim.target : view) }, pad: { ...pad }, moves: userMoves }; },
+    restoreSnapshot(s) { if (!s || s.moves !== userMoves || atFit) return false; animateTo(clampView(shiftFor(s.view, s.pad))); return true; },
+    reset() { atFit = true; userZoomed = false; restoreView = null; animateTo(fitView()); },
     // centre a location in the free area; k is a multiple of the fit scale
     zoomTo(id, kRel = 4) {
       const s = byId.get(id);
       if (!s || s._x == null) return;
       const k = Math.min(K_MAX, fitView().k * kRel);
       const cx = pad.left + (W - pad.left - pad.right) / 2, cy = pad.top + (H - pad.top - pad.bottom) / 2;
-      atFit = false;
+      atFit = false; userZoomed = false; restoreView = null;
       animateTo(clampView({ k, x: cx - s._x * k, y: cy - s._y * k }), 650);
     },
     // how many of these locations the view shows in the free area (at a running animation's end)
@@ -647,8 +661,8 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     // colors: Map id -> { fill, t, empty, hatched }; t (0..1) is the strength of the signal
     setColors(colors) { lastColors = colors; if (applyColors(colors)) applyView(); },
     setSelected(id) {
-      if (id && !selected) savedView = atFit ? null : { view: { ...(anim && anim.target ? anim.target : view) }, moves: userMoves };
-      if (!id && selected) { restoreView = savedView && savedView.moves === userMoves && !atFit ? savedView.view : null; savedView = null; }
+      if (id && !selected) { restoreView = null; savedView = atFit ? null : { view: { ...(anim && anim.target ? anim.target : view) }, pad: { ...pad }, moves: userMoves }; }
+      if (!id && selected) { restoreView = savedView && savedView.moves === userMoves && !atFit ? savedView : null; savedView = null; }
       selected = id; applySelected(id); applyView();
     },
     setOwn(ids) { ownIds = new Set(ids || []); applyOwn(ownIds); applyView(); },

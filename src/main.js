@@ -47,14 +47,21 @@ const BASE = import.meta.env.BASE_URL;
 const reducedOS = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const motionOn = () => (state.prefs.motion === undefined || state.prefs.motion === null ? !reducedOS() : state.prefs.motion !== false);
 
-function hideToast() { ui.toast = ''; ui.toastAction = null; ui.basketSnap = null; renderChrome(); }
+function hideToast() { ui.toast = ''; ui.toastAction = null; ui.basketRemoved = null; renderChrome(); }
+function restoreRemoved(list) {
+  const cur = state.basket.slice();
+  for (const { item, at } of [...list].reverse()) if (item && !cur.some((b) => b.id === item.id)) cur.splice(Math.min(at, cur.length), 0, item);
+  basketReplace(cur);
+}
 async function runToastAction() {
   const a = ui.toastAction; const back = ui.toastReturn; ui.toastReturn = null; hideToast();
   if (a) await a.fn();
   requestAnimationFrame(() => { const target = back && back !== document.body && document.contains(back) ? back : chrome.querySelector('.card h2') || chrome.querySelector('.search input'); if (target) target.focus(); });
 }
 function showToast(text, ms = 2600, action = null, { steal = true } = {}) {
-  ui.toast = text; ui.toastAction = action; renderChrome();
+  // another toast ends a run of basket removals: its undo is gone with it
+  if (!(action && action.kind === 'basket-remove')) ui.basketRemoved = null;
+  ui.toast = text; ui.toastAction = action; ui.toastShownAt = performance.now(); renderChrome();
   clearTimeout(ui.toastTimer);
   ui.toastTimer = setTimeout(hideToast, action ? 6500 : ms);
   // an undo must be reachable before it expires: a keyboard reader is taken to it (not when the
@@ -278,7 +285,7 @@ async function updateStage() {
         requestAnimationFrame(() => requestAnimationFrame(() => {
           if (tok !== ui.stageToken || map.isAtFit() || !coloured.length) return;
           const { n, k } = map.inFreeCount(coloured);
-          const zoomedIn = map.zoom() > map.fitK() * 1.25;
+          const zoomedIn = map.userZoomed();
           if (zoomedIn ? k < Math.min(3, n) : k < n * 0.9) { ui.readerMoved = false; ui.focusZoom = null; map.reset(); ui.moved = false; renderChrome(); }
         }));
       }
@@ -436,6 +443,9 @@ function closeCard() {
   }
   if (state.view.kind === 'store' && state.stage.kind !== 'index' && ['product', 'group', 'basket'].includes(ui.storeReturn)) { openStageCard(); return; }
   if (state.view.kind === 'store' && ui.storeFrom === 'map' && ui.keyboard) ui.opener = stageHost.querySelector('svg');
+  // a subject that could not load offline is not kept as the stage behind a closed card (the map
+  // was left blank, with no legend to step back from)
+  if (ui.stageFailed && ui.stageFailed === `${state.stage.kind}:${state.stage.id || ''}`) { state.stage = { kind: 'index' }; state.week = null; ui.stageFailed = null; notify('stage'); }
   if (history.state && history.state.prev === hashFor({ kind: 'city' }, state.week)) { history.back(); return; }
   ui.replaceNext = true;
   setView('city');
@@ -516,7 +526,7 @@ function stageTitle() {
   const s = state.stage;
   if (!s || s.kind === 'index') return t('index');
   if (s.kind === 'basket') return t('legendBasket', { n: state.basket.length });
-  if (s.kind === 'group') { const g = state.byGroup.get(s.id); return g ? t('legendGroup', { name: g.name }) : t('group'); }
+  if (s.kind === 'group') { const g = state.byGroup.get(s.id); return g ? (ui.stage && ui.stage.kind === 'group' && ui.stage.id === s.id && ui.stage.noWeeks ? g.name : t('legendGroup', { name: g.name })) : t('group'); }
   const p = state.byProduct.get(s.id); return p ? `${p.name}${p.brand ? ' · ' + p.brand : ''}` : t('product');
 }
 
@@ -572,24 +582,25 @@ function cardView() {
         // so repeated taps or Enters on one row never take the rows that slide into its place
         if (qty <= 0 && performance.now() - (ui.lastRemoval || 0) < 450) return;
         const p = state.byProduct.get(id);
-        const at = state.basket.findIndex((b) => b.id === id), prev = state.basket.slice();
+        const at = state.basket.findIndex((b) => b.id === id), item = at >= 0 ? { ...state.basket[at] } : null;
         basketSet(id, qty);
         if (qty > 0 || at < 0) return;
         ui.lastRemoval = performance.now();
-        // one undo brings back every item removed while its toast is up
-        if (!(ui.toast && ui.basketSnap)) ui.basketSnap = prev;
-        const snap = ui.basketSnap;
-        // the focus stays in the list, on the next item's name (never on its remove button, where
-        // the next Enter would remove it too), else the one before, else the empty note
+        // the undo puts back exactly the items removed while its toast is up, at their places, into
+        // the basket as it is then (an old copy of the basket lost an item added in between)
+        const continuing = ui.toastAction && ui.toastAction.kind === 'basket-remove' && ui.basketRemoved;
+        if (!continuing) ui.basketRemoved = [];
+        ui.basketRemoved.push({ item, at });
+        const removed = ui.basketRemoved;
+        // the focus stays in the list, on the next item's row (a row does nothing on Enter: on its
+        // name a second Enter opened that product, on its × removed it), else the empty note
         requestAnimationFrame(() => {
           if (document.activeElement && document.activeElement !== document.body) return;
-          const names = chrome.querySelectorAll('.card .bitems .linkish');
-          const target = names[Math.min(at, names.length - 1)] || chrome.querySelector('#basket-empty') || chrome.querySelector('.card h2');
+          const rows = chrome.querySelectorAll('.card .bitems.mine li');
+          const target = rows[Math.min(at, rows.length - 1)] || chrome.querySelector('#basket-empty') || chrome.querySelector('.card h2');
           if (target) target.focus();
         });
-        const removedN = snap.length - state.basket.length;
-        showToast(removedN > 1 ? t('basketUndoAll', { n: removedN }) : t('removed', { name: p ? p.name : id }), 6500, { label: t('undo'), fn: () => basketReplace(snap) }, { steal: false });
-        ui.basketSnap = snap;
+        showToast(removed.length > 1 ? t('basketUndoAll', { n: removed.length }) : t('removed', { name: p ? p.name : id }), 6500, { kind: 'basket-remove', label: t('undo'), fn: () => restoreRemoved(removed) }, { steal: false });
       },
       onClear: () => { const prev = state.basket.slice(); basketReplace([]); showToast(t('cleared'), 6500, { label: t('undo'), fn: () => basketReplace(prev) }); requestAnimationFrame(() => { const n = chrome.querySelector('#basket-empty'); if (n && !(document.activeElement && document.activeElement.classList.contains('toast-btn'))) n.focus(); }); },
       onOfferUse: () => { const n = ui.offer.length; basketReplace(ui.offer); ui.offer = null; announce(t('sharedReplaced', { n })); renderChrome(); requestAnimationFrame(() => { const h = chrome.querySelector('.card h2'); if (h) h.focus(); }); },
@@ -622,6 +633,10 @@ function settleSheet() {
   clearTimeout(ui.sheetTimer);
   ui.sheetTimer = setTimeout(() => {
     applyPadding(true);
+    // back from the full sheet, a view the reader had made returns as it was (the full sheet's
+    // strip re-centred the selected store, and the way back undid only the shift)
+    const leaving = !document.body.classList.contains('sheet-full');
+    if (leaving && ui.sheetView) { const s = ui.sheetView; ui.sheetView = null; if (ui.readerMoved && map.restoreSnapshot(s)) return; }
     if (ui.readerMoved) return;
     if (ui.focusZoom && state.view.kind === 'store') map.zoomTo(ui.focusZoom, 3); else map.reset();
   }, 320);
@@ -688,7 +703,7 @@ function renderChrome() {
       onBlur: () => setTimeout(() => { if (!chrome.querySelector('.search').contains(document.activeElement) && ui.results) { ui.results = null; renderChrome(); } }, 150),
       onFocus: () => { if (ui.query && !ui.results && ui.searchIndex) { runSearch(ui.query); renderChrome(); } } })}
     ${topRight({ basketCount: state.basket.length, basketOn: state.view.kind === 'basket', onBasket: openBasket })}
-    ${toast({ text: ui.toast, action: ui.toastAction && ui.toastAction.label, onAction: runToastAction, onFocus: () => clearTimeout(ui.toastTimer), onBlur: () => { if (ui.toastAction) { clearTimeout(ui.toastTimer); ui.toastTimer = setTimeout(hideToast, 4000); } } })}
+    ${toast({ text: ui.toast, action: ui.toastAction && ui.toastAction.label, onAction: () => { if (performance.now() - (ui.toastShownAt || 0) > 600) runToastAction(); }, onFocus: () => clearTimeout(ui.toastTimer), onBlur: () => { if (ui.toastAction) { clearTimeout(ui.toastTimer); ui.toastTimer = setTimeout(hideToast, 4000); } } })}
     ${open ? cardView() : nothing}
     <div class="float bottomleft">${legend({ stage: ui.stage, title: stageTitle(), hasOwn: !!(ui.stage && ownForStage(ui.stage).length), onResetStage: resetStage, onTitle: state.stage.kind !== 'index' && !['product', 'group', 'basket'].includes(state.view.kind) ? openStageCard : null })}${credit({ retrieved: retrievedDate() })}</div>
     ${weekNumeral(ui.stage)}
@@ -886,7 +901,7 @@ async function boot() {
     if (!sheetDrag) return;
     const dy = e.clientY - sheetDrag.y, b = document.body.classList;
     const grip = sheetDrag.grip; sheetDrag = null;
-    if (dy < -24 || (grip && Math.abs(dy) < 6 && !b.contains('sheet-full'))) { b.add('sheet-full'); b.remove('sheet-peek'); ui.tlSheetOpen = false; renderChrome(); }
+    if (dy < -24 || (grip && Math.abs(dy) < 6 && !b.contains('sheet-full'))) { if (!b.contains('sheet-full')) ui.sheetView = map.snapshot(); b.add('sheet-full'); b.remove('sheet-peek'); ui.tlSheetOpen = false; renderChrome(); }
     // leaving the full sheet returns to the height the card opened at (peek on short phones)
     else if (dy > 24 || (grip && Math.abs(dy) < 6)) { if (b.contains('sheet-full')) leaveFullSheet(innerHeight < 700); else b.add('sheet-peek'); }
     else return;

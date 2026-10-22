@@ -18,7 +18,10 @@ export function buildSearchIndex(data) {
   const groups = data.groups.map((g) => ({ kind: 'group', id: g.id, head: fold(g.name), key: fold(g.name), name: g.name, sub: g.category, n: g.stores ?? 0, boost: (pacicGroups.has(g.id) ? 1.2 : 0) - (g.stores ? 0 : 2), ref: g }));
   const products = data.products.map((p) => ({ kind: 'product', id: p.id, head: fold(p.name), brandKey: fold(p.brand || ''), key: fold(`${p.name} ${p.brand || ''} ${p.presentation || ''}`), name: p.name, brand: p.brand, sub: p.presentation, n: p.stores ?? 0, boost: (p.pacic ? 0.4 : 0) + (pacicGroups.has(p.group) ? 1.5 : 0) - (p.stores ? 0 : 2), ref: p }));
   const stores = data.stores.map((s) => ({ kind: 'store', id: s.id, head: fold(`${s.chain} ${s.name}`), chainKey: fold(s.chain), key: fold(`${s.chain} ${s.name} ${s.giro || ''} ${s.address || ''} ${s.municipio || ''}`), name: s.name, sub: `${s.chain}${s.municipio ? ' · ' + s.municipio : ''}`, n: s.products, boost: 0, muni: fold(s.municipio || ''), ref: s }));
-  for (const e of [...groups, ...products, ...stores]) if (e.head.includes('ñ')) e.alt = e.head.replace(/ñ/g, 'n');
+  // the same fields without ñ, for a reader who types "costena" or "jalapeno"
+  for (const e of [...groups, ...products, ...stores]) if (e.key.includes('ñ') || e.head.includes('ñ')) e.alt = { head: e.head.replace(/ñ/g, 'n'), brandKey: (e.brandKey || '').replace(/ñ/g, 'n'), key: e.key.replace(/ñ/g, 'n') };
+  // a product's presentation alone, where an English word's Spanish name may be a whole word
+  for (const e of products) e.presKey = fold(e.ref.presentation || '');
   // a place by its full name or by the names people use: "neza", "gam", "izcalli", "naucalpan"
   const full = [...new Set(stores.map((e) => e.muni).filter(Boolean))];
   const places = full.map((m) => [m, m]);
@@ -36,7 +39,7 @@ const EN_ES = { milk: 'leche', egg: 'huevo', eggs: 'huevo', tomato: 'jitomate', 
 // before Queso Panela), then a word start, then a hit inside a word; a hit only in the
 // presentation or address counts least. Ties break by how many stores carry it.
 const wordEnd = (s, j) => j >= s.length || s[j] === ' ' || (s[j] === 's' && (j + 1 >= s.length || s[j + 1] === ' ')) || (s.startsWith('es', j) && (j + 2 >= s.length || s[j + 2] === ' '));
-function scoreWord(entry, w) {
+function scoreCore(entry, w) {
   let h = entry.head.indexOf(w), best = -1;
   while (h >= 0) {
     const start = h === 0 || entry.head[h - 1] === ' ';
@@ -45,15 +48,31 @@ function scoreWord(entry, w) {
     h = entry.head.indexOf(w, h + 1);
   }
   if (best >= 0) return best;
-  // a name typed without its ñ: "pina" as a whole word is Piña (scored like a prefix); a mere
-  // start ("pan" in "panales") is as weak as a hit inside a word
-  if (entry.alt) { const a = entry.alt.indexOf(w); if (a >= 0) return (a === 0 || entry.alt[a - 1] === ' ') && wordEnd(entry.alt, a + w.length) ? 6 : 3; }
   if (entry.brandKey) { const b = entry.brandKey.indexOf(w); if (b >= 0) return (b === 0 || entry.brandKey[b - 1] === ' ') ? (wordEnd(entry.brandKey, b + w.length) ? 5 : 3.5) : 1.4; }
   // a whole word of the presentation counts like a whole word of the brand ("leche entera" is the
   // UHT carton "Entera", not the powdered milk whose brand line says "Entera")
   const i = entry.key.indexOf(w);
   if (i < 0) return -1;
   return (i === 0 || entry.key[i - 1] === ' ') ? (wordEnd(entry.key, i + w.length) ? 5 : 1.5) : 0.5;
+}
+// a hit only without the ñ is one step weaker: "pina" as a whole word is Piña (like a prefix),
+// a mere start ("pan" in "panales") is as weak as a hit inside a word
+const ALT_SCORE = { 9: 6, 6: 3, 3: 3, 5: 5, 3.5: 1.4, 1.4: 1.4, 1.5: 0.5, 0.5: 0.5 };
+// An English word's Spanish name counts only as a whole word of the name or the presentation,
+// never a prefix ("bread" → "pan" listed Pantiprotectores) nor a brand ("green" → "verde" listed
+// Verde Valle dried chilies)
+function scoreWhole(entry, w) {
+  const whole = (s) => { let i = s.indexOf(w); while (i >= 0) { if ((i === 0 || s[i - 1] === ' ') && wordEnd(s, i + w.length)) return true; i = s.indexOf(w, i + 1); } return false; };
+  if (whole(entry.head) || (entry.alt && whole(entry.alt.head))) return 9;
+  if (entry.presKey && whole(entry.presKey)) return 5;
+  return -1;
+}
+function scoreWord(entry, w) {
+  if (w[0] === '=') return scoreWhole(entry, w.slice(1));
+  const s = scoreCore(entry, w);
+  if (s >= 0 || !entry.alt) return s;
+  const a = scoreCore(entry.alt, w);
+  return a >= 0 ? ALT_SCORE[a] ?? a : -1;
 }
 // the scores of a hit inside a word ("nido" in Difenidol), dropped when anything matches better
 const INSIDE = new Set([3, 1.4, 0.5]);
@@ -88,7 +107,7 @@ export function search(index, query, limits = { groups: 6, products: 8, stores: 
   let place = null;
   for (const [alias, m] of index.places || []) { if (` ${q} `.includes(` ${alias} `)) { place = m; q = ` ${q} `.replace(` ${alias} `, ' ').trim(); break; } }
   // English: the word or any of its singular forms may have a Spanish name
-  const words = q.split(' ').filter(Boolean).map((w) => { const fs2 = forms(w); const es = fs2.map((x) => EN_ES[x]).find(Boolean); return en && es ? fs2.concat([fold(es)]) : fs2; });
+  const words = q.split(' ').filter(Boolean).map((w) => { const fs2 = forms(w); const es = fs2.map((x) => EN_ES[x]).find(Boolean); return en && es ? fs2.concat([`=${fold(es)}`]) : fs2; });
   if (!words.length && !place) return { groups: [], products: [], stores: [], total: 0 };
   // every list is scored first; a hit inside a word is kept only when no list has a better one
   const scored = (list) => (words.length ? list.map((e) => [...scoreFull(e, words), e]).filter(([sc]) => sc >= 0).sort((a, b) => b[0] - a[0]) : []);
@@ -101,7 +120,11 @@ export function search(index, query, limits = { groups: 6, products: 8, stores: 
   // the words name a chain when each is a whole word of some store's chain and one of them is
   // distinctive ("soriana", "la comer"; never "la" or "de" alone): the reader is looking for a
   // store, so the stores lead and Enter opens one
-  const chainWords = (e) => words.every((alts) => alts.some((w) => ` ${e.chainKey} `.includes(` ${w} `))) && words.some((alts) => alts.some((w) => w.length >= 4 && ` ${e.chainKey} `.includes(` ${w} `)));
+  // (a word also matches its plural in the chain: "farmacia" is in "Farmacias Similares")
+  const inChain = (e, w) => { const c = ` ${e.chainKey} `; return c.includes(` ${w} `) || c.includes(` ${w}s `) || c.includes(` ${w}es `); };
+  const chainWords = (e) => words.every((alts) => alts.some((w) => inChain(e, w))) && words.some((alts) => alts.some((w) => w.length >= 4 && inChain(e, w)));
+  // words that name a kind of store, not one chain: with a place they never say a chain is absent
+  const GENERIC = new Set(['farmacia', 'farmacias', 'tienda', 'tiendas', 'mercado', 'mercados', 'central', 'abasto', 'market', 'super', 'supermercado', 'hiper', 'mega', 'express', 'tortilleria', 'tortillerias', 'panaderia', 'panaderias', 'sucursal', 'bodega', 'publico']);
   let stores, storesFirst = false, placeName = null, storesTotal = 0;
   if (place) {
     // in a place, the words pick stores by their chain or name only (never by street address)
@@ -110,13 +133,14 @@ export function search(index, query, limits = { groups: 6, products: 8, stores: 
     const chainHere = words.length ? here.filter(chainWords) : [];
     // "soriana coyoacan" is a chain in a place: its stores there, no private-label products
     if (chainHere.length) { stores = chainHere.sort((a, b) => b.n - a.n).slice(0, 8); return { groups: [], products: [], stores, total: stores.length, place, placeName, storesFirst: true, storesTotal: chainHere.length }; }
-    // "oxxo tlalpan", a chain with no store in that place: say so, and list that chain elsewhere
-    // (it listed other chains' stores, or the chain's own-label products, and Enter opened one)
-    const chainAll = words.length ? index.stores.filter(chainWords) : [];
-    if (chainAll.length) { stores = [...chainAll].sort((a, b) => b.n - a.n).slice(0, 5); return { groups: [], products: [], stores, total: stores.length, place, placeName, storesFirst: true, storesTotal: chainAll.length, note: { chain: chainAll[0].ref.chain, place: placeName } }; }
     // "huevo iztapalapa" is a product in a place: the products, then the stores there whose name
     // has the words, else the place's biggest stores
     const byName = words.length ? here.map((e) => [score({ ...e, key: e.head }, words), e]).filter(([sc]) => sc >= 6 * words.length).sort((a, b) => b[0] - a[0]).map(([, e]) => e) : [];
+    // "oxxo tlalpan", one chain with no store in that place: say so, and list that chain elsewhere
+    // (it listed other chains' stores, or the chain's own-label products, and Enter opened one).
+    // Never for a kind of store ("farmacia coyoacan" has three pharmacies of other chains)
+    const chainAll = words.length && !byName.length && words.some((alts) => alts.some((w) => w.length >= 4 && !GENERIC.has(w))) ? index.stores.filter(chainWords) : [];
+    if (chainAll.length && new Set(chainAll.map((e) => e.ref.chain)).size === 1) { stores = [...chainAll].sort((a, b) => b.n - a.n).slice(0, 5); return { groups: [], products: [], stores, total: stores.length, place, placeName, storesFirst: true, storesTotal: chainAll.length, note: { chain: chainAll[0].ref.chain, place: placeName } }; }
     const pool = byName.length ? byName : here;
     stores = (byName.length ? byName : [...here].sort((a, b) => b.n - a.n)).slice(0, words.length ? 5 : 8);
     storesTotal = pool.length;

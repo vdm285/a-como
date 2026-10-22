@@ -384,7 +384,7 @@ export function groupCard(c) {
         <h3>${t('sizes')}${unit ? html` · ${t('perUnit', { unit: unitName(unit) })}` : nothing}${wk ? html` · ${t('medianThatWeek')}` : nothing}</h3>
         ${!mine ? pending(c) : html`<ul class="rank">${sized.slice(0, pLimit).map((p) => memberRow(p, perOf(p), uShort))}</ul>`}
         ${mine && sized.length > pLimit ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: sized.length - pLimit })}</button>` : nothing}
-        ${mine && otherUnit.length ? html`<div class="subh">${t('otherUnit')}</div><ul class="rank">${otherUnit.map((p) => { const u = p.size.unit === 'pza' ? 'pza' : p.size.unit === 'ml' ? 'l' : 'kg'; return memberRow(p, p.median != null ? perUnit(p.median, p.size, u) : null, unitName(u, true), false); })}</ul>` : nothing}
+        ${mine && otherUnit.length ? html`<div class="subh">${t('otherUnit')}</div><ul class="rank">${otherUnit.map((p) => { const u = p.size.unit === 'pza' ? 'pza' : p.size.unit === 'ml' ? 'l' : 'kg'; return memberRow(p, wk ? ((wk.get(p.id) || {}).per ?? null) : p.median != null ? perUnit(p.median, p.size, u) : null, unitName(u, true), false); })}</ul>` : nothing}
         ${mine && unsized.length ? html`<div class="subh">${t('noSize')}</div><ul class="rank">${unsized.map((p) => memberRow(p, null, '', false))}</ul>` : nothing}
       </section>
       ${unit ? html`<section>
@@ -471,7 +471,7 @@ export function basketCard(c) {
       </section>
       <section>
         <h3>${t('yourList')}</h3>
-        <ul class="bitems">${repeat(items, (it) => it.id, (it) => { const p = byProduct.get(it.id); const name = p ? p.name + (p.brand ? ' · ' + p.brand : '') : c.catalogReady ? it.id : t('loadingShort'); return html`<li>
+        <ul class="bitems mine">${repeat(items, (it) => it.id, (it) => { const p = byProduct.get(it.id); const name = p ? p.name + (p.brand ? ' · ' + p.brand : '') : c.catalogReady ? it.id : t('loadingShort'); return html`<li tabindex="-1" aria-label=${name}>
           <div><a class="n linkish" href=${`#p/${it.id}`} @click=${(e) => { e.preventDefault(); c.onOpenProduct(it.id); }}>${name}</a><div class="s">${p && p.median != null ? html`<b class="num nowrap">${money(p.median)}</b> · ` : nothing}${p ? (p.presentation || '') : ''}${p && p.median != null ? ` · ${t('storesRecentShort', { n: p.stores })}` : p ? ` · ${t('noRecentShort')}` : ''}</div></div>
           <div class="qty"><button @click=${() => c.onQty(it.id, it.qty - 1)} aria-label=${`${t('less')}: ${name}`}>−</button><span class="num" aria-label=${t('qty')}>${it.qty}</span><button @click=${() => c.onQty(it.id, it.qty + 1)} ?disabled=${it.qty >= 99} aria-label=${`${t('more1')}: ${name}`}>+</button></div>
           <button class="rm" @click=${() => c.onQty(it.id, 0)} title=${t('removeFromBasket')} aria-label=${`${t('removeFromBasket')}: ${name}`}>${I.x()}</button>

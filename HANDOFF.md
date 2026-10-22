@@ -2,6 +2,50 @@
 
 The state of the code, dated, newest first. `docs/VISION.md` is the direction; this file is what exists. Read `AGENTS.md` first.
 
+## 2026-10-22, evening — seventh round: what the verification of round 6 found (the owner still asleep)
+
+### State in one paragraph
+
+Four fresh agents verified round 6 on the live site (verdicts in `data/cache/verify6/result.json`, gitignored): 46 fixed, 16 partial, nothing regressed, and 33 new reports, mostly edges of round 6's own changes. Four were serious and are fixed: "farmacia coyoacán" said no pharmacy existed there; the basket's single undo could drop an item added between two removals; in a past week the rows in another unit showed recent prices under a "that week" heading; offline, an unvisited generic product or basket stated false counts. Unit tests 110/110; smoke 69/69 (2 new); `data/cache/r7/verify.mjs` 15/15; the round-6 script 24/24 and the round-5 script 25/27 with the two known items. Bundle: 213 kB JS / 76 kB gzip.
+
+### What the round found and what changed
+
+| Found (measured) | Fixed by |
+|---|---|
+| "farmacia coyoacán" said "Ninguna tienda Farmacia en Coyoacán" over one pharmacy in Cuauhtémoc while 3 were in Coyoacán; "farmacias tlalpan" named one chain over a list of five; "tienda", "mercado", "central" did the same | A word matches its plural in a chain's name; the "no store of this chain here" note needs one chain, a distinctive word, and no store in the place matching the words |
+| "la costena", "penafiel", "jalapeno" found nothing (the ñ-less form covered names only) | Brands and presentations are matched without their ñ too, one step weaker than with it |
+| English: "bread" listed panty liners, "green chili" a Verde Valle dried chili | An English word's Spanish name counts only as a whole word of a name or a presentation, never a prefix or a brand |
+| The basket's single undo replaced the basket with an old copy: an item added between two removals vanished, and an earlier removal came back unannounced | The undo puts back exactly the removed items at their places into the basket as it is; another toast ends the run; a click on Deshacer within 600 ms of its toast appearing is ignored (in the full sheet it appeared under the finger) |
+| After a removal, a second Enter opened the next item's product | Focus goes to the next row itself, which does nothing on Enter |
+| In a past week, rows in another unit showed recent prices under "mediana esa semana"; unsized rows lost their price | Every member's week file is read; each list shows that week's median and count |
+| Offline, an unvisited generic product read "25 productos · 0 tiendas" and "ninguna semana tuvo 3 tiendas"; a basket with an unvisited item read "Ninguna tienda tuvo todo" | A member or item that cannot be fetched offline makes the subject "todavía no se ha descargado"; closing such a card returns to the city with its legend |
+| A store card's remembered view was applied much later (opening another store jumped to an old zoom), and leaving a store for another card put the city under it | The remembered view is dropped whenever the view is replaced, and restored shifted by the change of the free area's centre |
+| A drag of the bare city counted as a deliberate zoom when the first card opened (phones, 1024, 1100: most of the subject hidden) | "Deliberate zoom" is now a flag set only by wheel, pinch, double tap and + / − |
+| A keyboard walk's pan was undone by closing the card; a phone grip round trip did not return to the view it left | A walk's pan counts as the reader's move; the view before the full sheet is restored on leaving it |
+| Stepping into a light week rescaled the phone's city (the numeral wrapped) | The numeral keeps one line |
+| The reset slot cost every desktop timeline 50 px (captions cut at 1280) | The reset button stands above the settings button: the corner's width never changes |
+| The card's sentence named a single week the strip treats as a plateau ("mínimo $628.50 (13 abr)" inside twelve weeks at $629.00) | "$628.50 (13 semanas a menos de 1 % de él, la última el …)" |
+| Smaller: a shared point with only flagged prices said "el más barato"; a generic product with no comparable sizes was "por unidad" with "sin precio reciente aquí"; a week's dear tag could vanish at 1440; the strip's fold button left the screen at 360; a long name was cut in the phone's undo toast; basket names grew rows on touch tablets | Each fixed |
+
+### Decisions taken while the owner slept (continued; each with its one-line reversal)
+
+35. **The basket's undo restores the removed items, not an old copy of the basket.** Reverse: `restoreRemoved` in `src/main.js`.
+36. **Offline, a subject with any member or item not downloaded says so as a whole** rather than showing partial counts. Reverse: the `offline` throws in the group and basket branches of `src/app/stage.js`.
+37. **The reset button sits above the settings button on desktop.** Reverse: the `flex-direction: column` rule for `.bottomright` at the end of `src/style.css`.
+
+### Not done
+
+- A "mínimo" note whose dot sits just under the reference line is still dropped (the card's sentence states it when the line moves 10 % or more).
+- English phrases with one word outside the dictionary ("cooking oil", "dish soap") still find nothing.
+- Labels: names blink out where a panel covers every spot; one-step pushes during a pan.
+- A "cheap" tag in a dear week has the red outline of its colour against the recent reference (the side is judged against the week, the colour against the recent median; both are stated).
+
+### Verified, and how
+
+- `npm test` 110/110; `npm run build`; `node tools/smoke.mjs` 69/69 against a fresh dev server.
+- `data/cache/r7/verify.mjs` 15/15; `data/cache/r6/verify.mjs` 24/24; `data/cache/r5/verify.mjs` 25/27 (the two known items).
+- `tools/shots.mjs` with no console errors; the product week and the phone basket read by eye.
+
 ## 2026-10-22, afternoon — sixth round: what the verification of round 5 found (the owner still asleep)
 
 ### State in one paragraph

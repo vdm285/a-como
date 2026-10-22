@@ -344,6 +344,20 @@ try {
     await page.goto(`${BASE}#p/a-s-d320dd`); await sleep(2500);
     const band = await page.evaluate(() => [...document.querySelectorAll('.card .rank.stores li a.row')].slice(0, 10).map((a) => Math.round(a.getBoundingClientRect().right - a.querySelector('.pr').getBoundingClientRect().right)));
     check('product rows leave no dead band right of the prices', band.length > 0 && band.every((b) => b <= 8), band);
+    await page.goto(`${BASE}#`); await sleep(1000);
+    const f = await q('farmacia coyoacan');
+    check('a kind of store with a place lists those stores there, never "no store"', !f.some((x) => /Ninguna tienda/.test(x)) && f.some((x) => /Farmacia/.test(x)), f.slice(0, 3));
+    await ctx.close();
+  }
+  // round 7: a group whose files cannot be fetched says so instead of counting zero stores
+  {
+    const { ctx, page } = await fresh();
+    await page.setRequestInterception(true);
+    page.on('request', (r) => { if (/data\/qqp\/products\/huevo[^/]*\.json/.test(r.url())) r.abort('internetdisconnected'); else r.continue(); });
+    await open(page, 'g/huevo');
+    await sleep(2500);
+    const tx = await page.evaluate(() => (document.querySelector('.card') || {}).innerText || '');
+    check('a generic product that cannot be fetched says so, with no store count', /descargado/.test(tx) && !/0 tiendas/.test(tx), tx.split('\n').slice(0, 4));
     await ctx.close();
   }
 } finally {
