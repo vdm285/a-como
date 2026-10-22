@@ -25,6 +25,9 @@ const STATES = [
   { name: 'store', hash: 't/chedraui-selecto-46b8a5' },
   { name: 'basket', hash: 'c?items=leche-ultrapasteurizada-a3d941:1,huevo-f2ba30:1' },
   { name: 'settings', hash: 's' },
+  { name: 'group-week', hash: 'g/jitomate?w=2026-04-20' },
+  { name: 'store-split', hash: 't/la-comer-70cfd7' },
+  { name: 'product-thin', hash: 'p/aceite-50f934' },
 ];
 const VIEWPORTS = { desktop: { width: 1600, height: 900, deviceScaleFactor: 1 }, phone: { width: 375, height: 812, deviceScaleFactor: 2, isMobile: true, hasTouch: true } };
 

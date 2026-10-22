@@ -2,6 +2,98 @@
 
 The state of the code, dated, newest first. `docs/VISION.md` is the direction; this file is what exists. Read `AGENTS.md` first.
 
+## 2026-10-22, day — fifth round: what the second verification of round 4 found (the owner still asleep)
+
+### State in one paragraph
+
+A second verification of round 4 (seven fresh agents; verdicts in `data/cache/verify4b/result.json`, gitignored) re-tested 90 items: 49 fixed, 4 deliberate, 29 partial, 8 not fixed, plus 41 new reports, two of them serious (a past week crowned a generic-product member sold in 2 stores that week; a product word plus a place dropped every product when a store name there contained the word). This round answers all of them except the few listed under "Not done". The arithmetic was never in question (about 9,000 recomputed values matched in round 4); what changed is which set each sentence counts, the camera on the phone and at 1024 px, search, and two stalls (a new zoom level cost 67–566 ms in label placement; each week step forced a layout per price tag). Unit tests 110/110; smoke 62/62 (7 new); a round script, `data/cache/r5/verify.mjs`, 25/27 (one failure is its own stale regex, the other the label residue below). Bundle: 204 kB JS / 73 kB gzip, 37 kB CSS / 11 kB gzip.
+
+### What the round found and what changed
+
+| Found (measured) | Fixed by |
+|---|---|
+| In a chosen week a generic product kept members by their recent store count: blanqueador on 9 Mar crowned a 1 L bottle priced in 2 stores that week; calamar ignored a member priced in 42 | `stage.js` group branch: each week judges members by that week's stores (`countsAt`, `usableAt`), for the map, the hero and every week of the curve; rows give both counts ("8 tiendas · 2 esa semana") |
+| The store split counted medicines in supermarkets, against EDITORIAL; it flipped La Comer Coyoacán (cheaper more often with them, dearer without) | The split counts the same products as the wins and losses and says "sin contar medicinas"; the singular forms are right ("1 igual", "1 más barato") |
+| Members "en otra unidad" were coloured against the group's unit (a $15.90 bunch of onions "cheaper" than $39.90/kg) | Other-unit and unsized members get the empty swatch |
+| Cards stated false facts while their stage loaded (a product "sin precio reciente" for 200 ms; every UHT milk "en otra unidad" for up to 2.4 s) | "Cargando…" until the stage is there |
+| The strip's "pico" dated a repeated value to its first week, the card to its last; a 9–15 week plateau was still a "pico" | A value reached in 3 or more weeks is a plateau and gets no note; one reached twice is dated to its latest week |
+| A curve with no week of 3 stores drew an empty strip under "mediana semanal y rango" (78 products, 2,720 weeks) | The scale falls back to every week it has (faint dots) and the caption says "ninguna semana tuvo 3 tiendas: cada punto es una semana con menos" |
+| "huevo iztapalapa" opened a store; "res coyoacan" listed Walmart Express; "pan coyoacan" dropped every bread (124 of 13,896 product-and-place queries lost their products) | A place query lists stores only when the words name a chain ("soriana coyoacan"); otherwise the products stay and the place's stores follow, under "Tiendas en Coyoacán" |
+| "soriana" and Enter opened a face mask; "la comer" led with "comercial" ground beef; "nido" led with Difenidol; "pan" ranked Queso Panela with bread; "nueces", "arroces", "pineapple", "chilies" found nothing | A query naming a chain lists stores first (Enter opens one); a whole word outranks a word start, which outranks a hit inside a word, and inside-word hits drop out when anything better matches; -ces plurals; 40 more English words |
+| Phone: leaving the full sheet by the chip, a sibling row or the grip left the city a speck (k 0.13 against 0.36), measured mid-transition; a store picked by search lost its street zoom after any sheet gesture | One exit path (`leaveFullSheet`, `settleSheet`): re-measure after the 280 ms transition, refit unless the reader moved the map, re-centre a store picked by search; the chip from a full sheet now gives the same scale as from a normal one |
+| 360x640: the full sheet ran under the folded chip | The full sheet stops 8 px under the chip |
+| Any tap on the phone map (and a tap on the sheet's grip) focused the map, drew a keyboard ring and announced a store | Focus within a second of any press is a pointer's; only Tab starts the walk |
+| 1024: the folded timeline's invisible wrapper blocked hover and clicks on 82–86 dots | The folded wrapper is its chip's size and lets pointers through |
+| A store card opened from a zoomed map did not shift the view, and closing it slid the view 207–414 px | The view follows the free area's centre the same way on open and close (the round's script returns to the exact transform); a new subject with under half its points in the free map is refitted |
+| Zoom stalled 67–133 ms per new zoom level (566 ms at 4× CPU; 0.9 s per pinch step on a throttled phone) in d3's spherical `geoContains` | Each alcaldía is rasterised once (96×96, scanlines over its projected rings); a zoom level's label spots are a lookup: 0 long tasks over 16 wheel notches |
+| Each week step and pan frame measured every tag's text (forced layout) and scanned every dot per spot: playback stalls of 1.2 s at 4× CPU | Tag widths measured once (re-measured when the font arrives); dot positions once per draw: 0 long tasks over 6 steps of the UHT milk group |
+| Names hopped up to 134 px during a pan | A name keeps its spot while it stays clear; one that must move goes to the nearest clear spot |
+| A tie tag clicked with its card open did nothing visible | It scrolls the card to the tied rows and marks them for two seconds |
+| The strip's axis labels overlapped ("$180.0reciente $190.00") | Labels compared by their text's extent |
+| A thin hero gave no store name and disagreed with the counts beside it (2 stores vs "3 tiendas esa semana") | "X, una de solo 2 tiendas con precio" plus "1 precio más, marcado «revísalo»"; the basket's thin hero names its store too |
+| A "cheap" tag sat on the median itself ("$20.00/L empatada en 45 tiendas") | Cheap tags only below the reference, the dear tag only above it |
+| A shared point's tooltip and dot used a flagged price as "el más barato" | A point shows its cheapest fair price |
+| The basket in a week with no recent reference said "mediana de la ciudad esa semana … (sin precio reciente)"; its header said "13 tiendas con todo" with no week | "total mediano esa semana en las N tiendas con todo … (sin total reciente)"; "13 tiendas con todo esa semana" |
+| A shared basket loading read "Vacía" with the empty-basket hint | "Canasta compartida" and only the loading line |
+| Removing a basket item by keyboard dropped focus to the page | Focus stays in the list; the removal has an undo that does not take the focus (the next Enter would undo it) |
+| The undo toast wrapped to two lines over a fifth of the phone's city | One line (`width: max-content`) |
+| `?w=1999-01-01` showed 9 Mar 2026 and `?w=xx` the recent prices, but the address kept the bad value | The address is replaced by the week shown, a malformed week dropped |
+| The index legend said "su última semana visitada" while 29 stores show an older week | "su última semana completa"; the store card names a later light week and why it does not count |
+| 859 products named like their generic product had no way to it | A kicker "Ver sus 8 tamaños y marcas" |
+| Group rows' third line cut the grade that tells members apart | It drops what repeats (the price when it equals the per-unit figure, the group's name) and wraps to two lines |
+| Phone product rows with long unit prices cut the store's name (4 of 10 at 375) | The price column wraps between its parts and takes at most 45 % of the row |
+| Pharmacy chains cut in the race ("Farmacias San Pablo" 126 px in 112) | The name column fits the longest chain up to 144 px |
+| Smaller items: Escape and ✕ still spoke a pending count; the index's spoken span differed from its label; the timeline chip started in lowercase; the English placeholder was cut at 360; the selected hatched dot was small; touch targets under 40 px | Each fixed; touch targets grow on coarse pointers without moving anything |
+
+### Decisions taken while the owner slept (continued; each with its one-line reversal)
+
+16. **A chosen week judges a generic product's members by that week's stores.** Reverse: use `usable` instead of `usableAt(w)` in `bestAt` (`src/app/stage.js`).
+17. **The store split leaves medicines out of a supermarket** (and says so); the index still includes them, since leaving them out moves it by 0 in the typical supermarket and at most 1.3 points. Reverse: count `recentRows` instead of `eligible` in `storeCard`'s split.
+18. **The camera follows the free area for every card, store cards included, and refits a new subject that is mostly out of view.** Reverse: restore `&& !selected` in `setPadding` (`src/map/map.js`) and drop the `shareInFree` check in `updateStage`.
+19. **Search**: a chain name puts stores first; whole words outrank prefixes; a place keeps the products unless the words name a chain. Reverse: `storesFirst` and `INSIDE` in `src/ui/search.js`.
+20. **A value held 3 weeks or more is a plateau** (no "pico" on the strip; the card's sentence keeps it with its count). Reverse: `times(...) < 3` in `timeline()` (`src/ui/chrome.js`).
+21. **Tags**: "cheap" only below the reference, "dear" only above. Reverse: the two `dev` filters at the end of `stageTags` (`src/main.js`).
+22. **A thin hero names its store**, and flagged prices are counted after the line. Reverse: the `storesWithPrice`, `completeHero` and `flaggedMore` strings.
+23. **Removing one basket item offers an undo** that leaves the focus in the list. Reverse: the `showToast` call in `onQty`.
+24. **Links are normalised to the week shown.** Reverse: the `state.week` check after `computeStage` in `updateStage`.
+25. **Left as they are, deliberately**: the phone timeline carries no notes (its strip is 40 px tall; the card's sentence gives the high and the low on the first screen); a name pushed by the chrome during a pan moves one grid step (9 such moves in a 30-frame diagonal pan at 1440, against about 40 with jumps up to 134 px before).
+
+### Not done
+
+- Some alcaldías stay unnamed in some views (Benito Juárez beside a card at 1440 and at the 1024 fit; Magdalena Contreras and Miguel Hidalgo on the phone city; none on a phone with a card open, by the "a city smaller than its names gets none" rule).
+- A tie between two stores anchors its tag by file order (both are equally near their middle); the click shows both rows.
+- Touch targets were enlarged by CSS for coarse pointers and measured only in emulation, not on a device.
+
+### Verified, and how
+
+- `npm test` 110/110; `npm run build`; `node tools/smoke.mjs` 62/62 against a fresh dev server.
+- `data/cache/r5/verify.mjs` (27 measured checks for this round's items, on 5176): 25 pass; "rows count that week" fails only on its own regex (the row reads "8 tiendas · 2 esa semana"), and the label check reports the residue in decision 25.
+- `node tools/shots.mjs` with three new states (a generic product in a past week, a supermarket's split, a product with no solid week), read by eye at 1600 and 375.
+
+## 2026-10-22, morning — fourth self-audit round (the owner asleep: decisions taken alone)
+
+### State in one paragraph
+
+Three fresh reviewers measured the live site (40 findings; about 9,000 recomputed values matched, so the arithmetic is sound and what failed was what the surfaces claimed). Commit `4560c3f` answered them: one hero rule that never crowns a flagged price, ties said as ties on the card and as one tag on the map, a weekly line that skips weeks under 3 stores, generic products that compare like with like, the store split, and a search built for shoppers. Nine agents then re-tested the 40 on the routes where they were found (19 fixed, 18 partial, 3 regressed) and hunted for regressions (69 reports); commit `55d4242` answered those. A second verification followed; round 5, above, answers it.
+
+### Decisions taken while the owner slept (each reversible; say the word)
+
+1. **The store index stays the median of ratios**, and the store card adds the split of its recent prices against the city ("más barata en 160, igual en 822, más cara en 190 de 1,172 productos"). Reason: every Walmart and La Comer sits at exactly 1.000 because their prices are often the median itself; the split says what the index cannot, without breaking the "no means" rule. Alternative left open: a matched-basket index in the pipeline. Reverse: drop the `split` block in `storeCard` (`src/ui/cards.js`).
+2. **Generic products compare only members sold in 3 or more stores and within a third to three times the median member size.** Reason: a 200 ml chocolate box was "the dearest litre of milk" and a grade sold in one store "the cheapest jitomate". Excluded members stay listed with the reason. Reverse: the `bySize` and `usable` filters in the group branch of `src/app/stage.js`.
+3. **A basket with no recent reference compares a chosen week with that week's own median total**, as products already did, and says so. Reverse: the `refKind = 'week'` fallback in the basket branch of `src/app/stage.js`.
+4. **Only cheaper dots grow on the map**; more expensive ones keep the base size, and "missing an item" dots are smaller and fainter. Reason: the ink went to the dear and incomplete stores, not to the answer. Reverse: `screenR(c._t)` and the hatch factor in `applyView` (`src/map/map.js`).
+5. **A tie on the map is one tag** ("empatada en 34 tiendas") instead of three stores picked by file order. Reverse: `groups` and `tagOf` in `stageTags` (`src/main.js`).
+6. **Search**: plurals match their singular, results rank by stores with a recent price with the PACIC basics first, products without a recent price sink and say so, a municipio in the query is a place filter. Reverse: `boost` and `forms()` in `src/ui/search.js`.
+7. **The basket card answers first** (cheapest store, savings, the race, the ranking) and the editable list comes after. Reverse: move the "Tu lista" section back above the ranking in `basketCard`.
+8. **The portfolio demos keep the data they were reviewed on** (before five stores were unplaced); the chosen direction will be rebuilt in the app on current data. `tools/portfolio-data.mjs` now leaves stores without a position out, so a rerun cannot break the demos. Reverse: rerun `node tools/portfolio-data.mjs` and republish the three demos.
+9. **"Sold in 3 stores" means 3 stores with a recent price** (not ever), the same count the rows show; in a chosen week, 3 stores that week (decision 16). Reverse: `p.storesAll` in the `usable` filter.
+10. **A tie tag opens the subject's card** (which lists the tied stores) and points at the tied store nearest the middle of the others; since round 5 it also scrolls to the tied rows and marks them. Reverse: `showTie` in `src/main.js`.
+11. **A store card returns to the card it was opened over** (a product, a generic product, the basket); opened from the bare map, it returns to the map and the keyboard walk resumes on that store. Reverse: `ui.storeReturn` in `openStore` and `closeCard`.
+12. **Colloquial place names** are read as places in search: neza, gam, izcalli, contreras, and the first word of a municipio when it is unambiguous (naucalpan, ecatepec, atizapan, tlalnepantla, coacalco). A chain plus a place lists only stores (since round 5, only when the words are a chain's whole words). Reverse: the `ALIAS` table and the first-word rule in `buildSearchIndex`.
+13. **The weekly line breaks only at thin weeks** (1 or 2 stores, drawn as faint dots); weeks with no data are spanned, since a gap there drew nothing at all. Reverse: the `runs` construction in `timeline()`.
+14. **A tap or a small drag (under 60 px) does not count as the reader moving the map**; a longer drag, a wheel, a double click or + and − do, and then a new subject keeps the reader's view (since round 5, unless under half of it is in view). Reverse: the 60 px test in the window `pointerup` listener (`src/main.js`).
+15. **Left as they are, deliberately**: the index hero may read "en la mediana" (decision 1); stores that can never have an index keep their empty rings on the index; the index legend's weeks and the cards' 28-day window are different measures and may both show; a price near the 0.4 boundary can be flagged in a product and not in its generic product (different comparison sets).
+
 ## 2026-10-22, small hours — third self-audit round landed
 
 ### State in one paragraph

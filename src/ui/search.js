@@ -16,7 +16,7 @@ export function buildSearchIndex(data) {
   const pacicGroups = new Set(data.products.filter((p) => p.pacic).map((p) => p.group));
   const groups = data.groups.map((g) => ({ kind: 'group', id: g.id, head: fold(g.name), key: fold(g.name), name: g.name, sub: g.category, n: g.stores ?? 0, boost: (pacicGroups.has(g.id) ? 1.2 : 0) - (g.stores ? 0 : 2), ref: g }));
   const products = data.products.map((p) => ({ kind: 'product', id: p.id, head: fold(p.name), brandKey: fold(p.brand || ''), key: fold(`${p.name} ${p.brand || ''} ${p.presentation || ''}`), name: p.name, brand: p.brand, sub: p.presentation, n: p.stores ?? 0, boost: (p.pacic ? 0.4 : 0) + (pacicGroups.has(p.group) ? 1.5 : 0) - (p.stores ? 0 : 2), ref: p }));
-  const stores = data.stores.map((s) => ({ kind: 'store', id: s.id, head: fold(`${s.chain} ${s.name}`), key: fold(`${s.chain} ${s.name} ${s.giro || ''} ${s.address || ''} ${s.municipio || ''}`), name: s.name, sub: `${s.chain}${s.municipio ? ' · ' + s.municipio : ''}`, n: s.products, boost: 0, muni: fold(s.municipio || ''), ref: s }));
+  const stores = data.stores.map((s) => ({ kind: 'store', id: s.id, head: fold(`${s.chain} ${s.name}`), chainKey: fold(s.chain), key: fold(`${s.chain} ${s.name} ${s.giro || ''} ${s.address || ''} ${s.municipio || ''}`), name: s.name, sub: `${s.chain}${s.municipio ? ' · ' + s.municipio : ''}`, n: s.products, boost: 0, muni: fold(s.municipio || ''), ref: s }));
   // a place by its full name or by the names people use: "neza", "gam", "izcalli", "naucalpan"
   const full = [...new Set(stores.map((e) => e.muni).filter(Boolean))];
   const places = full.map((m) => [m, m]);
@@ -29,27 +29,39 @@ export function buildSearchIndex(data) {
 }
 
 // PROFECO's product names are Spanish; in English a basic word also matches its Spanish name.
-const EN_ES = { milk: 'leche', egg: 'huevo', eggs: 'huevo', tomato: 'jitomate', tomatoes: 'jitomate', rice: 'arroz', bean: 'frijol', beans: 'frijol', oil: 'aceite', sugar: 'azucar', bread: 'pan', chicken: 'pollo', onion: 'cebolla', onions: 'cebolla', potato: 'papa', potatoes: 'papa', coffee: 'cafe', tuna: 'atun', lemon: 'limon', lime: 'limon', apple: 'manzana', apples: 'manzana', banana: 'platano', bananas: 'platano', cheese: 'queso', butter: 'mantequilla', soap: 'jabon', salt: 'sal', flour: 'harina', water: 'agua', beef: 'res', pork: 'cerdo', ham: 'jamon', yogurt: 'yoghurt', chili: 'chile', avocado: 'aguacate', carrot: 'zanahoria', carrots: 'zanahoria', garlic: 'ajo', orange: 'naranja', oranges: 'naranja', lettuce: 'lechuga', paper: 'papel', detergent: 'detergente', diapers: 'pañal', cream: 'crema', chocolate: 'chocolate', beer: 'cerveza', soda: 'refresco', juice: 'jugo', cookies: 'galletas', meat: 'carne', fish: 'pescado', shrimp: 'camaron', corn: 'maiz', lentils: 'lenteja', oats: 'avena', pasta: 'pasta', soup: 'sopa', toothpaste: 'pasta dental', whole: 'entera', skim: 'descremada', skimmed: 'descremada', powdered: 'polvo', evaporated: 'evaporada', condensed: 'condensada' };
-// Every word must appear somewhere; a hit in the name (head) at a word start counts most, a hit
-// only in the presentation or address counts least. Ties break by how many stores carry it.
+const EN_ES = { milk: 'leche', egg: 'huevo', eggs: 'huevo', tomato: 'jitomate', tomatoes: 'jitomate', rice: 'arroz', bean: 'frijol', beans: 'frijol', oil: 'aceite', sugar: 'azucar', bread: 'pan', chicken: 'pollo', onion: 'cebolla', onions: 'cebolla', potato: 'papa', potatoes: 'papa', coffee: 'cafe', tuna: 'atun', lemon: 'limon', lime: 'limon', apple: 'manzana', apples: 'manzana', banana: 'platano', bananas: 'platano', cheese: 'queso', butter: 'mantequilla', soap: 'jabon', salt: 'sal', flour: 'harina', water: 'agua', beef: 'res', pork: 'cerdo', ham: 'jamon', yogurt: 'yoghurt', chili: 'chile', avocado: 'aguacate', carrot: 'zanahoria', carrots: 'zanahoria', garlic: 'ajo', orange: 'naranja', oranges: 'naranja', lettuce: 'lechuga', paper: 'papel', detergent: 'detergente', diapers: 'pañal', cream: 'crema', chocolate: 'chocolate', beer: 'cerveza', soda: 'refresco', juice: 'jugo', cookies: 'galletas', meat: 'carne', fish: 'pescado', shrimp: 'camaron', corn: 'maiz', lentils: 'lenteja', oats: 'avena', pasta: 'pasta', soup: 'sopa', toothpaste: 'crema dental', whole: 'entera', skim: 'descremada', skimmed: 'descremada', powdered: 'polvo', evaporated: 'evaporada', condensed: 'condensada', chilies: 'chile', chillies: 'chile', chilli: 'chile', pineapple: 'piña', mango: 'mango', papaya: 'papaya', watermelon: 'sandia', melon: 'melon', grape: 'uva', strawberry: 'fresa', strawberries: 'fresa', pear: 'pera', peach: 'durazno', peaches: 'durazno', cucumber: 'pepino', zucchini: 'calabaza', spinach: 'espinaca', cabbage: 'col', broccoli: 'brocoli', sausage: 'salchicha', turkey: 'pavo', bleach: 'blanqueador', toilet: 'higienico', napkins: 'servilletas', deodorant: 'desodorante', sardine: 'sardina', sardines: 'sardina', peanut: 'cacahuate', walnut: 'nuez', nut: 'nuez', almond: 'almendra', honey: 'miel', jam: 'mermelada', mayonnaise: 'mayonesa', vinegar: 'vinagre', pepper: 'pimienta', cinnamon: 'canela', wine: 'vino', tortillas: 'tortilla', cereal: 'cereal', noodles: 'sopa', lard: 'manteca', margarine: 'margarina', candy: 'dulce', gum: 'chicle' };
+// Every word must appear somewhere; a whole word in the name (head) counts most ("pan" is Pan
+// before Queso Panela), then a word start, then a hit inside a word; a hit only in the
+// presentation or address counts least. Ties break by how many stores carry it.
+const wordEnd = (s, j) => j >= s.length || s[j] === ' ' || (s[j] === 's' && (j + 1 >= s.length || s[j + 1] === ' ')) || (s.startsWith('es', j) && (j + 2 >= s.length || s[j + 2] === ' '));
 function scoreWord(entry, w) {
-  const h = entry.head.indexOf(w);
-  if (h >= 0) return (h === 0 || entry.head[h - 1] === ' ') ? 6 : 3;
-  if (entry.brandKey) { const b = entry.brandKey.indexOf(w); if (b >= 0) return (b === 0 || entry.brandKey[b - 1] === ' ') ? 3 : 1.5; }
+  let h = entry.head.indexOf(w), best = -1;
+  while (h >= 0) {
+    const start = h === 0 || entry.head[h - 1] === ' ';
+    best = Math.max(best, start ? (wordEnd(entry.head, h + w.length) ? 9 : 6) : 3);
+    if (best === 9) break;
+    h = entry.head.indexOf(w, h + 1);
+  }
+  if (best >= 0) return best;
+  if (entry.brandKey) { const b = entry.brandKey.indexOf(w); if (b >= 0) return (b === 0 || entry.brandKey[b - 1] === ' ') ? (wordEnd(entry.brandKey, b + w.length) ? 5 : 3.5) : 1.4; }
   const i = entry.key.indexOf(w);
   if (i < 0) return -1;
   return (i === 0 || entry.key[i - 1] === ' ') ? 1.5 : 0.5;
 }
+// the scores of a hit inside a word ("nido" in Difenidol), dropped when anything matches better
+const INSIDE = new Set([3, 1.4, 0.5]);
 // words: each an array of alternatives (the word, and in English its Spanish name)
-function score(entry, words) {
-  let sc = 0;
+function scoreFull(entry, words) {
+  let sc = 0, inside = false;
   for (const alts of words) {
     const best = Math.max(...alts.map((w) => scoreWord(entry, w)));
-    if (best < 0) return -1;
+    if (best < 0) return [-1, true];
+    if (INSIDE.has(best)) inside = true;
     sc += best;
   }
-  return sc + (entry.n ? Math.min(entry.n, 200) / 200 : 0) + (entry.boost || 0);
+  return [sc + (entry.n ? Math.min(entry.n, 200) / 200 : 0) + (entry.boost || 0), inside];
 }
+const score = (entry, words) => scoreFull(entry, words)[0];
 
 // a plural also tries its singular: huevos → huevo, limones → limon
 const forms = (w) => {
@@ -57,6 +69,8 @@ const forms = (w) => {
   if (w.length > 3 && w.endsWith('s')) {
     out.push(w.slice(0, -1));
     if (w.endsWith('es') && w.length > 4 && /[lnrdjzy]$/.test(w.slice(0, -2))) out.push(w.slice(0, -2));
+    // -ces is the plural of -z: nueces → nuez, arroces → arroz
+    if (w.endsWith('ces') && w.length > 4) out.push(`${w.slice(0, -3)}z`);
   }
   return out;
 };
@@ -69,20 +83,37 @@ export function search(index, query, limits = { groups: 6, products: 8, stores: 
   // English: the word or any of its singular forms may have a Spanish name
   const words = q.split(' ').filter(Boolean).map((w) => { const fs2 = forms(w); const es = fs2.map((x) => EN_ES[x]).find(Boolean); return en && es ? fs2.concat([fold(es)]) : fs2; });
   if (!words.length && !place) return { groups: [], products: [], stores: [], total: 0 };
-  const run = (list, n, ws) => list.map((e) => [score(e, ws), e]).filter(([sc]) => sc >= 0).sort((a, b) => b[0] - a[0]).slice(0, n).map(([, e]) => e);
-  const groups = words.length ? run(index.groups, limits.groups, words) : [];
-  const products = words.length ? run(index.products, limits.products, words) : [];
-  let stores;
+  // every list is scored first; a hit inside a word is kept only when no list has a better one
+  const scored = (list) => (words.length ? list.map((e) => [...scoreFull(e, words), e]).filter(([sc]) => sc >= 0).sort((a, b) => b[0] - a[0]) : []);
+  const all = { groups: scored(index.groups), products: scored(index.products), stores: place ? [] : scored(index.stores) };
+  const clean = Object.values(all).some((l) => l.some(([, inside]) => !inside));
+  const take = (l, n) => l.filter(([, inside]) => !clean || !inside).slice(0, n).map(([, , e]) => e);
+  const run = (list, n) => take(list === index.stores ? all.stores : scored(list), n);
+  const groups = take(all.groups, limits.groups);
+  const products = take(all.products, limits.products);
+  // the words name a chain when each is a whole word of some store's chain ("soriana", "la comer"):
+  // the reader is looking for a store, so the stores lead and Enter opens one
+  const chainWords = (e) => words.every((alts) => alts.some((w) => ` ${e.chainKey} `.includes(` ${w} `)));
+  let stores, storesFirst = false, placeName = null;
   if (place) {
     // in a place, the words pick stores by their chain or name only (never by street address)
     const here = index.stores.filter((e) => e.muni === place);
-    const byName = words.length ? here.map((e) => [score({ ...e, key: e.head }, words), e]).filter(([sc]) => sc >= 0).sort((a, b) => b[0] - a[0]).map(([, e]) => e) : [];
-    stores = byName.length ? byName.slice(0, 8) : [...here].sort((a, b) => b.n - a.n).slice(0, 8);
-    // "soriana coyoacan" is a store in a place: the stores lead, no private-label products
-    if (byName.length) return { groups: [], products: [], stores, total: stores.length, place };
-  } else stores = run(index.stores, limits.stores, words);
-  return { groups, products, stores, total: groups.length + products.length + stores.length, place };
+    placeName = here.length ? here[0].ref.municipio : null;
+    const chainHere = words.length ? here.filter(chainWords) : [];
+    // "soriana coyoacan" is a chain in a place: its stores there, no private-label products
+    if (chainHere.length) { stores = chainHere.sort((a, b) => b.n - a.n).slice(0, 8); return { groups: [], products: [], stores, total: stores.length, place, placeName, storesFirst: true }; }
+    // "huevo iztapalapa" is a product in a place: the products, then the stores there whose name
+    // has the words, else the place's biggest stores
+    const byName = words.length ? here.map((e) => [score({ ...e, key: e.head }, words), e]).filter(([sc]) => sc >= 6 * words.length).sort((a, b) => b[0] - a[0]).map(([, e]) => e) : [];
+    stores = (byName.length ? byName : [...here].sort((a, b) => b.n - a.n)).slice(0, words.length ? 5 : 8);
+  } else {
+    stores = run(index.stores, limits.stores);
+    storesFirst = stores.length > 0 && words.length > 0 && index.stores.some(chainWords);
+  }
+  return { groups, products, stores, total: groups.length + products.length + stores.length, place, placeName, storesFirst };
 }
+// the order the list shows and Enter follows
+export const flatResults = (r) => (!r ? [] : r.storesFirst ? [...r.stores, ...r.groups, ...r.products] : [...r.groups, ...r.products, ...r.stores]);
 
 export function searchView({ query, results, active, placeholder, onInput, onPick, onClear, onKey, onBlur, onFocus }) {
   const item = (e, i) => html`<button id=${`sr-${i}`} class="item ${i === active ? 'active' : ''}" role="option" aria-selected=${i === active} tabindex="-1"
@@ -104,9 +135,7 @@ export function searchView({ query, results, active, placeholder, onInput, onPic
     </div>
     ${open ? html`<div class="list" role="listbox" id="search-list">
       ${results.total === -1 ? html`<div class="empty">${t('loadingCatalog')}</div>` : results.total === 0 ? html`<div class="empty">${t('noResults')}</div>` : nothing}
-      ${results.groups.length ? html`<div role="group" aria-labelledby="sr-h-g"><div class="h" id="sr-h-g">${t('groups')}</div>${results.groups.map((e) => item(e, ++i))}</div>` : nothing}
-      ${results.products.length ? html`<div role="group" aria-labelledby="sr-h-p"><div class="h" id="sr-h-p">${t('products')}</div>${results.products.map((e) => item(e, ++i))}</div>` : nothing}
-      ${results.stores.length ? html`<div role="group" aria-labelledby="sr-h-s"><div class="h" id="sr-h-s">${t('stores')}</div>${results.stores.map((e) => item(e, ++i))}</div>` : nothing}
+      ${(results.storesFirst ? ['stores', 'groups', 'products'] : ['groups', 'products', 'stores']).map((k) => (results[k] && results[k].length ? html`<div role="group" aria-labelledby=${`sr-h-${k[0]}`}><div class="h" id=${`sr-h-${k[0]}`}>${k === 'stores' && results.placeName ? t('storesIn', { place: results.placeName }) : t(k)}</div>${results[k].map((e) => item(e, ++i))}</div>` : nothing))}
     </div>` : nothing}
   </div>`;
 }

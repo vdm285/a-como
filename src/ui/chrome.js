@@ -37,7 +37,7 @@ export function refText(stage) {
   if (stage.ref == null) return '';
   if (stage.tooFew) return t(stage.kind === 'basket' ? 'refTooFewBasket' : 'refTooFew', { n: stage.refN });
   const unit = stage.kind === 'group' && stage.unit ? `/${unitName(stage.unit, true)}` : '';
-  if (stage.refKind === 'week') return t('refWeekOnly', { ref: money(stage.ref) + unit });
+  if (stage.refKind === 'week') return stage.kind === 'basket' ? t('refWeekBasket', { ref: money(stage.ref), n: stage.refN }) : t('refWeekOnly', { ref: money(stage.ref) + unit });
   if (stage.kind === 'group') return t('refGroup', { ref: money(stage.ref) + unit, n: stage.refN });
   if (stage.kind === 'basket') return t('refBasket', { ref: money(stage.ref), n: stage.refN });
   return t('refProduct', { ref: money(stage.ref), n: stage.refN });
@@ -45,7 +45,7 @@ export function refText(stage) {
 export function vsText(stage, dev) {
   if (Math.abs(dev) < 0.005) return t('atMedian');
   const p = pct(dev, 0);
-  if (stage.refKind === 'week') return t('vsRefWeek', { pct: p });
+  if (stage.refKind === 'week') return t(stage.kind === 'basket' ? 'vsRefWeekBasket' : 'vsRefWeek', { pct: p });
   if (stage.kind === 'group') return t('vsRefGroup', { pct: p });
   if (stage.kind === 'basket') return t('vsRefBasket', { pct: p });
   return t('vsRef', { pct: p });
@@ -180,9 +180,12 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
       // the scale follows the median line and the reference; the min–max band is clipped to it,
       // so one store's spike never flattens the line the reader is meant to see
       // the scale follows the solid weeks (3 stores) and the reference: one store's spike never sets it
-      const meds = rows.filter((r) => r && r[1] != null && (r[4] ?? MIN_N) >= MIN_N).map((r) => r[1]);
+      // (a curve with fewer than 2 solid weeks takes its scale from every week it has, so its thin
+      // weeks are still drawn as faint dots)
+      let meds = rows.filter((r) => r && r[1] != null && (r[4] ?? MIN_N) >= MIN_N).map((r) => r[1]);
+      if (meds.length < 2) meds = rows.filter((r) => r && r[1] != null).map((r) => r[1]);
       if (stage.ref != null && !stage.tooFew) meds.push(stage.ref);
-      if (meds.length > 1) {
+      if (meds.length > 0) {
         let lo = Math.min(...meds), hi = Math.max(...meds);
         const pad = (hi - lo) * 0.18 || Math.max(0.5, hi * 0.05);
         lo -= pad; hi += pad;
@@ -223,12 +226,15 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
           const sv = solid.map(([, r]) => r[1]);
           const typical = median(sv);
           const moves = sv.length > 3 && typical > 0 && Math.max(...sv) / Math.min(...sv) - 1 >= 0.03;
-          const share = (v) => sv.filter((x) => Math.abs(x - v) < 0.005).length / sv.length;
-          const standsOut = moves && Math.max(...sv) >= typical * 1.03 && share(Math.max(...sv)) < 0.2;
-          const dipsOut = moves && !standsOut && Math.min(...sv) <= typical * 0.97 && share(Math.min(...sv)) < 0.2;
+          // a value reached in 3 weeks or more is a plateau, not a peak: no note (the card's trend
+          // line gives it with its count); a value reached twice is dated to its latest week, as
+          // the card dates it
+          const times = (v) => sv.filter((x) => Math.abs(x - v) < 0.005).length;
+          const standsOut = moves && Math.max(...sv) >= typical * 1.03 && times(Math.max(...sv)) < 3;
+          const dipsOut = moves && !standsOut && Math.min(...sv) <= typical * 0.97 && times(Math.min(...sv)) < 3;
           let peakY = null;
           if (standsOut || dipsOut) {
-            const peak = solid.reduce((p, q) => (standsOut ? q[1][1] > p[1][1] : q[1][1] < p[1][1]) ? q : p);
+            const peak = solid.reduce((p, q) => (standsOut ? q[1][1] >= p[1][1] : q[1][1] <= p[1][1]) ? q : p);
             if (!(stage.ref != null && Math.abs(peak[1][1] / stage.ref - 1) < 0.005)) {
               const px = xAt(peak[0]), py = y(peak[1][1]);
               const txt = `${t(standsOut ? 'peak' : 'low')} ${money(peak[1][1])}${unit} · ${fdate(peak[1][0], true)}`;
@@ -277,7 +283,9 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
     : t('week', { date: fdate(stage.week) });
   const wv = weekValue(stage);
   const valueText = `${label}${partialNow ? `, ${t('partialWeek')}` : ''}${wv ? `, ${wv.what} ${money(wv.value)}${unit}` : ''}`;
-  const caption = neverComplete ? t('noneCompleteLegend') : emptyNow ? t('noneCompleteWeek') : !stage.curve ? '' : stage.curve.kind === 'visits' ? t('tlVisits') : stage.curve.kind === 'basket' ? t('tlBasket') : stage.curve.kind === 'group' ? t('tlGroupMedian') : t('tlPrice');
+  // a curve whose every week has fewer than 3 stores has no weekly median to name
+  const noSolid = stage.curve && stage.curve.kind !== 'visits' && stage.curve.rows && !stage.curve.rows.some((r) => r[1] != null && (r[4] ?? MIN_N) >= MIN_N);
+  const caption = neverComplete ? t('noneCompleteLegend') : emptyNow ? t('noneCompleteWeek') : !stage.curve ? '' : noSolid ? t('tlNoSolid') : stage.curve.kind === 'visits' ? t('tlVisits') : stage.curve.kind === 'basket' ? t('tlBasket') : stage.curve.kind === 'group' ? t('tlGroupMedian') : t('tlPrice');
   const atStart = !live && stage.weekIdx === 0;
   return html`<div class="float timeline ${compact ? 'compact' : ''}">
     <button class="play" @click=${onPlay} ?disabled=${neverComplete} title=${playing ? t('pause') : t('play')} aria-label=${playing ? t('pause') : t('play')}>${playing ? I.pause() : I.play()}</button>

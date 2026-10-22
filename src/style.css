@@ -187,8 +187,8 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 .tl-peak { fill: var(--ink-2); }
 .tl-thin { fill: var(--ink-3); opacity: 0.7; }
 .tl-solo { fill: var(--ink-2); }
-.rank .nm .s2 { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
-#stage .dot.hatch.sel { opacity: 1; }
+.rank .nm .s2 { font-size: 12.5px; color: var(--ink-2); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-variant-numeric: tabular-nums; }
+#stage .dot.hatch.sel, #stage .dot.hatch.hover { opacity: 1; }
 .strip-dot.far { stroke: var(--ink); stroke-width: 1.2; stroke-dasharray: 1.5 1.5; }
 .search .item .tag.old { color: var(--own); border-color: rgba(242, 193, 78, 0.4); }
 .tl-cursor { stroke: var(--accent); stroke-width: 1.5; }
@@ -196,7 +196,10 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 .tl-live { flex: none; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.05); color: var(--ink-3); font-size: 12px; font-weight: 700; }
 .tl-live:hover { color: var(--ink); }
 .tl-live.on { background: rgba(236, 230, 216, 0.16); border-color: var(--accent); color: var(--ink); }
-.timeline.collapsed { padding: 0; background: none; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; width: auto; }
+.timeline.collapsed { padding: 0; background: none; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; width: auto; pointer-events: none; }
+/* the folded strip is its chip: the wrapper never sits invisibly over dots (82 were dead at 1024) */
+body.tl-stack .timeline.collapsed, body.tl-stack.card-left .timeline.collapsed { width: auto; }
+.timeline.collapsed .tl-chip { pointer-events: auto; }
 .tl-chip { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px 0 14px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: var(--ink-2); font-size: 13px; font-weight: 600; white-space: nowrap; }
 .tl-chip:hover { color: var(--ink); border-color: var(--line-2); }
 .tl-chip svg { width: 16px; height: 16px; flex: none; }
@@ -300,7 +303,7 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 
 /* the chain race in the basket card: rows glide when the order changes; dots never stretch */
 .race { position: relative; margin-top: 12px; }
-.race-row { position: absolute; left: 0; right: 0; top: 0; height: 26px; display: grid; grid-template-columns: 112px minmax(0, 1fr) 112px; gap: 10px; align-items: center; transition: transform 520ms var(--ease); }
+.race-row { position: absolute; left: 0; right: 0; top: 0; height: 26px; display: grid; grid-template-columns: var(--rn, 112px) minmax(0, 1fr) 112px; gap: 10px; align-items: center; transition: transform 520ms var(--ease); }
 .race-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .race-track { position: relative; height: 10px; margin: 0 5px; }
 .race-track::before { content: ''; position: absolute; left: -5px; right: -5px; top: 4px; height: 2px; border-radius: 1px; background: rgba(255, 255, 255, 0.07); }
@@ -308,7 +311,7 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 .race-dot { position: absolute; top: 5px; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--stage); transition: left 520ms var(--ease); }
 .race-val { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .race-val small { color: var(--ink-3); font-weight: 500; }
-.race-axis { position: absolute; left: 122px; right: 122px; display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.race-axis { position: absolute; left: calc(var(--rn, 112px) + 10px); right: 122px; display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 
 /* sparkline */
 .spark { width: 100%; height: 64px; display: block; cursor: pointer; }
@@ -358,7 +361,7 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 .kbd { font-size: 12px; color: var(--ink-3); }
 
 /* toast */
-.toast { position: absolute; z-index: 10; bottom: calc(var(--tlh, 110px) + 26px); left: var(--fcx, 50%); transform: translateX(-50%); background: var(--glass-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 9px 16px; font-size: 13px; box-shadow: var(--shadow); opacity: 0; transition: opacity 200ms; pointer-events: none; max-width: calc(100vw - 32px); text-align: center; }
+.toast { position: absolute; z-index: 10; width: max-content; bottom: calc(var(--tlh, 110px) + 26px); left: var(--fcx, 50%); transform: translateX(-50%); background: var(--glass-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 9px 16px; font-size: 13px; box-shadow: var(--shadow); opacity: 0; transition: opacity 200ms; pointer-events: none; max-width: calc(100vw - 32px); text-align: center; }
 .toast.on { opacity: 1; pointer-events: auto; }
 .toast-btn { margin-left: 10px; padding: 3px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 12.5px; }
 
@@ -415,7 +418,8 @@ body.tl-stack .numeral .nwhat, body.tl-stack .numeral .nref { display: none; }
   body.card-left .numeral { left: calc(12px + var(--sal)); }
 
   /* the sheet: drag its head (or tap the grip) for more list or more map */
-  body.sheet-full { --sheet-h: 86dvh; }
+  /* the full sheet stops under the folded timeline chip (top 62px + 40px + 8px) */
+  body.sheet-full { --sheet-h: min(86dvh, calc(100dvh - 110px - var(--sat))); }
   body.sheet-peek { --sheet-h: 36dvh; }
   .card { left: 0 !important; right: 0 !important; top: auto; bottom: 0; width: auto; height: var(--sheet-h); border-radius: var(--radius) var(--radius) 0 0; border-bottom: 0; transition: height 280ms var(--ease), transform 380ms var(--ease), opacity 300ms var(--ease); }
   .card.enter { transform: translateY(24px); }
@@ -473,3 +477,21 @@ body.tl-stack .numeral .nwhat, body.tl-stack .numeral .nref { display: none; }
   .card, #stage .dot, .veil, .race-row, .race-whisk, .race-dot { transition: none; }
 }
 body.no-motion .card, body.no-motion #stage .dot, body.no-motion .veil, body.no-motion .race-row, body.no-motion .race-whisk, body.no-motion .race-dot, body.no-motion .toast { transition: none; }
+/* a product row's second price line wraps between its parts (date · unit price · chip) instead of
+   widening the column until the store's name is cut: "$1,416.67/100 ml" left 85 px for the name */
+.rank .pr.wrapu { max-width: 45%; }
+.rank .pr.wrapu .u { white-space: normal; }
+.rank .pr .d, .rank .pr .flag { white-space: nowrap; }
+/* the rows a tie tag points to, marked for a moment */
+@keyframes tie-hl { from { background: rgba(255, 255, 255, 0.16); } to { background: transparent; } }
+.rank li.tie-hl a.row { animation: tie-hl 2s var(--ease) both; }
+body.no-motion .rank li.tie-hl a.row { animation: none; background: rgba(255, 255, 255, 0.1); }
+/* touch: small links and buttons get a 40 px hit area without moving anything (the padding is
+   given back as a negative margin) */
+@media (pointer: coarse) {
+  .ltitle { padding-block: 11px; margin-block: -11px; }
+  .card .bitems .linkish { display: inline-block; padding-block: 5px; margin-block: -5px; }
+  .credit a { display: inline-block; padding-block: 12px; margin-block: -12px; }
+  .card .chip { min-height: 40px; }
+  .toast-btn { min-height: 40px; }
+}

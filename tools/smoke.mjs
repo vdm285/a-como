@@ -292,6 +292,35 @@ try {
     check('phone: with a card open the timeline folds into its chip', !!chip);
     await ctx.close();
   }
+  // round 5: search, the address, the store split, the strip, the folded chip at 1024
+  {
+    const { ctx, page } = await fresh();
+    await open(page);
+    const q = async (s) => { await page.click('.search input', { clickCount: 3 }); await page.keyboard.press('Backspace'); await page.type('.search input', s); await sleep(450); return page.evaluate(() => [...document.querySelectorAll('.search .list .h, .search .list .item .n')].map((e) => e.textContent.trim())); };
+    const a = await q('huevo iztapalapa');
+    check('a product word and a place keep the products', a.some((x) => /^Huevo/.test(x)), a.slice(0, 4));
+    const b = await q('soriana');
+    check('a chain name lists its stores first', /Tiendas/.test(b[0]), b.slice(0, 2));
+    await page.keyboard.press('Enter'); await sleep(1500);
+    check('a chain name and Enter opens a store', /#t\//.test(page.url()), page.url().split('#')[1]);
+    await page.goto(`${BASE}#t/la-comer-70cfd7`); await sleep(2500);
+    const split = await page.evaluate(() => ((document.querySelector('.card .split') || {}).textContent || ''));
+    check('a supermarket split leaves medicines out', /sin contar medicinas/.test(split), split.slice(0, 90));
+    await page.goto(`${BASE}#p/carne-res-718a0c?w=2026-05-11`); await sleep(2500);
+    const overlap = await page.evaluate(() => { const ts = [...document.querySelectorAll('.card .strip .strip-ax')].map((t) => t.getBoundingClientRect()); let n = 0; for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) if (!(ts[i].right < ts[j].left || ts[j].right < ts[i].left)) n++; return n; });
+    check('the strip axis labels never overlap', overlap === 0, overlap);
+    await page.goto(`${BASE}#p/jitomate-3532af?w=1999-01-01`); await sleep(2500);
+    check('a week outside the data is replaced in the address', !/1999/.test(page.url()), page.url().split('#')[1]);
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await fresh({ width: 1024, height: 768 });
+    await open(page, 't/city-market-38d171');
+    await sleep(1200);
+    const r = await page.evaluate(() => { const chip = document.querySelector('.timeline.collapsed .tl-chip'); if (!chip) return null; const cr = chip.getBoundingClientRect(); let blocked = 0; for (const d of document.querySelectorAll('#stage .dot')) { const b = d.getBoundingClientRect(); const x = b.left + b.width / 2, y = b.top + b.height / 2; if (x > cr.right + 2 && y > cr.top && y < cr.bottom) { const el = document.elementFromPoint(x, y); if (el && el.closest('.timeline')) blocked++; } } return blocked; });
+    check('1024: the folded timeline blocks no dot beside its chip', r === 0, r);
+    await ctx.close();
+  }
 } finally {
   await browser.close();
 }

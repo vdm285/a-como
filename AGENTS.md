@@ -69,7 +69,9 @@ and read the captures in `data/cache/shots/` by eye: the city, a product, a past
 - **Git Bash rewrites a leading slash**: `VITE_BASE=/compa-precio/` becomes `/Program Files/Git/compa-precio/`. Use `MSYS_NO_PATHCONV=1` for a local base-path build and grep `dist/index.html`.
 - **The Vite dev server answers a missing JSON with `index.html` and 200**: loaders check the content type.
 - **Building while the pipeline writes `public/data/`** fails with a copy error; wait for the run to finish.
-- **Heredocs with backticks break in this shell**: write patch scripts to `data/cache/patches/` and run them by path.
+- **Heredocs with backticks break in this shell** (and a long quoted heredoc can fail too): write scripts with the file-writing tool to `data/cache/patches/` and run them by path; for code edits, write old/new blocks to a text file and run `node tools/apply-patch.cjs <file>` (no escaping; each old text must match once; nothing is written unless every block applies).
+- **d3-geo's `geoContains` is spherical and slow**: never call it per frame or per zoom level. The alcaldía labels use a raster of each shape built once in world space (`maskOf` in `src/map/map.js`).
+- **The phone sheet animates its height for 280 ms**: anything that leaves `sheet-full` goes through `leaveFullSheet` / `settleSheet` in `src/main.js`, which measure after the transition.
 - **The browser pane's screenshots time out when the window is behind**: use `npm run shots` (puppeteer-core with the installed Chrome) for exact viewports; with an emulated viewport, click coordinates are in the screenshot's frame.
 - **Size caps are bytes on the wire** (Pages serves gzip): products.json is ~770 kB raw, ~97 kB gzip; the checker fails above 1,400 kB raw.
 - **Chrome profiles under `data/` crash Vite's watcher**, so the config ignores `data/**`. A dev server another agent started can keep serving stale modules after its watcher dies (a "does not provide an export" error for an export that exists): start your own on another port (`npx vite --port 5176 --strictPort`) rather than killing theirs.

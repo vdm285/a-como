@@ -12,7 +12,7 @@
 // - Alcaldía labels sit above the dots with a knockout halo, are sized in screen pixels, and
 //   colliding labels are dropped.
 
-import { geoMercator, geoPath, geoCentroid, geoContains } from 'd3-geo';
+import { geoMercator, geoPath, geoCentroid } from 'd3-geo';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const DOT_R = 5;          // on-screen radius at the fit, for a median-coloured dot
@@ -172,7 +172,9 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     }
   }
   function applySelected(id) {
-    for (const c of dotEls.values()) c.classList.remove('sel');
+    // (a selected incomplete store is drawn at the answer size: the radius is recomputed)
+    for (const c of dotEls.values()) if (c.classList.contains('sel')) { c.classList.remove('sel'); c._rk = null; }
+    if (id && dotEls.get(id)) dotEls.get(id)._rk = null;
     layers.halo.innerHTML = '';
     const c = id && dotEls.get(id);
     if (c) {
@@ -191,7 +193,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       if (c._rk === view.k) continue; // a pan does not change any radius
       c._rk = view.k;
       const empty = c.classList.contains('empty'), hatch = c.classList.contains('hatch');
-      c.setAttribute('r', (empty ? DOT_R * 0.45 * Math.pow(Math.max(view.k, 0.3), 0.15) : hatch ? screenR(0) * 0.7 : screenR(c._t || 0)) / view.k);
+      c.setAttribute('r', (empty ? DOT_R * 0.45 * Math.pow(Math.max(view.k, 0.3), 0.15) : hatch && !c.classList.contains('sel') ? screenR(0) * 0.7 : screenR(c._t || 0)) / view.k);
     }
     for (const [id, ring] of ringEls) { const c = dotEls.get(id); const r = c ? Number(c.getAttribute('r')) : DOT_R / view.k; ring.setAttribute('r', r + 3 / view.k); }
     const halo = layers.halo.firstChild;
@@ -209,6 +211,36 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   // and the tags: no per-frame search (it cost 13 ms a frame), no hopping while the map pans, and a
   // name wherever part of its alcaldía shows.
   const labelCache = new Map();
+  // Each alcaldía's shape as a 96×96 raster over its box in world space, filled once by scanlines
+  // over its projected rings (even-odd, so holes stay holes). The inside test for a spot becomes a
+  // lookup: the spherical geoContains took 67–133 ms per new zoom level, 500 ms at 4× CPU.
+  function maskOf(it) {
+    if (it._mask) return it._mask;
+    const bb = path.bounds(it.f), N = 96;
+    const x0 = bb[0][0], y0 = bb[0][1], cw = (bb[1][0] - x0) / N || 1, ch = (bb[1][1] - y0) / N || 1;
+    const bits = new Uint8Array(N * N);
+    const g = it.f.geometry || it.f;
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+    const edges = [];
+    for (const poly of polys) for (const ring of poly) {
+      const pts = ring.map((c) => projection(c)).filter(Boolean);
+      for (let i = 0; i + 1 < pts.length; i++) edges.push(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]);
+    }
+    const xs = [];
+    for (let r = 0; r < N; r++) {
+      const y = y0 + (r + 0.5) * ch;
+      xs.length = 0;
+      for (let e = 0; e < edges.length; e += 4) { const ay = edges[e + 1], by = edges[e + 3]; if ((ay > y) !== (by > y)) xs.push(edges[e] + ((y - ay) / (by - ay)) * (edges[e + 2] - edges[e])); }
+      xs.sort((p, q) => p - q);
+      for (let k = 0; k + 1 < xs.length; k += 2) {
+        const c0 = Math.max(0, Math.ceil((xs[k] - x0) / cw - 0.5)), c1 = Math.min(N - 1, Math.floor((xs[k + 1] - x0) / cw - 0.5));
+        for (let c = c0; c <= c1; c++) bits[r * N + c] = 1;
+      }
+    }
+    it._mask = { x0, y0, cw, ch, N, bits };
+    return it._mask;
+  }
+  const insideMask = (m, x, y) => { const c = Math.floor((x - m.x0) / m.cw), r = Math.floor((y - m.y0) / m.ch); return c >= 0 && r >= 0 && c < m.N && r < m.N && m.bits[r * m.N + c] === 1; };
   function labelCandidates(size) {
     const bk = Math.round(Math.log2(Math.max(view.k, 0.05)) * 4) / 4;
     const key = `${bk}|${size}`;
@@ -221,10 +253,10 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       if (!it._near) { const m = Math.max(bb[1][0] - bb[0][0], bb[1][1] - bb[0][1]) * 0.1; it._near = located.filter((p) => p._x != null && p._x > bb[0][0] - m && p._x < bb[1][0] + m && p._y > bb[0][1] - m && p._y < bb[1][1] + m); }
       const step = Math.max(hW * 1.2, Math.max(bb[1][0] - bb[0][0], bb[1][1] - bb[0][1]) / 14);
       const cands = [];
+      const mask = maskOf(it);
       for (let y = bb[0][1] + step / 2; y < bb[1][1]; y += step) {
         for (let x = bb[0][0] + step / 2; x < bb[1][0]; x += step) {
-          const ll = projection.invert([x, y]);
-          if (!ll || !geoContains(it.f, ll)) continue;
+          if (!insideMask(mask, x, y)) continue;
           let dots = 0;
           for (const p of it._near) { if (Math.abs(p._x - x) < wW / 2 + padW && Math.abs(p._y - y) < hW / 2 + padW) dots++; }
           if (dots > 2) continue;
@@ -246,42 +278,70 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     const placed = [...obstacles, ...placedTags];
     const size = W < 520 ? 9 : 10.5;
     const hit = (box, q) => !(box[2] < q[0] || box[0] > q[2] || box[3] < q[1] || box[1] > q[3]);
+    // a name keeps its spot while that spot stays on screen and clear (taking the first clear spot
+    // every frame made names jump as the chrome's edges passed during a pan); a new zoom level
+    // keeps the spot nearest the old one
+    const near = (h) => 2 * h / view.k;
     for (const { it, cands } of labelCandidates(size)) {
       const w = it.name.length * size * 0.7 + 6, h = size + 4;
-      for (const c of cands) {
+      const boxOf = (c) => {
         const x = c.x * view.k + view.x, y = c.y * view.k + view.y;
         const box = [x - w / 2, y - h / 2, x + w / 2, y + h / 2];
-        if (box[0] < 4 || box[2] > W - 4 || box[1] < 4 || box[3] > H - 4) continue;
-        if (placed.some((q) => hit(box, q))) continue;
-        placed.push(box);
-        const t = el('text', { x, y, class: 'alc-label' }, labelsG);
-        t.style.fontSize = `${size}px`;
-        t.textContent = it.name;
-        break;
+        if (box[0] < 4 || box[2] > W - 4 || box[1] < 4 || box[3] > H - 4) return null;
+        return placed.some((q) => hit(box, q)) ? null : box;
+      };
+      let chosen = null, box = null;
+      if (it._spot) {
+        const prev = cands.includes(it._spot) ? it._spot : cands.reduce((a, c) => { const d = Math.hypot(c.x - it._spot.x, c.y - it._spot.y); return d < near(h) && (!a || d < a.d) ? { c, d } : a; }, null)?.c;
+        if (prev) { box = boxOf(prev); if (box) chosen = prev; }
       }
+      // a spot that must move goes to the nearest clear one, not the best one across the alcaldía
+      const order = it._spot ? [...cands].sort((a, b) => Math.hypot(a.x - it._spot.x, a.y - it._spot.y) - Math.hypot(b.x - it._spot.x, b.y - it._spot.y)) : cands;
+      if (!chosen) for (const c of order) { box = boxOf(c); if (box) { chosen = c; break; } }
+      it._spot = chosen;
+      if (!chosen) continue;
+      placed.push(box);
+      const t = el('text', { x: (box[0] + box[2]) / 2, y: (box[1] + box[3]) / 2, class: 'alc-label' }, labelsG);
+      t.style.fontSize = `${size}px`;
+      t.textContent = it.name;
     }
   }
 
   // ---- price tags: callouts in screen space with a leader to the dot ----
+  // a tag's text is measured once (it is drawn in screen pixels, so its width never changes with
+  // the view); measuring on every frame forced a layout per tag and stalled playback for a second
+  const textWidths = new Map();
+  function measureTag(tg) {
+    const key = `${tg.text}|${tg.sub || ''}`;
+    if (textWidths.has(key)) return textWidths.get(key);
+    const probe = el('g', { class: 'tag' }, tagsG);
+    const p1 = el('text', { class: 'tag-price', x: 0, y: 0 }, probe); p1.textContent = tg.text;
+    let sub = tg.sub || '';
+    const p2 = sub ? el('text', { class: 'tag-sub', x: 0, y: 0 }, probe) : null;
+    if (p2) { p2.textContent = sub; while (p2.getComputedTextLength() > 172 && sub.length > 4) { sub = sub.slice(0, -2); p2.textContent = `${sub}…`; } sub = p2.textContent; }
+    const out = { tw: Math.max(p1.getComputedTextLength(), p2 ? p2.getComputedTextLength() : 0), sub };
+    probe.remove();
+    if (textWidths.size > 400) textWidths.clear();
+    textWidths.set(key, out);
+    return out;
+  }
+  // a width taken before Manrope arrived was the fallback font's
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { textWidths.clear(); drawTags(); });
   function drawTags() {
     tagsG.innerHTML = '';
     placedTags = [];
     if (!tags.length) return;
     const placed = [...obstacles];
-    const colouredNear = (box) => { let n = 0; for (const [id, c] of dotEls) { if (c.classList.contains('empty')) continue; const p = byId.get(id); const dx = p._x * view.k + view.x, dy = p._y * view.k + view.y; if (dx > box[0] - 3 && dx < box[2] + 3 && dy > box[1] - 3 && dy < box[3] + 3) n++; } return n; };
+    // the coloured dots on screen, once per draw (each spot scanned all 411 dots through the DOM)
+    const pts = [];
+    for (const [id, c] of dotEls) { if (c.classList.contains('empty')) continue; const p = byId.get(id); pts.push(p._x * view.k + view.x, p._y * view.k + view.y); }
+    const colouredNear = (box) => { let n = 0; for (let i = 0; i < pts.length; i += 2) { const dx = pts[i], dy = pts[i + 1]; if (dx > box[0] - 3 && dx < box[2] + 3 && dy > box[1] - 3 && dy < box[3] + 3) n++; } return n; };
     for (const tg of tags) {
       const s = byId.get(tg.id);
       if (!s || s._x == null) continue;
       const x = s._x * view.k + view.x, y = s._y * view.k + view.y;
       if (x < pad.left - 10 || x > W - pad.right + 10 || y < pad.top - 10 || y > H - pad.bottom + 10) continue;
-      // measure the real text, then size the box
-      const probe = el('g', { class: 'tag' }, tagsG);
-      const p1 = el('text', { class: 'tag-price', x: 0, y: 0 }, probe); p1.textContent = tg.text;
-      let sub = tg.sub || '';
-      const p2 = sub ? el('text', { class: 'tag-sub', x: 0, y: 0 }, probe) : null;
-      if (p2) { p2.textContent = sub; while (p2.getComputedTextLength() > 172 && sub.length > 4) { sub = sub.slice(0, -2); p2.textContent = `${sub}…`; } sub = p2.textContent; }
-      const tw = Math.max(p1.getComputedTextLength(), p2 ? p2.getComputedTextLength() : 0);
-      probe.remove();
+      const { tw, sub } = measureTag(tg);
       const w = Math.ceil(tw) + 16, h = tg.sub ? 36 : 22;
       // above, below and beside the dot, at three leader lengths: the nearest spot that covers no data wins
       const spots = [];
@@ -488,10 +548,14 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   });
   // a tap or a click focuses the svg too: that must not start the keyboard walk (a second ring, an
   // announcement, a pan); a keyboard focus resumes the walk where it was
-  let pointerFocus = false, lastActive = null;
-  svg.addEventListener('pointerdown', () => { pointerFocus = true; setTimeout(() => { pointerFocus = false; }, 0); }, true);
+  // Focus that follows a press anywhere is a pointer's, never the keyboard walk's: a finger's
+  // focus arrives with the compatibility mousedown after pointerup, and a tap on the sheet's grip
+  // lands its mousedown on the map that moved under it. Only Tab starts the walk.
+  let lastPress = -Infinity, lastActive = null;
+  window.addEventListener('pointerdown', () => { lastPress = performance.now(); }, true);
+  window.addEventListener('mousedown', () => { lastPress = performance.now(); }, true);
   svg.addEventListener('focus', () => {
-    if (pointerFocus) return;
+    if (performance.now() - lastPress < 1000) return;
     if (active) { setActive(active); return; }
     if (lastActive && dotEls.has(lastActive)) { setActive(lastActive); return; }
     move(0, 1); if (!active) move(1, 0);
@@ -504,23 +568,27 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     resize() {
       W = host.clientWidth || W; H = host.clientHeight || H;
       fitProjection();
-      labelCache.clear(); for (const it of labelItems) it._near = null; // world coordinates change with the projection
+      labelCache.clear(); for (const it of labelItems) { it._near = null; it._mask = null; } // world coordinates change with the projection
       drawAll();
       if (atFit) { view = fitView(); applyView(); }
     },
     // A card opened or closed (or the chrome moved). At the fit: glide to the new fit. Zoomed by
     // hand: keep the zoom, and only if the selected store is now covered, pan it into view.
+    // The view follows the free area's centre the same way when a card opens and when it closes
+    // (a store card too: skipping the shift on open slid the view on close, and buried the side of
+    // the city under the card); then a selected store the shift left covered is centred.
     setPadding(p, animate = true) {
       const before = { x: pad.left + (W - pad.left - pad.right) / 2, y: pad.top + (H - pad.top - pad.bottom) / 2 };
       pad = { ...pad, ...p };
       if (atFit) { animateTo(fitView(), animate ? 480 : 0); return; }
       const after = { x: pad.left + (W - pad.left - pad.right) / 2, y: pad.top + (H - pad.top - pad.bottom) / 2 };
-      if (Math.abs(after.x - before.x) > 40 && !selected) { animateTo(clampView({ k: view.k, x: view.x + after.x - before.x, y: view.y + after.y - before.y }), animate ? 480 : 0); return; }
+      let target = Math.abs(after.x - before.x) > 40 || Math.abs(after.y - before.y) > 40 ? clampView({ k: view.k, x: view.x + after.x - before.x, y: view.y + after.y - before.y }) : view;
       const s = selected && byId.get(selected);
-      if (s && !api.inFreeArea(selected)) {
-        const cx = pad.left + (W - pad.left - pad.right) / 2, cy = pad.top + (H - pad.top - pad.bottom) / 2;
-        animateTo(clampView({ k: view.k, x: cx - s._x * view.k, y: cy - s._y * view.k }), animate ? 480 : 0);
-      } else applyView();
+      if (s && s._x != null) {
+        const x = s._x * target.k + target.x, y = s._y * target.k + target.y;
+        if (!(x > pad.left + 16 && x < W - pad.right - 16 && y > pad.top + 16 && y < H - pad.bottom - 16)) target = clampView({ k: view.k, x: after.x - s._x * view.k, y: after.y - s._y * view.k });
+      }
+      if (target !== view) animateTo(target, animate ? 480 : 0); else applyView();
     },
     reset() { atFit = true; animateTo(fitView()); },
     // centre a location in the free area; k is a multiple of the fit scale
@@ -532,6 +600,8 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       atFit = false;
       animateTo(clampView({ k, x: cx - s._x * k, y: cy - s._y * k }), 650);
     },
+    // the share of these locations inside the free area at the current view
+    shareInFree(ids) { let n = 0, k = 0; for (const id of ids) { const s = byId.get(id); if (!s || s._x == null) continue; n++; if (api.inFreeArea(id)) k++; } return n ? k / n : 1; },
     inFreeArea(id) {
       const s = byId.get(id);
       if (!s || s._x == null) return true;
