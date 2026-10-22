@@ -1,0 +1,1218 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>A cómo · Respira</title>
+<style>
+/* Respira. The map is the stage: full-bleed and dark. Words sit top-left, the weeks run along the
+   bottom, one number speaks at a time. The breath is the warm accent; blue means "cheaper" and
+   nothing else. */
+:root {
+  color-scheme: dark;
+  --bg: #0c1118;
+  --ink: #f4f5f7;
+  --ink-2: #b9bec7;
+  --muted: #8a919c;
+  --cheaper: #3987e5;
+  --dearer: #e66767;
+  --cheaper-ink: #7db3f0;
+  --dearer-ink: #f29191;
+  --mid: #5b616a;
+  --accent: #ece6d8;
+  --accent-ink: #14171c;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.18);
+  --glass: rgba(14, 19, 28, 0.82);
+  --glass-2: rgba(18, 24, 34, 0.96);
+  --scrim: rgba(12, 17, 24, 0.94);
+  --scrim-0: rgba(12, 17, 24, 0);
+  --shadow: rgba(0, 0, 0, 0.45);
+  --dot-edge: rgba(8, 12, 18, 0.9);
+  --ghost: rgba(185, 190, 199, 0.55);
+  --geo-zmvm-fill: rgba(255, 255, 255, 0.012);
+  --geo-zmvm-line: rgba(255, 255, 255, 0.055);
+  --geo-alc-fill: rgba(255, 255, 255, 0.022);
+  --geo-alc-line: rgba(255, 255, 255, 0.1);
+  --geo-park: rgba(236, 230, 216, 0.03);
+  --geo-water: rgba(185, 190, 199, 0.07);
+  --geo-road: rgba(255, 255, 255, 0.055);
+  --geo-road-major: rgba(255, 255, 255, 0.095);
+  --geo-label: rgba(255, 255, 255, 0.17);
+  --font: 'Manrope', system-ui, sans-serif;
+  --gut: 48px;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --tl-h: clamp(176px, 25vh, 226px);
+  --tl-b: calc(40px + var(--sab));
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; background: var(--bg); }
+body { margin: 0; color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.4; overflow: hidden; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+#app { position: fixed; inset: 0; overflow: hidden; background: var(--bg); }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#app[data-phase="end"] #map { cursor: crosshair; }
+.scrim { position: absolute; pointer-events: none; }
+.scrim.side { left: 0; top: 0; bottom: 0; width: 640px; background: linear-gradient(90deg, var(--scrim) 0, var(--scrim) 34%, var(--scrim-0) 100%); }
+.scrim.foot { left: 0; right: 0; bottom: 0; height: calc(var(--tl-b) + var(--tl-h) + 40px); background: linear-gradient(0deg, var(--scrim) 0, var(--scrim) 62%, var(--scrim-0) 100%); }
+.scrim.head { display: none; }
+
+/* words */
+.panel { position: absolute; left: var(--gut); top: calc(34px + var(--sat)); width: min(500px, 40vw); display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
+.brand { font-weight: 800; font-size: 15px; letter-spacing: -0.01em; color: var(--ink); display: flex; align-items: center; gap: 10px; }
+.brand i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.slot { will-change: opacity, transform; }
+.eyebrow { margin: clamp(22px, 13vh, 130px) 0 0; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); min-height: 17px; }
+.display { margin: 0; font-size: clamp(56px, 5.8vw, 96px); font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; min-height: 1em; }
+.caption { margin: 0; font-size: 17px; line-height: 1.45; color: var(--ink-2); max-width: 30em; text-wrap: pretty; }
+#app[data-act="story"] .caption { color: var(--ink); font-size: 19px; line-height: 1.42; max-width: 26em; }
+.note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); max-width: 34em; text-wrap: pretty; }
+
+/* controls */
+.topright { position: absolute; top: calc(28px + var(--sat)); right: var(--gut); display: flex; gap: 8px; }
+.pill { height: 38px; padding: 0 16px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); color: var(--ink-2); font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; transition: color 150ms, border-color 150ms, opacity 300ms; }
+.pill:hover { color: var(--ink); border-color: var(--line-2); }
+.pill svg { width: 16px; height: 16px; flex: none; }
+.pill.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.pill.primary:hover { color: var(--accent-ink); }
+[hidden] { display: none !important; }
+
+/* the weeks */
+.timeline { position: absolute; left: var(--gut); right: var(--gut); bottom: var(--tl-b); height: var(--tl-h); display: flex; flex-direction: column; gap: 6px; }
+.tl-head { display: flex; align-items: center; gap: 12px; height: 30px; flex: none; font-size: 13px; }
+.tl-label { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tl-right { color: var(--muted); font-variant-numeric: tabular-nums; flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+.tl-hint { color: var(--muted); font-size: 12px; white-space: nowrap; flex: none; }
+.tl-hint kbd { font: inherit; font-weight: 700; color: var(--ink-2); }
+.chip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--ink-2); font-size: 13px; font-weight: 700; flex: none; transition: background 150ms, color 150ms; }
+.chip:hover { color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+#strip { flex: 1 1 auto; width: 100%; min-height: 0; display: block; touch-action: pan-y; }
+#app[data-phase="end"] #strip { cursor: ew-resize; touch-action: none; }
+
+/* legend */
+.legend { position: absolute; left: var(--gut); bottom: calc(var(--tl-b) + var(--tl-h) + 22px); width: 440px; font-size: 12px; color: var(--ink-2); pointer-events: none; }
+.legend .bar { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--cheaper), var(--mid), var(--dearer)); background: linear-gradient(in oklab 90deg, var(--cheaper), var(--mid), var(--dearer)); }
+.legend .ticks { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; margin-top: 6px; font-variant-numeric: tabular-nums; line-height: 1.3; white-space: nowrap; }
+.legend .ticks span:nth-child(2) { text-align: center; }
+.legend .ticks span:nth-child(3) { text-align: right; }
+.legend .ticks b { color: var(--ink); font-weight: 700; }
+.legend .sizes { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 11px; margin-top: 9px; min-height: 20px; color: var(--muted); font-size: 11.5px; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.legend .sz { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-2); white-space: nowrap; }
+.legend .sz i { display: inline-block; flex: none; border-radius: 50%; box-shadow: 0 0 0 1px var(--dot-edge); }
+.legend .extra { margin-top: 7px; color: var(--muted); font-size: 11.5px; line-height: 1.35; min-height: 1.35em; }
+.legend .ring { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--ink-2); margin-right: 6px; vertical-align: 0; }
+.legend .ring.acc { border: 1.5px solid var(--accent); width: 10px; height: 10px; vertical-align: -1px; }
+
+/* tags on the map */
+#tags { position: absolute; inset: 0; pointer-events: none; }
+.tag { position: absolute; left: 0; top: 0; padding: 5px 9px 6px; border-radius: 9px; background: var(--glass-2); border: 1.5px solid var(--cheaper); font-size: 11.5px; line-height: 1.3; color: var(--ink-2); max-width: 270px; box-shadow: 0 8px 24px var(--shadow); }
+.tag .tt { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.tag b { color: var(--ink); font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tag em { font-style: normal; color: var(--muted); font-size: 11px; }
+.tag span { display: block; white-space: normal; text-wrap: balance; }
+
+/* tooltip */
+.tip { position: absolute; left: 0; top: 0; z-index: 20; width: max-content; max-width: min(300px, calc(100vw - 32px)); padding: 10px 12px 11px; border-radius: 12px; background: var(--glass-2); border: 1px solid var(--line-2); font-size: 13px; line-height: 1.35; color: var(--ink-2); pointer-events: none; box-shadow: 0 12px 34px var(--shadow); }
+.tip .n { color: var(--ink); font-weight: 700; }
+.tip .s { color: var(--muted); font-size: 12px; margin-top: 1px; }
+.tip .p { margin-top: 6px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.tip .p b { color: var(--ink); font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tip .d { font-size: 12px; margin-top: 2px; }
+
+.credit { position: absolute; left: var(--gut); right: var(--gut); bottom: calc(14px + var(--sab)); margin: 0; font-size: 11px; line-height: 1.35; color: var(--muted); pointer-events: none; }
+
+#app.tight[data-act="story"] .note { display: none; }
+
+@media (max-width: 759px) {
+  :root { --gut: 16px; --tl-h: clamp(140px, 20vh, 172px); --tl-b: calc(54px + var(--sab)); }
+  .scrim.side { display: none; }
+  .scrim.head { display: block; left: 0; right: 0; top: 0; height: 260px; background: linear-gradient(180deg, var(--scrim) 0, var(--scrim) 52%, var(--scrim-0) 100%); }
+  .scrim.foot { height: calc(var(--tl-b) + var(--tl-h) + 128px); background: linear-gradient(0deg, var(--scrim) 0, var(--scrim) 66%, var(--scrim-0) 100%); }
+  .panel { left: 16px; right: 16px; top: calc(14px + var(--sat)); width: auto; gap: 7px; }
+  .eyebrow { margin-top: 12px; font-size: 11px; letter-spacing: 0.12em; }
+  .display { font-size: 52px; }
+  .caption { font-size: 14.5px; line-height: 1.42; }
+  #app[data-act="story"] .caption { font-size: 15px; }
+  .note { font-size: 12px; line-height: 1.45; }
+  #app[data-act="story"] .note { display: none; }
+  .topright { top: calc(10px + var(--sat)); right: 16px; }
+  .pill { height: 32px; padding: 0 12px; font-size: 13px; }
+  .timeline { gap: 2px; }
+  /* two short rows (the week, then its count) beside the chip, at a fixed height so the strip never squeezes */
+  .tl-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; align-content: center; column-gap: 8px; row-gap: 1px; font-size: 12px; height: 36px; }
+  .tl-label { grid-column: 1; grid-row: 1; line-height: 1.25; }
+  .tl-right { grid-column: 1; grid-row: 2; line-height: 1.25; }
+  .chip { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  .tl-hint { display: none; }
+  .chip { height: 28px; padding: 0 10px; font-size: 12px; }
+  .legend { left: 16px; right: 16px; width: auto; bottom: calc(var(--tl-b) + var(--tl-h) + 8px); font-size: 11px; }
+  .legend .ticks { gap: 6px; }
+  .legend .sizes { font-size: 11px; gap: 3px 9px; margin-top: 7px; }
+  .legend .extra { font-size: 11px; margin-top: 5px; min-height: 2.7em; }
+  .tag { max-width: 172px; font-size: 10.5px; padding: 3px 8px 4px; border-radius: 8px; }
+  .tag b { font-size: 13px; }
+  .credit { font-size: 10px; bottom: calc(8px + var(--sab)); }
+}
+@media (max-width: 759px) and (max-height: 700px) {
+  .display { font-size: 44px; }
+  .note { display: none; }
+  .legend .extra { display: none; }
+}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
+<link rel="icon" href="data:,">
+
+<div id="app" data-phase="opening" data-act="breath">
+  <canvas id="map" aria-label="Mapa de tiendas de la Ciudad de México y su zona metropolitana"></canvas>
+  <div class="scrim side"></div>
+  <div class="scrim head"></div>
+  <div class="scrim foot"></div>
+  <div id="tags" aria-hidden="true"></div>
+
+  <header class="panel">
+    <div class="brand"><i></i>A cómo</div>
+    <p class="eyebrow slot" id="eyebrow"></p>
+    <p class="display slot" id="display"></p>
+    <p class="caption slot" id="caption"></p>
+    <p class="note slot" id="note"></p>
+  </header>
+
+  <div class="topright">
+    <button class="pill" id="skip" type="button">Saltar</button>
+    <button class="pill primary" id="replay" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Repetir</button>
+  </div>
+
+  <div class="legend slot" id="legend">
+    <div class="bar"></div>
+    <div class="ticks">
+      <span><b>−50&nbsp;%</b> o más barato</span>
+      <span><b id="lgRef"></b> mediana reciente</span>
+      <span><b>+50&nbsp;%</b> o más caro</span>
+    </div>
+    <div class="sizes" id="lgSizes"></div>
+    <div class="extra" id="lgMode"></div>
+  </div>
+
+  <section class="timeline" id="timeline" aria-label="Semanas">
+    <div class="tl-head">
+      <span class="tl-label slot" id="tlLabel"></span>
+      <span class="tl-right slot" id="tlRight"></span>
+      <span class="tl-hint" id="tlHint" hidden>Arrastra sobre la curva o usa <kbd>←</kbd> <kbd>→</kbd> para cambiar de semana</span>
+      <button class="chip" id="recent" type="button" aria-pressed="true" hidden>Reciente</button>
+    </div>
+    <canvas id="strip" role="slider" aria-label="Semana del jitomate" aria-describedby="stripHelp" aria-disabled="true" tabindex="-1"></canvas>
+    <p class="sr" id="stripHelp">Flechas: semana anterior o siguiente. Inicio: la primera semana. Fin: los precios recientes.</p>
+  </section>
+
+  <div class="tip" id="tip" hidden></div>
+  <p class="credit" id="credit"></p>
+  <p class="sr" id="summary" aria-live="polite"></p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="demo-data.js"></script>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const app = $('app');
+  const D = window.DEMO;
+  if (!D || !window.d3) {
+    $('caption').textContent = 'No se pudieron cargar los datos o la biblioteca del mapa. Recarga la página.';
+    app.dataset.phase = 'error';
+    return;
+  }
+
+  // ---------- small helpers ----------
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const c01 = (x) => clamp(x, 0, 1);
+  const lerp = (a, b, p) => a + (b - a) * p;
+  const ease = (p) => (p <= 0 ? 0 : p >= 1 ? 1 : p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+  const easeOut = (p) => 1 - Math.pow(1 - c01(p), 3);
+  const rootCss = getComputedStyle(document.documentElement);
+  const tok = (n) => rootCss.getPropertyValue(n).trim();
+  const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const ymd = (s) => s.split('-').map(Number);
+  const fDay = (s, year = true) => { const [y, m, d] = ymd(s); return `${d} ${MES[m - 1]}${year ? ' ' + y : ''}`; };
+  const fRange = (a, b) => {
+    const [y1, m1, d1] = ymd(a), [y2, m2, d2] = ymd(b);
+    if (y1 === y2 && m1 === m2) return `${d1}–${d2} ${MES[m2 - 1]} ${y2}`;
+    if (y1 === y2) return `${d1} ${MES[m1 - 1]} – ${d2} ${MES[m2 - 1]} ${y2}`;
+    return `${fDay(a)} – ${fDay(b)}`;
+  };
+  const nf = new Intl.NumberFormat('es-MX');
+  const r2 = (x) => Math.round(Number((x * 100).toPrecision(12))) / 100; // half-up on the decimal value
+  const money = (x) => '$' + r2(x).toFixed(2);
+  const NB = ' ';
+  const median = (a) => {
+    const v = a.filter((x) => x != null && Number.isFinite(x)).sort((x, y) => x - y);
+    if (!v.length) return null;
+    const m = v.length >> 1;
+    return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+  };
+  const KIND = { super: 'súper', mercado: 'mercado', central: 'central de abasto', tortilleria: 'tortillería', tradicional: 'tradicional', farmacia: 'farmacia', conveniencia: 'conveniencia' };
+  // display names: PROFECO's "Sucursal" and trailing branch number are database detail, not part of
+  // the name; the number stays only where two stores would otherwise read the same
+  const rawClean = (s) => String(s || '').replace(/\s*\(\d+\)\s*$/, '').replace(/\bSucursal\s+/g, '').replace(/\s{2,}/g, ' ').trim();
+  const cleanCount = new Map();
+  D.stores.forEach((s) => { const c = rawClean(s[0]); cleanCount.set(c, (cleanCount.get(c) || 0) + 1); });
+  const storeName = (i) => {
+    const raw = String(D.stores[i][0] || ''), c = rawClean(raw);
+    if (!c) return raw;
+    if (cleanCount.get(c) > 1) { const m = raw.match(/\((\d+)\)\s*$/); if (m) return `${c} (${m[1]})`; }
+    return c;
+  };
+
+  // ---------- everything on screen comes from DEMO ----------
+  const V = D.visits, NW = V.weeks.length, NS = D.stores.length;
+  const partial = new Set(D.partialWeeks);
+  const bits = new Uint8Array(NS * NW);
+  V.rows.forEach((r, i) => { for (let j = 0; j < NW; j++) bits[i * NW + j] = r.charCodeAt(j) === 49 ? 1 : 0; });
+  const cum = []; { let a = 0; V.products.forEach((p, j) => { a += p; cum[j] = a; }); }
+  const maxCount = Math.max(...V.count);
+  const visitedAny = V.rows.filter((r) => r.includes('1')).length;
+
+  const J = D.jitomate, JW = J.weeks, NK = JW.length, ref = J.ref;
+  const jIdx = Object.keys(J.prices).map(Number);
+  const isJ = new Uint8Array(NS); jIdx.forEach((i) => { isJ[i] = 1; });
+  const wMed = JW.map((w, k) => median(jIdx.map((i) => J.prices[i][k])));
+  const wN = JW.map((w, k) => jIdx.filter((i) => J.prices[i][k] != null).length);
+  const off = Math.max(0, V.weeks.indexOf(JW[0])); // the jitomate's 26 weeks are the survey's last 26
+  const ST = D.stories.jitomate;
+  const peakK = JW.indexOf(ST.peakWeek), lastK = JW.indexOf(ST.lastWeek);
+  const matched = new Uint8Array(NS);
+  jIdx.forEach((i) => { const a = J.prices[i]; if (a[peakK] != null && a[lastK] != null) matched[i] = 1; });
+  const cheap = Object.entries(J.latest).map(([i, [p, d]]) => ({ i: +i, p, d })).sort((a, b) => a.p - b.p || a.i - b.i);
+  const top3 = cheap.slice(0, 3);
+  const tieMore = top3.length === 3 ? cheap.slice(3).filter((c) => c.p === top3[2].p).length : 0;
+  const recentLabel = fRange(D.recent.from, D.recent.to);
+  const norm = (p) => clamp((p - ref) / ref / 0.5, -1, 1); // ±50 % cap, as the legend says
+
+  // story text, all computed
+  const pct = Math.round((ST.medianRatio - 1) * 100);
+  const share = Math.round(ST.medianRatio * 100);
+  const sameYear = ST.peakWeek.slice(0, 4) === ST.lastWeek.slice(0, 4);
+  const bigStory = (pct < 0 ? '−' : '+') + Math.abs(pct) + NB + '%';
+  const storyEyebrow = `${J.name} · ${fDay(ST.peakWeek, !sameYear)} → ${fDay(ST.lastWeek)}`;
+  const storyLine = `En las mismas ${ST.matched} tiendas, el ${J.name.toLowerCase()} de la semana del ${fDay(ST.lastWeek, !sameYear)} costó, en la mediana, el ${share}${NB}% de lo que costaba en la del ${fDay(ST.peakWeek, !sameYear)}.`;
+  const storyNote = `La del ${fDay(ST.peakWeek, false)} fue la semana de mediana más alta de las ${JW.length}. El ${bigStory} es la mediana del cambio de cada una de esas ${ST.matched} tiendas (su precio del ${fDay(ST.lastWeek, false)} entre el del ${fDay(ST.peakWeek, false)}). La curva, en cambio, es la mediana de todas las tiendas con precio cada semana.`;
+  const cap1 = V.totalWhat.charAt(0).toUpperCase() + V.totalWhat.slice(1) + '.';
+  const note1Short = `Cada punto es una de las ${visitedAny} tiendas y se enciende la semana en que PROFECO anotó precios ahí.`;
+  const note1 = `${note1Short} Del ${fDay(V.weeks[0])} al ${fDay(D.latestDate)}.`;
+  // "1 Kg. Granel. Saladette/huaje o Tomate Saladette/huaje" → "Jitomate saladette o huaje, el kilo a granel."
+  const presTxt = (() => {
+    const parts = String(J.presentation || '').split('.').map((s) => s.trim()).filter(Boolean);
+    let qty = '', loose = false, kind = '';
+    for (const p of parts) {
+      const m = p.match(/^(\d+(?:,\d+)?)\s*(kg|g|l|ml)$/i);
+      if (m && !qty) { const n = m[1], u = m[2].toLowerCase(); qty = n === '1' && u === 'kg' ? 'el kilo' : n === '1' && u === 'l' ? 'el litro' : `${n} ${u}`; continue; }
+      if (/^granel$/i.test(p)) { loose = true; continue; }
+      if (!kind) kind = p.split(/\s+o\s+/i)[0].replace(/\s*\/\s*/g, ' o ').toLowerCase();
+    }
+    if (!qty && !kind) return J.presentation ? `${J.presentation}.` : '';
+    return `${J.name}${kind ? ' ' + kind : ''}${qty ? ', ' + qty : ''}${loose ? ' a granel' : ''}.`;
+  })();
+  const note2 = `${presTxt} Color y tamaño: cada tienda contra la mediana reciente, ${money(ref)} (${J.n} tiendas, ${recentLabel}).`;
+  const curveTitle = 'Mediana de todas las tiendas con precio, cada semana';
+
+  // ---------- colour: cheaper → grey → dearer, in OKLab ----------
+  const hex = (h) => { h = h.replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); };
+  const toLin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const toS = (c) => Math.round(c01(c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055) * 255);
+  const oklab = (rgb) => {
+    const [r, g, b] = rgb.map(toLin);
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+  };
+  const fromOklab = ([L, a, b]) => {
+    const l = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3);
+    const m = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3);
+    const s = Math.pow(L - 0.0894841775 * a - 1.291485548 * b, 3);
+    return [toS(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s), toS(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s), toS(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)];
+  };
+  const C = { bg: tok('--bg'), ink: tok('--ink'), ink2: tok('--ink-2'), muted: tok('--muted'), cheaper: tok('--cheaper'), dearer: tok('--dearer'), cheaperInk: tok('--cheaper-ink'), dearerInk: tok('--dearer-ink'), mid: tok('--mid'), accent: tok('--accent'), edge: tok('--dot-edge'), ghost: tok('--ghost'), line2: tok('--line-2') };
+  const LC = oklab(hex(C.cheaper)), LM = oklab(hex(C.mid)), LD = oklab(hex(C.dearer));
+  const LUT = [];
+  for (let s = 0; s <= 200; s++) {
+    const x = s / 100 - 1, A = x < 0 ? LC : LD, t = Math.abs(x);
+    LUT.push(`rgb(${fromOklab([0, 1, 2].map((q) => lerp(LM[q], A[q], t))).join(',')})`);
+  }
+  const colorOf = (v) => LUT[Math.round((clamp(v, -1, 1) + 1) * 100)];
+  const sprite = (color, stops) => {
+    const c = document.createElement('canvas'); c.width = c.height = 96;
+    const x = c.getContext('2d'), g = x.createRadialGradient(48, 48, 0, 48, 48, 48);
+    const [r, gg, b] = hex(color);
+    for (const [o, a] of stops) g.addColorStop(o, `rgba(${r},${gg},${b},${a})`);
+    x.fillStyle = g; x.fillRect(0, 0, 96, 96); return c;
+  };
+  const GLOW = [[0, 1], [0.25, 0.55], [0.6, 0.14], [1, 0]], HEAT = [[0, 0.75], [0.3, 0.38], [0.65, 0.1], [1, 0]];
+  const SPR = { accent: sprite(C.accent, GLOW), dearer: sprite(C.dearer, GLOW), cheaper: sprite(C.cheaper, GLOW), heatD: sprite(C.dearer, HEAT), heatC: sprite(C.cheaper, HEAT) };
+
+  // ---------- price states: one per week, and the recent window ----------
+  // v: colour, the deviation from ref capped at ±50 %; q: size, price / ref (dot area ∝ price, no cap)
+  const mkState = () => ({ v: new Float32Array(NS).fill(NaN), q: new Float32Array(NS).fill(NaN), on: new Float32Array(NS) });
+  const S = JW.map((w, k) => { const s = mkState(); jIdx.forEach((i) => { const p = J.prices[i][k]; if (p != null) { s.v[i] = norm(p); s.q[i] = p / ref; s.on[i] = 1; } }); return s; });
+  const R = mkState();
+  for (const [i, [p]] of Object.entries(J.latest)) { R.v[+i] = norm(p); R.q[+i] = p / ref; R.on[+i] = 1; }
+  const stA = mkState();
+  const copyState = (out, A) => { for (const i of jIdx) { out.v[i] = A.v[i]; out.q[i] = A.q[i]; out.on[i] = A.on[i]; } };
+  const mix = (a, b, p) => (Number.isNaN(a) ? b : Number.isNaN(b) ? a : lerp(a, b, p));
+  const lerpEach = (out, A, B, pf) => {
+    for (const i of jIdx) {
+      const p = pf(i);
+      out.on[i] = lerp(A.on[i], B.on[i], p); out.v[i] = mix(A.v[i], B.v[i], p); out.q[i] = mix(A.q[i], B.q[i], p);
+    }
+  };
+  const lerpState = (out, A, B, p) => {
+    for (const i of jIdx) { out.on[i] = lerp(A.on[i], B.on[i], p); out.v[i] = mix(A.v[i], B.v[i], p); out.q[i] = mix(A.q[i], B.q[i], p); }
+  };
+
+  // ---------- the clock: milliseconds from the start of the opening ----------
+  const WK1 = 80, WK2 = 700, TW2 = 280;
+  const T = {};
+  T.a1 = 900; T.a1e = T.a1 + NW * WK1; T.tr = T.a1e + 700; T.a2 = T.tr + 1600;
+  T.a2e = T.a2 + NK * WK2; T.land = T.a2e + 250; T.end = T.land + 5400; T.done = T.end + 1100;
+
+  // act 1: each store glows when PROFECO visited it that week; light weeks glow less
+  const phase = new Float32Array(NS * NW);
+  for (let i = 0; i < NS; i++) for (let j = 0; j < NW; j++) { const h = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; phase[i * NW + j] = (h - Math.floor(h)) * 0.85; }
+  // a short flash (rise ~18 ms, fall ~90 ms) and a linear response, so a store that skips a week goes
+  // dark and the light weeks show as a visible exhale instead of being smoothed into a steady glow
+  const wWeek = V.weeks.map((w) => (partial.has(w) ? 0.2 : 1));
+  const KENV = new Float32Array(1001);
+  { let pk = 0; for (let d = 0; d <= 1000; d++) { KENV[d] = (1 - Math.exp(-d / 18)) * Math.exp(-d / 90); pk = Math.max(pk, KENV[d]); } for (let d = 0; d <= 1000; d++) KENV[d] /= pk; }
+  const breathAt = (i, tb) => {
+    const u = tb / WK1; if (u <= 0) return 0;
+    const hi = Math.min(NW - 1, Math.floor(u)), lo = Math.max(0, hi - 5);
+    let s = 0;
+    for (let j = lo; j <= hi; j++) {
+      if (!bits[i * NW + j]) continue;
+      const dt = tb - (j + phase[i * NW + j]) * WK1;
+      if (dt <= 0 || dt >= 1000) continue;
+      s += wWeek[j] * KENV[dt | 0];
+    }
+    return Math.min(1, 0.75 * s);
+  };
+  const counterAt = (t) => {
+    const u = (t - T.a1) / WK1;
+    if (u <= 0) return 0;
+    if (u >= NW) return V.total;
+    const j = Math.floor(u);
+    return Math.round((j ? cum[j - 1] : 0) + V.products[j] * (u - j));
+  };
+  const act2At = (t) => {
+    if (t < T.a2) return { k: 0, p: 1 };
+    const k = Math.min(NK - 1, Math.floor((t - T.a2) / WK2));
+    return { k, p: k === 0 ? 1 : ease(c01((t - T.a2 - k * WK2) / TW2)) };
+  };
+  // the big number is always a real weekly median, the one of the week the label names (the dots may glide; the number never shows an in-between value)
+  const medianAt = (t) => wMed[act2At(t).k];
+  const wk1At = (t) => clamp(Math.floor((t - T.a1) / WK1), 0, NW - 1);
+  const partTxt = (w) => (partial.has(w) ? (phone ? ' · incompleta' : ' · semana incompleta') : '');
+
+  // words over time: [start, text]; each fades out just before the next one starts
+  // the landing (L = ms since T.land): the matched stores go back to the peak week, then cool to the
+  // last full week; the number lands when they have.
+  const L1 = 300, L2 = 1000, L3 = 2300;
+  const TX = {
+    eyebrow: [[350, `La encuesta de PROFECO · ${NW} semanas`], [T.tr + 450, J.name], [T.land + L1, storyEyebrow]],
+    display: [[350, (t) => nf.format(counterAt(t))], [T.tr + 450, (t) => money(medianAt(t))], [T.land + 150, ''], [T.land + L3, bigStory]],
+    caption: [[500, cap1], [T.tr + 550, 'Mediana de las tiendas con precio, cada semana.'], [T.land + 150, ''],
+      [T.land + L1, `Las mismas ${ST.matched} tiendas, la semana del ${fDay(ST.peakWeek, !sameYear)}…`], [T.land + L2 + 250, `…y la del ${fDay(ST.lastWeek, !sameYear)}.`],
+      [T.land + L3 + 200, storyLine]],
+    note: [[700, () => (phone ? note1Short : note1)], [T.tr + 650, () => (phone ? presTxt : note2)], [T.land + 150, ''], [T.land + L3 + 400, storyNote]],
+    // the handoff names the zoom ("the last 26 weeks") until the visit bars are gone and the curve is in
+    tlLabel: [[T.a1 - 400, (t) => `Semana del ${fDay(V.weeks[wk1At(t)])}`], [T.tr + 300, `Las últimas ${NK} semanas`], [T.tr + 1000, (t) => `Semana del ${fDay(JW[act2At(t).k])}`],
+      [T.land + L1, `Semana del ${fDay(ST.peakWeek)}`], [T.land + L2, `${fDay(ST.peakWeek, !sameYear)} → ${fDay(ST.lastWeek)}`], [T.land + L3, `Semana del ${fDay(ST.lastWeek)}`],
+      [T.end + 100, `Precios del ${recentLabel}`]],
+    tlRight: [[T.a1 - 400, (t) => { const j = wk1At(t); return `${nf.format(V.count[j])} tiendas visitadas${partTxt(V.weeks[j])}`; }],
+      [T.tr + 300, `semanas del ${fDay(JW[0], JW[0].slice(0, 4) !== JW[NK - 1].slice(0, 4))} al ${fDay(JW[NK - 1])}`],
+      [T.tr + 1000, (t) => { const k = act2At(t).k; return `${wN[k]} tiendas con precio${partTxt(JW[k])}`; }],
+      [T.land + L1, `${wN[peakK]} tiendas con precio`], [T.land + L2, `${ST.matched} tiendas anilladas, de una semana a la otra`],
+      [T.land + L3, `${wN[lastK]} tiendas con precio`], [T.end + 100, `${J.n} tiendas · mediana ${money(ref)}`]],
+  };
+  const slotAt = (t, entries) => {
+    let i = -1;
+    for (let n = 0; n < entries.length; n++) if (t >= entries[n][0]) i = n;
+    if (i < 0) return { text: '', a: 0, i: -1 };
+    const [at, tx] = entries[i], next = entries[i + 1];
+    let a = ease(c01((t - at) / 450));
+    if (next && t > next[0] - 260) a *= c01((next[0] - t) / 260);
+    return { text: typeof tx === 'function' ? tx(t) : tx, a, i };
+  };
+
+  // ---------- layout ----------
+  const mapC = $('map'), mctx = mapC.getContext('2d');
+  const stripC = $('strip'), sctx = stripC.getContext('2d');
+  const baseC = document.createElement('canvas'), bctx = baseC.getContext('2d');
+  const labC = document.createElement('canvas'), lctx = labC.getContext('2d');
+  let W = 0, H = 0, dpr = 1, phone = false, ds = 1, SW = 0, SH = 0, proj = null;
+  const PX = new Float32Array(NS), PY = new Float32Array(NS), dist = new Float32Array(NS), BI = new Float32Array(NS);
+  const storesMP = { type: 'MultiPoint', coordinates: D.stores.map((s) => [s[4], s[3]]) };
+  const G = D.geo;
+
+  function drawBase() {
+    const c = bctx;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
+    const path = d3.geoPath(proj, c);
+    const polys = (fc, fill, stroke) => {
+      for (const f of (fc && fc.features) || []) {
+        c.beginPath(); path(f);
+        if (fill) { c.fillStyle = fill; c.fill(); }
+        if (stroke) { c.strokeStyle = stroke; c.lineWidth = 1; c.stroke(); }
+      }
+    };
+    polys(G.zmvm, tok('--geo-zmvm-fill'), tok('--geo-zmvm-line'));
+    polys(G.alcaldias, tok('--geo-alc-fill'), tok('--geo-alc-line'));
+    polys(G.green, tok('--geo-park'), null);
+    polys(G.water, tok('--geo-water'), null);
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (const f of (G.roads && G.roads.features) || []) {
+      const major = /ring|expressway|highway/.test((f.properties && f.properties.class) || '');
+      c.beginPath(); path(f);
+      c.strokeStyle = tok(major ? '--geo-road-major' : '--geo-road'); c.lineWidth = major ? 1.5 : 1; c.stroke();
+    }
+    drawLabels(null);
+  }
+
+  // alcaldía names, for the end state only (desktop): each one goes to the spot nearest its centroid
+  // that is inside the alcaldía and clear of store dots, tags, other names and the page's words
+  const rectsOf = (sels, pad) => sels.map((s) => document.querySelector(s)).filter(Boolean).map((e) => e.getBoundingClientRect())
+    .filter((b) => b.width > 0 && b.height > 0).map((b) => [b.left - pad, b.top - pad, b.right + pad, b.bottom + pad]);
+  const hitBox = (a, b) => !(a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3]);
+  const LOFF = [], labelsShown = [];
+  for (let dy = -4; dy <= 4; dy++) for (let dx = -7; dx <= 7; dx++) LOFF.push([dx * 18, dy * 12]);
+  LOFF.sort((a, b) => Math.hypot(a[0], a[1] * 1.7) - Math.hypot(b[0], b[1] * 1.7));
+  function drawLabels(extra) {
+    const l = lctx;
+    l.setTransform(dpr, 0, 0, dpr, 0, 0); l.clearRect(0, 0, W, H);
+    if (phone || !proj) return;
+    l.font = '600 10px Manrope, system-ui, sans-serif';
+    if ('letterSpacing' in l) l.letterSpacing = '1.4px';
+    l.textAlign = 'center'; l.textBaseline = 'middle';
+    l.fillStyle = tok('--geo-label'); l.strokeStyle = C.bg; l.lineWidth = 3; l.lineJoin = 'round';
+    const avoid = rectsOf(['.panel', '#legend', '#timeline', '.topright'], 6).concat(extra || []);
+    const path = d3.geoPath(proj), boxes = []; labelsShown.length = 0;
+    const inside = (f, x, y) => { const g = proj.invert([x, y]); return !!g && d3.geoContains(f, g); };
+    const items = (G.alcaldias.features || []).map((f) => ({ f, area: path.area(f) })).sort((a, b) => b.area - a.area);
+    for (const { f } of items) {
+      const c0 = proj(d3.geoCentroid(f)); if (!c0) continue;
+      const name = ((f.properties && f.properties.name) || '').toUpperCase(); if (!name) continue;
+      const w = l.measureText(name).width + 6, h = 12;
+      // first a spot where the whole name fits inside the alcaldía, then one where at least its middle does
+      let done = false;
+      for (const strict of [true, false]) {
+        for (const [dx, dy] of LOFF) {
+          const x = c0[0] + dx, y = c0[1] + dy, b = [x - w / 2, y - h / 2, x + w / 2, y + h / 2];
+          if (b[0] < 8 || b[1] < 8 || b[2] > W - 8 || b[3] > H - 8) continue;
+          if (boxes.some((o) => hitBox(b, o)) || avoid.some((o) => hitBox(b, o))) continue;
+          let clear = true;
+          for (const i of jIdx) if (PX[i] > b[0] - 7 && PX[i] < b[2] + 7 && PY[i] > b[1] - 7 && PY[i] < b[3] + 7) { clear = false; break; }
+          if (!clear || !inside(f, x, y) || (strict && (!inside(f, b[0] + 2, y) || !inside(f, b[2] - 2, y)))) continue;
+          boxes.push(b); labelsShown.push(name); l.strokeText(name, x, y); l.fillText(name, x, y);
+          done = true; break;
+        }
+        if (done) break;
+      }
+    }
+  }
+
+  // the tallest the words get in each act (phone), so the map never starts under them
+  function panelBottom() {
+    const p = document.querySelector('.panel'), out = [];
+    const states = [[TX.eyebrow[0][1], nf.format(V.total), cap1, phone ? note1Short : note1], [J.name, money(Math.max(...wMed.filter((x) => x != null))), TX.caption[1][1], phone ? presTxt : note2],
+      [storyEyebrow, bigStory, storyLine, phone ? '' : storyNote]];
+    for (const [e, d, c, n] of states) {
+      const cl = p.cloneNode(true);
+      cl.removeAttribute('id'); cl.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id'));
+      cl.style.visibility = 'hidden'; cl.setAttribute('aria-hidden', 'true');
+      cl.querySelector('.eyebrow').textContent = e; cl.querySelector('.display').textContent = d;
+      cl.querySelector('.caption').textContent = c; const nn = cl.querySelector('.note'); nn.textContent = n;
+      nn.style.display = n && !(phone && H <= 700) ? 'block' : 'none'; // as the CSS would show it, whatever the act is now
+      cl.querySelectorAll('.slot').forEach((x) => { x.style.opacity = 0; x.style.transform = 'none'; });
+      app.appendChild(cl); out.push(cl.getBoundingClientRect().bottom); cl.remove();
+    }
+    return out;
+  }
+
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight; dpr = Math.min(2, window.devicePixelRatio || 1);
+    phone = W < 760;
+    for (const c of [mapC, baseC, labC]) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+    const tlTop = $('timeline').getBoundingClientRect().top;
+    const lgTop = $('legend').getBoundingClientRect().top;
+    const pb = panelBottom();
+    let r;
+    if (phone) {
+      const top = clamp(Math.max(...pb) + 10, Math.max(150, Math.round(H * 0.24)), Math.round(H * 0.36));
+      r = [20, top, W - 20, Math.max(top + 150, lgTop - 10)];
+    } else {
+      r = [Math.max(W * 0.36, Math.min(600, W * 0.4)), 48, W - 64, tlTop - 14];
+      // a short desktop: the story's note gives way to the legend rather than run under it
+      app.classList.toggle('tight', pb[2] > lgTop - 14);
+    }
+    proj = d3.geoMercator().fitExtent([[r[0], r[1]], [r[2], r[3]]], storesMP);
+    let cx = 0, cy = 0;
+    for (let i = 0; i < NS; i++) { const p = proj([D.stores[i][4], D.stores[i][3]]); PX[i] = p[0]; PY[i] = p[1]; cx += p[0]; cy += p[1]; }
+    cx /= NS; cy /= NS;
+    let md = 1; for (let i = 0; i < NS; i++) { dist[i] = Math.hypot(PX[i] - cx, PY[i] - cy); md = Math.max(md, dist[i]); }
+    for (let i = 0; i < NS; i++) dist[i] /= md;
+    ds = phone ? 0.82 : clamp((r[3] - r[1]) / 620, 0.8, 1.2);
+    sizeLegend();
+    drawBase();
+    SW = stripC.clientWidth; SH = stripC.clientHeight;
+    stripC.width = Math.round(SW * dpr); stripC.height = Math.round(SH * dpr);
+    tagsPlaced = false; dirty = true;
+    if (freezeAt != null && !endMode) render(compose(freezeAt));
+  }
+
+  // ---------- frames ----------
+  const blank = () => ({ baseA: 1, labelsA: 0, tb: null, ghostA: 0, jitoA: 0, st: stA, appear: null, dim: 0, ringsA: 0, ringT: 0, tagsA: 0,
+    heat: 0.22, introA: 1, z: 1, barsU: NW, barsA: 0, curveA: 1, curK: NK - 1, curP: 1, peakA: 0, lastA: 0, sweep: 1, sweepA: 0, cur: null, endUI: null, legendA: 1, legendMode: 'recent', texts: null });
+
+  function compose(t) {
+    const F = blank();
+    const intro = ease(c01(t / 800));
+    F.introA = ease(c01((t - 300) / 700));
+    F.baseA = intro * lerp(0.6, 1, ease(c01((t - T.tr) / 900)));
+    F.tb = t < T.a2 ? t - T.a1 : null;
+    F.ghostA = intro * (1 - ease(c01((t - T.tr) / 600)));
+    F.jitoA = t >= T.tr + 200 ? 1 : 0;
+    F.heat = lerp(0.3, 0.22, ease(c01((t - T.land) / 1500)));
+    const A2 = act2At(t);
+    if (t < T.a2) {
+      copyState(stA, S[0]);
+      F.appear = (i) => ease(c01((t - (T.tr + 250 + 900 * dist[i])) / 450));
+    } else if (t < T.land) {
+      if (A2.k === 0) copyState(stA, S[0]); else lerpState(stA, S[A2.k - 1], S[A2.k], A2.p);
+    } else if (t < T.end) {
+      const L = t - T.land;
+      if (L < L2) lerpState(stA, S[NK - 1], S[peakK], ease(c01(L / 700)));
+      else lerpEach(stA, S[peakK], S[lastK], (i) => ease(c01((L - L2 - 500 * dist[i]) / (L3 - L2 - 500))));
+      F.dim = ease(c01((L - 100) / 600));
+      F.ringsA = 1; F.ringT = L - L1;
+      F.peakA = ease(c01((L - L1) / 500)); F.lastA = ease(c01((L - L3 + 300) / 400));
+      F.sweep = c01((L - L2) / (L3 - L2)); F.sweepA = 1;
+    } else {
+      const p = ease(c01((t - T.end) / 900));
+      lerpState(stA, S[lastK], R, p);
+      F.dim = 1 - p; F.ringsA = 1 - p; F.ringT = 1e9;
+      F.tagsA = ease(c01((t - T.end - 500) / 500));
+      F.labelsA = ease(c01((t - T.end) / 900));
+      F.peakA = 1; F.lastA = 1; F.sweepA = 1 - p;
+      F.endUI = { mode: 'recent', k: lastK, a: ease(c01((t - T.end - 300) / 600)), bandA: ease(c01((t - T.end - 300) / 600)) };
+    }
+    F.z = ease(c01((t - T.tr - 150) / 1000));
+    F.barsU = clamp((t - T.a1) / WK1, 0, NW);
+    F.barsA = 1 - ease(c01((t - T.tr - 500) / 550));
+    F.curveA = ease(c01((t - T.tr - 950) / 600));
+    if (t < T.a2) { F.curK = 0; F.curP = 1; } else if (t < T.land) { F.curK = A2.k; F.curP = A2.p; }
+    if (t < T.tr + 300) F.cur = t >= T.a1 ? { type: 'bar', j: wk1At(t) } : null;
+    else if (t < T.land) F.cur = { type: 'pt', k: A2.k, p: A2.p, a: F.curveA };
+    else if (t < T.land + 400) F.cur = { type: 'pt', k: NK - 1, p: 1, a: 1 - c01((t - T.land) / 400) };
+    F.legendA = ease(c01((t - T.tr - 950) / 600));
+    F.legendMode = t < T.land + L1 ? 'week' : t < T.end + 400 ? 'story' : 'recent';
+    F.texts = {};
+    for (const key of Object.keys(TX)) F.texts[key] = slotAt(t, TX[key]);
+    F.act = F.texts.caption.i <= 0 ? 'breath' : F.texts.caption.i === 1 ? 'jito' : 'story';
+    return F;
+  }
+
+  // the end: the recent map, or a week the reader picked
+  const E = { mode: 'recent', k: lastK, from: mkState(), to: R, t0: -1e9, dur: 380, hover: -1, pinned: false };
+  function composeEnd(now) {
+    const F = blank();
+    const p = ease(c01((now - E.t0) / E.dur));
+    lerpState(stA, E.from, E.to, p);
+    F.jitoA = 1; F.labelsA = 1; F.peakA = 1; F.lastA = 1;
+    F.tagsA = E.mode === 'recent' ? p : 1 - p;
+    if (E.mode !== 'recent' && p >= 1) F.tagsA = 0;
+    F.cur = E.mode === 'week' ? { type: 'handle', k: E.k, a: 1 } : null;
+    F.endUI = { mode: E.mode, k: E.k, a: 1, bandA: E.mode === 'recent' ? p : 0 };
+    F.legendMode = E.mode;
+    const lab = E.mode === 'recent' ? `Precios del ${recentLabel}` : `Semana del ${fDay(JW[E.k])}`;
+    const right = E.mode === 'recent' ? `${J.n} tiendas · mediana ${money(ref)}` : `${wN[E.k]} tiendas · mediana ${money(wMed[E.k])}${partTxt(JW[E.k])}`;
+    const fin = (key) => ({ text: TX[key][TX[key].length - 1][1], a: 1 });
+    F.texts = { eyebrow: fin('eyebrow'), display: fin('display'), caption: fin('caption'), note: fin('note'), tlLabel: { text: lab, a: 1 }, tlRight: { text: right, a: 1 } };
+    F.act = 'story';
+    return F;
+  }
+
+  // ---------- drawing: the map ----------
+  // size is the second channel: radius ∝ √(price / ref), so a dot's area is proportional to its price
+  // (the colour stops at ±50 %, the size never does: an April store at $64 is ~1.8× as wide as one at $19)
+  const DOT_R = 4.5;
+  const rad = (q) => DOT_R * ds * Math.sqrt(Number.isNaN(q) || q <= 0 ? 1 : q);
+  const order = jIdx.slice();
+  const key = new Float32Array(NS);
+  function sizeLegend() {
+    const el = $('lgSizes'); el.textContent = '';
+    const lab = document.createElement('span'); lab.textContent = phone ? 'Tamaño:' : 'Tamaño según el precio:'; el.appendChild(lab);
+    for (const m of [0.5, 1, 2, 4]) {
+      const p = ref * m, d = 2 * rad(m);
+      const s = document.createElement('span'); s.className = 'sz';
+      const i = document.createElement('i'); i.style.width = i.style.height = `${d.toFixed(1)}px`; i.style.background = colorOf(norm(p));
+      const b = document.createElement('span'); b.textContent = Number.isInteger(r2(p)) ? '$' + r2(p) : money(p);
+      s.append(i, b); el.appendChild(s);
+    }
+    const none = document.createElement('span'); none.className = 'sz';
+    const ring = document.createElement('i'); ring.className = 'ring'; ring.style.width = ring.style.height = `${(2 * rad(1) - 1.6).toFixed(1)}px`; ring.style.marginRight = '0';
+    const nt = document.createElement('span'); nt.textContent = 'sin precio'; nt.style.color = C.muted;
+    none.append(ring, nt); el.appendChild(none);
+  }
+  function drawMap(F) {
+    const c = mctx;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+    c.fillStyle = C.bg; c.fillRect(0, 0, W, H);
+    if (F.baseA > 0) { c.globalAlpha = F.baseA; c.drawImage(baseC, 0, 0, W, H); }
+    if (F.labelsA > 0 && !phone) { c.globalAlpha = F.labelsA; c.drawImage(labC, 0, 0, W, H); }
+
+    // act 1: every store, breathing
+    if (F.ghostA > 0.003) {
+      c.globalAlpha = F.ghostA * 0.32; c.fillStyle = C.ghost; c.beginPath();
+      const r = 1.1 * ds;
+      for (let i = 0; i < NS; i++) { c.moveTo(PX[i] + r, PY[i]); c.arc(PX[i], PY[i], r, 0, 6.2832); }
+      c.fill();
+    }
+    if (F.tb != null && F.tb > 0) {
+      for (let i = 0; i < NS; i++) BI[i] = breathAt(i, F.tb);
+      c.globalCompositeOperation = 'screen';
+      for (let i = 0; i < NS; i++) {
+        const I = BI[i]; if (I < 0.03) continue;
+        const R = (6 + 16 * I) * ds;
+        c.globalAlpha = 0.4 * I * I;
+        c.drawImage(SPR.accent, PX[i] - R, PY[i] - R, 2 * R, 2 * R);
+      }
+      c.globalCompositeOperation = 'source-over';
+      c.fillStyle = C.accent;
+      for (let i = 0; i < NS; i++) {
+        const I = BI[i]; if (I < 0.03) continue;
+        c.globalAlpha = 0.95 * I;
+        c.beginPath(); c.arc(PX[i], PY[i], (0.8 + 1.7 * I) * ds, 0, 6.2832); c.fill();
+      }
+    }
+
+    // act 2 and the end: the jitomate, each store against the recent median
+    if (F.jitoA > 0) {
+      const st = F.st, r1 = rad(1);
+      // the biggest dots first, so a small one is never buried; during the story the ringed stores on top
+      for (const i of jIdx) key[i] = (F.dim > 0 && matched[i] ? 100 : 0) - (Number.isNaN(st.q[i]) ? 0 : st.q[i]);
+      order.sort((a, b) => key[a] - key[b]);
+      // stores with no price: hollow rings, at the size of a store at the median
+      c.lineWidth = 1; c.strokeStyle = C.ink2;
+      for (const i of order) {
+        const ap = F.appear ? F.appear(i) : 1;
+        const dim = matched[i] ? 1 : 1 - 0.75 * F.dim;
+        const a = (1 - st.on[i]) * ap * dim * F.jitoA * 0.42;
+        if (a < 0.01) continue;
+        c.globalAlpha = a; c.beginPath(); c.arc(PX[i], PY[i], r1 - 0.8, 0, 6.2832); c.stroke();
+      }
+      // heat under the dots: the further from the median, the warmer (or cooler) the ground; its reach
+      // follows the dot's size
+      c.globalCompositeOperation = 'screen';
+      for (const i of order) {
+        const v = st.v[i]; if (Number.isNaN(v)) continue;
+        const ap = F.appear ? F.appear(i) : 1;
+        const dim = matched[i] ? 1 : 1 - 0.8 * F.dim;
+        const a = F.heat * Math.abs(v) * st.on[i] * ap * dim;
+        if (a < 0.01) continue;
+        const R = 5.5 * rad(st.q[i]);
+        c.globalAlpha = a;
+        c.drawImage(v > 0 ? SPR.heatD : SPR.heatC, PX[i] - R, PY[i] - R, 2 * R, 2 * R);
+      }
+      c.globalCompositeOperation = 'source-over';
+      c.strokeStyle = C.edge;
+      for (const i of order) {
+        const v = st.v[i]; if (Number.isNaN(v)) continue;
+        const ap = F.appear ? F.appear(i) : 1;
+        const dim = matched[i] ? 1 : 1 - 0.75 * F.dim;
+        const a = st.on[i] * ap * dim;
+        if (a < 0.01) continue;
+        const rr = rad(st.q[i]) * (0.55 + 0.45 * easeOut(ap));
+        c.globalAlpha = a; c.fillStyle = colorOf(v); c.lineWidth = rr < 3 ? 0.9 : 1.2;
+        c.beginPath(); c.arc(PX[i], PY[i], rr, 0, 6.2832); c.fill(); c.stroke();
+      }
+      // the matched stores, ringed during the story
+      if (F.ringsA > 0) {
+        c.strokeStyle = C.accent; c.lineWidth = 1.3;
+        for (const i of jIdx) {
+          if (!matched[i]) continue;
+          const a = F.ringsA * ease(c01((F.ringT - 520 * dist[i]) / 380));
+          if (a < 0.01) continue;
+          c.globalAlpha = a * 0.95;
+          c.beginPath(); c.arc(PX[i], PY[i], rad(st.q[i]) + 3, 0, 6.2832); c.stroke();
+        }
+      }
+      // tags: a leader from each store to its label
+      if (F.tagsA > 0 && tagsPlaced) {
+        c.lineWidth = 1;
+        for (const tg of tagEls) {
+          c.globalAlpha = F.tagsA * 0.55; c.strokeStyle = C.ink;
+          c.beginPath(); c.moveTo(tg.ax, tg.ay); c.lineTo(tg.lx, tg.ly); c.stroke();
+          c.globalAlpha = F.tagsA; c.lineWidth = 1.5;
+          c.beginPath(); c.arc(PX[tg.i], PY[tg.i], rad(st.q[tg.i]) + 2.6, 0, 6.2832); c.stroke();
+          c.lineWidth = 1;
+        }
+      }
+      if (E.hover >= 0 && endMode) {
+        c.globalAlpha = 1; c.strokeStyle = C.ink; c.lineWidth = 2;
+        c.beginPath(); c.arc(PX[E.hover], PY[E.hover], rad(st.q[E.hover]) + 2.4, 0, 6.2832); c.stroke();
+      }
+    }
+    c.globalAlpha = 1;
+  }
+
+  // ---------- drawing: the weeks ----------
+  // the curve's y axis runs from just under the lowest weekly median to just over the highest, so the
+  // fall fills the strip (it is a line, not bars, so it needs no zero; the reference line stays in range)
+  const wMedF = wMed.filter((x) => x != null);
+  const yLo = Math.min(0.8 * Math.min(...wMedF), 0.9 * ref), yHi = Math.max(1.1 * Math.max(...wMedF), 1.1 * ref);
+  const FONT_S = '600 10.5px Manrope, system-ui, sans-serif';
+  const FONT_B = '800 11px Manrope, system-ui, sans-serif';
+  const kStop = (() => { for (let k = 1; k < NK; k++) if (partial.has(JW[k])) return k; return NK; })(); // the area stops before a light week
+  const wkUTC = (s) => { const [y, m, d] = ymd(s); return Date.UTC(y, m - 1, d); };
+  const recentK = [JW.findIndex((w) => wkUTC(w) + 6 * 864e5 >= wkUTC(D.recent.from)), JW.reduce((a, w, k) => (wkUTC(w) <= wkUTC(D.recent.to) ? k : a), -1)];
+  function stripGeom(z) {
+    const top = phone ? 18 : 22, axis = 17, plotH = Math.max(20, SH - top - axis), base = top + plotH;
+    const d0 = lerp(0, off, z), slot = SW / (NW - d0);
+    const X = (j) => (j - d0 + 0.5) * slot;
+    return { top, plotH, base, slot, X, PXk: (k) => X(off + k), Y: (v) => base - ((v - yLo) / (yHi - yLo)) * plotH };
+  }
+  function wrapLines(c, s, maxW) {
+    const words = s.split(' '), lines = [];
+    let cur = '';
+    for (const w of words) { const t = cur ? cur + ' ' + w : w; if (cur && c.measureText(t).width > maxW) { lines.push(cur); cur = w; } else cur = t; }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  function knob(c, x, y) {
+    const w = 24, h = 14, r = 7;
+    c.fillStyle = C.ink; c.beginPath();
+    c.moveTo(x - w / 2 + r, y - h / 2); c.lineTo(x + w / 2 - r, y - h / 2); c.arc(x + w / 2 - r, y, r, -Math.PI / 2, Math.PI / 2);
+    c.lineTo(x - w / 2 + r, y + h / 2); c.arc(x - w / 2 + r, y, r, Math.PI / 2, Math.PI * 1.5); c.closePath(); c.fill();
+    c.strokeStyle = C.bg; c.lineWidth = 1.5; c.stroke();
+    c.fillStyle = C.bg;
+    c.beginPath(); c.moveTo(x - 2.5, y - 3.5); c.lineTo(x - 7, y); c.lineTo(x - 2.5, y + 3.5); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(x + 2.5, y - 3.5); c.lineTo(x + 7, y); c.lineTo(x + 2.5, y + 3.5); c.closePath(); c.fill();
+  }
+  function roundTop(c, x, y, w, h, r) {
+    if (h <= 0) return;
+    r = Math.min(r, h);
+    c.beginPath(); c.moveTo(x, y + h); c.lineTo(x, y + r); c.quadraticCurveTo(x, y, x + r, y); c.lineTo(x + w - r, y);
+    c.quadraticCurveTo(x + w, y, x + w, y + r); c.lineTo(x + w, y + h); c.closePath(); c.fill();
+  }
+  function haloText(c, s, x, y) { c.lineWidth = 3; c.strokeStyle = C.bg; c.strokeText(s, x, y); c.fillText(s, x, y); }
+  function drawStrip(F) {
+    const c = sctx;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, SW, SH);
+    if (SW < 10 || SH < 10) return;
+    const g = stripGeom(F.z);
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    // baseline
+    c.globalAlpha = F.introA; c.fillStyle = C.line2; c.fillRect(0, g.base + 0.5, SW, 1);
+
+    // act 1: stores visited per week
+    if (F.barsA > 0.003 && F.barsU > 0) {
+      const n = Math.min(NW, Math.ceil(F.barsU)), bw = clamp(g.slot * 0.28, 1.5, 3.5);
+      for (let j = 0; j < n; j++) {
+        const x = g.X(j); if (x < -g.slot || x > SW + g.slot) continue;
+        const grow = easeOut(c01((F.barsU - j) * 2.2));
+        const h = (V.count[j] / maxCount) * g.plotH * grow;
+        const isCur = F.cur && F.cur.type === 'bar' && F.cur.j === j;
+        c.globalAlpha = F.barsA * (isCur ? 1 : partial.has(V.weeks[j]) ? 0.26 : 0.58);
+        c.fillStyle = isCur ? C.ink : C.accent;
+        roundTop(c, x - bw / 2, g.base - h, bw, h, bw / 2);
+        if (isCur && h > 0) { c.beginPath(); c.arc(x, g.base - h, bw / 2 + 1.6, 0, 6.2832); c.fill(); }
+      }
+    }
+    // axis labels: years while unzoomed, months once zoomed
+    c.font = FONT_S; c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+    const ay = SH - 3;
+    if (F.z < 1) {
+      c.globalAlpha = (1 - F.z) * 0.9 * F.introA; c.fillStyle = C.muted;
+      for (let j = 1; j < NW; j++) {
+        const [y, m] = ymd(V.weeks[j]), [, pm] = ymd(V.weeks[j - 1]);
+        if (m === pm || (m !== 1 && m !== 7)) continue;
+        const x = g.X(j) - g.slot / 2;
+        c.fillRect(x, g.base + 1, 1, 4);
+        c.fillText(m === 1 ? `ene ${y}` : MES[m - 1], x + 3, ay);
+      }
+    }
+    if (F.z > 0) {
+      c.globalAlpha = F.z * F.curveA * 0.9; c.fillStyle = C.muted;
+      for (let k = 0; k < NK; k++) {
+        const [y, m] = ymd(JW[k]);
+        if (k > 0 && ymd(JW[k - 1])[1] === m) continue;
+        const x = g.PXk(k) - g.slot / 2;
+        c.fillRect(x, g.base + 1, 1, 4);
+        c.fillText(k === 0 ? `${MES[m - 1]} ${y}` : MES[m - 1], x + 3, ay);
+      }
+    }
+
+    // act 2 and the end: the median of every store with a price, week by week
+    if (F.curveA > 0.003) {
+      const yr = g.Y(ref);
+      const K = F.curK, P = F.curP;
+      const pt = (k) => [g.PXk(k), g.Y(wMed[k])];
+      // the end: the recent window as a band, and a grip that says the strip can be dragged
+      const U = F.endUI;
+      if (U && U.bandA > 0.003 && recentK[0] >= 0 && recentK[1] >= recentK[0]) {
+        const x0 = g.PXk(recentK[0]) - g.slot / 2, x1 = Math.min(SW, g.PXk(recentK[1]) + g.slot / 2);
+        c.globalAlpha = F.curveA * U.bandA * 0.055; c.fillStyle = C.accent; c.fillRect(x0, g.top - 4, x1 - x0, g.base - g.top + 4);
+      }
+      // area between the curve and the reference: red above it, blue below, by the same colour scale
+      const fillPts = [];
+      for (let k = 0; k <= K && k < kStop; k++) {
+        if (k === K && P < 1 && k > 0) { const a = pt(k - 1), b = pt(k); fillPts.push([lerp(a[0], b[0], P), lerp(a[1], b[1], P)]); } else fillPts.push(pt(k));
+      }
+      if (fillPts.length > 1) {
+        const gr = c.createLinearGradient(0, g.Y(ref * 0.5), 0, g.Y(ref * 1.5));
+        gr.addColorStop(0, C.cheaper); gr.addColorStop(0.5, C.mid); gr.addColorStop(1, C.dearer);
+        c.globalAlpha = F.curveA * 0.2; c.fillStyle = gr;
+        c.beginPath(); c.moveTo(fillPts[0][0], yr);
+        for (const p of fillPts) c.lineTo(p[0], p[1]);
+        c.lineTo(fillPts[fillPts.length - 1][0], yr); c.closePath(); c.fill();
+      }
+      c.globalAlpha = F.curveA * 0.7; c.strokeStyle = C.muted; c.lineWidth = 1; c.setLineDash([2, 4]);
+      c.beginPath(); c.moveTo(0, yr); c.lineTo(SW, yr); c.stroke(); c.setLineDash([]);
+      c.globalAlpha = F.curveA; c.fillStyle = C.muted; c.font = FONT_S; c.textAlign = 'left';
+      haloText(c, `${money(ref)} mediana reciente`, 2, yr - 5);
+      c.lineWidth = 2.6;
+      for (let k = 1; k <= K; k++) {
+        const [x0, y0] = pt(k - 1); let [x1, y1] = pt(k);
+        let v1 = wMed[k];
+        if (k === K && P < 1) { x1 = lerp(x0, x1, P); y1 = lerp(y0, y1, P); v1 = lerp(wMed[k - 1], wMed[k], P); }
+        if (Math.abs(x1 - x0) < 0.5) continue;
+        const gr = c.createLinearGradient(x0, 0, x1, 0);
+        gr.addColorStop(0, colorOf(norm(wMed[k - 1]))); gr.addColorStop(1, colorOf(norm(v1)));
+        c.strokeStyle = gr; c.setLineDash(partial.has(JW[k]) ? [3, 4] : []);
+        c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+      }
+      c.setLineDash([]);
+      for (let k = 0; k <= K; k++) {
+        if (k === K && P < 1) break;
+        const [x, y] = pt(k);
+        if (partial.has(JW[k])) { c.strokeStyle = colorOf(norm(wMed[k])); c.lineWidth = 1.4; c.beginPath(); c.arc(x, y, 2.6, 0, 6.2832); c.stroke(); }
+        else { c.fillStyle = colorOf(norm(wMed[k])); c.beginPath(); c.arc(x, y, 2.1, 0, 6.2832); c.fill(); }
+      }
+      // the span of the story, swept from the peak week to the last full week
+      if (F.sweepA > 0.003 && F.sweep > 0) {
+        const kEnd = lerp(peakK, lastK, ease(F.sweep));
+        c.globalAlpha = F.curveA * F.sweepA * 0.13; c.strokeStyle = C.ink; c.lineWidth = 9;
+        c.beginPath();
+        for (let k = peakK; k <= Math.ceil(kEnd); k++) {
+          const kk = Math.min(k, kEnd), k0 = Math.floor(kk), k1 = Math.min(NK - 1, k0 + 1), f = kk - k0;
+          const x = lerp(pt(k0)[0], pt(k1)[0], f), y = lerp(pt(k0)[1], pt(k1)[1], f);
+          if (k === peakK) c.moveTo(x, y); else c.lineTo(x, y);
+        }
+        c.stroke();
+        if (F.sweep < 1) {
+          const k0 = Math.floor(kEnd), k1 = Math.min(NK - 1, k0 + 1), f = kEnd - k0;
+          const x = lerp(pt(k0)[0], pt(k1)[0], f), y = lerp(pt(k0)[1], pt(k1)[1], f);
+          c.globalAlpha = F.curveA * F.sweepA; c.fillStyle = C.ink; c.beginPath(); c.arc(x, y, 3.2, 0, 6.2832); c.fill();
+        }
+      }
+      // where we are
+      const cur = F.cur;
+      if (cur && (cur.type === 'pt' || cur.type === 'handle') && cur.a > 0.003) {
+        let x, y, v;
+        if (cur.type === 'pt') {
+          const k = cur.k, p = cur.p;
+          if (k === 0) { [x, y] = pt(0); v = wMed[0]; }
+          else { const a = pt(k - 1), b = pt(k); x = lerp(a[0], b[0], p); y = lerp(a[1], b[1], p); v = lerp(wMed[k - 1], wMed[k], p); }
+        } else { [x, y] = pt(cur.k); v = wMed[cur.k]; }
+        c.globalAlpha = F.curveA * cur.a * (cur.type === 'handle' ? 0.6 : 0.3);
+        c.fillStyle = C.ink; c.fillRect(Math.round(x) - 0.5, cur.type === 'handle' ? g.top : y, 1, g.base - (cur.type === 'handle' ? g.top : y));
+        c.globalAlpha = F.curveA * cur.a * 0.5;
+        const R = 14; c.drawImage(v >= ref ? SPR.dearer : SPR.cheaper, x - R, y - R, 2 * R, 2 * R);
+        c.globalAlpha = F.curveA * cur.a;
+        c.fillStyle = colorOf(norm(v)); c.beginPath(); c.arc(x, y, 4.6, 0, 6.2832); c.fill();
+        c.strokeStyle = C.ink; c.lineWidth = 1.6; c.stroke();
+      }
+      // the two weeks of the story
+      if (F.peakA > 0.003 || F.lastA > 0.003) {
+        c.font = FONT_B;
+        for (const k of [peakK, lastK]) {
+          const ma = k === peakK ? F.peakA : F.lastA;
+          if (ma < 0.003) continue;
+          c.globalAlpha = F.curveA * ma;
+          const [x, y] = pt(k);
+          c.strokeStyle = C.ink; c.lineWidth = 1.5; c.beginPath(); c.arc(x, y, 5, 0, 6.2832); c.stroke();
+          // each mark carries its own n: these are all-store medians, not the ringed stores' prices
+          const s1 = `${money(wMed[k])} · ${fDay(JW[k], false)}`, sN = `${wN[k]} tiendas`, s = `${s1} · ${sN}`;
+          const two = phone && k === lastK; // on the phone the low mark would sit on the curve; stack it
+          const w = c.measureText(two ? s1 : s).width;
+          c.textAlign = x + w / 2 + 4 > SW ? 'right' : x - w / 2 - 4 < 0 ? 'left' : 'center';
+          const lx = c.textAlign === 'right' ? x + 6 : c.textAlign === 'left' ? x - 6 : x;
+          c.fillStyle = C.ink;
+          if (two) { haloText(c, s1, lx, Math.max(11, y - 23)); c.font = FONT_S; c.fillStyle = C.ink2; haloText(c, sN, lx, Math.max(11, y - 23) + 12.5); c.font = FONT_B; }
+          else haloText(c, s, lx, Math.max(11, y - 10));
+        }
+        c.textAlign = 'left';
+      }
+      if (U && U.a > 0.003) {
+        const kx = U.mode === 'week' ? g.PXk(U.k) : (g.PXk(Math.max(0, recentK[0])) + Math.min(SW - 12, g.PXk(recentK[1]))) / 2;
+        c.globalAlpha = F.curveA * U.a; knob(c, clamp(kx, 12, SW - 12), g.base);
+      }
+      // the curve says what it is, so its marks are never read as the ringed stores' prices
+      c.font = FONT_S; c.textAlign = 'right'; c.fillStyle = C.ink2; c.globalAlpha = F.curveA * 0.95;
+      const tl = wrapLines(c, curveTitle, phone ? SW * 0.46 : SW * 0.5);
+      tl.forEach((s, n) => haloText(c, s, SW - 1, 10 + n * 12.5));
+      c.textAlign = 'left';
+    }
+    c.globalAlpha = 1;
+  }
+
+  // ---------- words and chrome ----------
+  const els = { eyebrow: $('eyebrow'), display: $('display'), caption: $('caption'), note: $('note'), tlLabel: $('tlLabel'), tlRight: $('tlRight') };
+  const shown = {};
+  function applyTexts(F) {
+    for (const k of Object.keys(els)) {
+      const s = F.texts[k], el = els[k];
+      if (shown[k] !== s.text) { el.textContent = s.text; shown[k] = s.text; }
+      const a = Math.round(s.a * 1000) / 1000;
+      if (el._a !== a) { el.style.opacity = a; el.style.transform = a < 1 ? `translateY(${((1 - a) * 6).toFixed(2)}px)` : ''; el._a = a; }
+    }
+    if (app.dataset.act !== F.act) { app.dataset.act = F.act; tagsPlaced = false; }
+    const lg = $('legend');
+    if (lg._a !== F.legendA) { lg.style.opacity = F.legendA; lg._a = F.legendA; }
+    if (lg._m !== F.legendMode) {
+      lg._m = F.legendMode;
+      const m = $('lgMode'); m.textContent = '';
+      if (F.legendMode === 'story') {
+        const i = document.createElement('i'); i.className = 'ring acc';
+        m.append(i, `Anilladas: las ${ST.matched} tiendas con precio el ${fDay(ST.peakWeek, false)} y el ${fDay(ST.lastWeek, false)}`);
+      } else if (F.legendMode === 'recent') m.textContent = tagsLine;
+    }
+  }
+  $('lgRef').textContent = money(ref);
+  const tieP = top3.length ? money(top3[top3.length - 1].p) : '';
+  const tagsLine = top3.length
+    ? `Con etiqueta: las ${top3.length} más baratas.` + (tieMore === 1 ? ` Otra tienda también cobra ${tieP}.` : tieMore > 1 ? ` Otras ${tieMore} tiendas también cobran ${tieP}.` : '')
+    : '';
+  $('credit').textContent = D.credit;
+  $('summary').textContent = `${nf.format(V.total)} ${V.totalWhat}. ${storyEyebrow}: ${bigStory}. ${storyLine}`;
+
+  // ---------- tags on the three cheapest stores ----------
+  const tagRoot = $('tags');
+  const tagEls = top3.map((o) => {
+    const el = document.createElement('div'); el.className = 'tag';
+    const top = document.createElement('div'); top.className = 'tt';
+    const b = document.createElement('b'); b.textContent = money(o.p);
+    const d = document.createElement('em'); d.textContent = fDay(o.d, false);
+    top.append(b, d);
+    const n = document.createElement('span'); n.textContent = storeName(o.i);
+    el.append(top, n); el.style.borderColor = colorOf(norm(o.p)); el.style.opacity = 0;
+    tagRoot.appendChild(el);
+    return { el, i: o.i, ax: 0, ay: 0, lx: 0, ly: 0 };
+  });
+  let tagsPlaced = false;
+  function placeTags() {
+    const avoid = ['.panel', '#legend', '#timeline', '.topright', '#credit'].map((s) => document.querySelector(s).getBoundingClientRect())
+      .filter((b) => b.width > 0).map((b) => [b.left - 6, b.top - 6, b.right + 6, b.bottom + 6]);
+    // the panel's real text block only (it is wide but short)
+    const placed = [];
+    const hit = (a, b) => !(a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3]);
+    const pts = tagEls.map((t) => [PX[t.i] - 10, PY[t.i] - 10, PX[t.i] + 10, PY[t.i] + 10]);
+    let cx = 0, cy = 0; for (const i of jIdx) { cx += PX[i]; cy += PY[i]; } cx /= jIdx.length; cy /= jIdx.length;
+    for (const tg of tagEls) {
+      const w = tg.el.offsetWidth, h = tg.el.offsetHeight, x = PX[tg.i], y = PY[tg.i], g = phone ? 16 : 26;
+      const cands = [[x + g, y - h - g * 0.5], [x - g - w, y - h - g * 0.5], [x + g, y + g * 0.5], [x - g - w, y + g * 0.5], [x + g + 10, y - h / 2], [x - g - 10 - w, y - h / 2], [x - w / 2, y - h - g * 1.3], [x - w / 2, y + g * 1.3]];
+      let best = null, bestScore = Infinity;
+      cands.forEach(([bx, by]) => {
+        const box = [bx, by, bx + w, by + h];
+        let score = 0;
+        if (box[0] < 12 || box[1] < 12 || box[2] > W - 12 || box[3] > H - 12) score += 100;
+        for (const a of avoid) if (hit(box, a)) score += 30;
+        for (const p of placed) if (hit(box, [p[0] - 8, p[1] - 8, p[2] + 8, p[3] + 8])) score += 60;
+        for (const p of pts) if (hit(box, p)) score += 25;
+        // cover as few stores as possible, and lean away from the middle of the city
+        for (const i of jIdx) if (PX[i] > box[0] - 3 && PX[i] < box[2] + 3 && PY[i] > box[1] - 3 && PY[i] < box[3] + 3) score += 1.5;
+        const bcx = (box[0] + box[2]) / 2, bcy = (box[1] + box[3]) / 2;
+        score -= 0.02 * (Math.hypot(bcx - cx, bcy - cy) - Math.hypot(x - cx, y - cy));
+        if (score < bestScore) { bestScore = score; best = box; }
+      });
+      best[0] = clamp(best[0], 12, W - 12 - w); best[1] = clamp(best[1], 12, H - 12 - h);
+      best[2] = best[0] + w; best[3] = best[1] + h;
+      placed.push(best);
+      tg.el.style.transform = `translate(${Math.round(best[0])}px, ${Math.round(best[1])}px)`;
+      // leader: from the dot's edge to the nearest point of the box
+      const lx = clamp(x, best[0], best[2]), ly = clamp(y, best[1], best[3]);
+      const dx = lx - x, dy = ly - y, L = Math.hypot(dx, dy) || 1, rr = rad(R.q[tg.i]) + 2.6;
+      tg.ax = x + (dx / L) * rr; tg.ay = y + (dy / L) * rr; tg.lx = lx; tg.ly = ly;
+    }
+    tagsPlaced = true;
+    drawLabels(placed.map((b) => [b[0] - 6, b[1] - 6, b[2] + 6, b[3] + 6])); // the alcaldía names keep clear of the tags
+  }
+  function applyTags(F) {
+    if (F.tagsA > 0 && !tagsPlaced) placeTags();
+    for (const tg of tagEls) {
+      const a = tagsPlaced ? Math.round(F.tagsA * 1000) / 1000 : 0;
+      if (tg._a !== a) { tg.el.style.opacity = a; tg._a = a; }
+    }
+  }
+
+  function render(F) {
+    applyTexts(F);
+    applyTags(F);
+    drawMap(F);
+    drawStrip(F);
+  }
+
+  // ---------- controls ----------
+  const skipB = $('skip'), replayB = $('replay'), recentB = $('recent'), tip = $('tip');
+  let playing = false, endMode = false, t0 = 0, dirty = true;
+  const reduce = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+  const freezeAt = (() => { try { const q = new URLSearchParams(location.search).get('t'); return q != null && q !== '' && Number.isFinite(+q) ? +q : null; } catch (e) { return null; } })();
+
+  // the strip is a slider over 27 stops: the 26 weeks, then the recent window
+  stripC.setAttribute('aria-valuemin', '1'); stripC.setAttribute('aria-valuemax', String(NK + 1));
+  function sliderAria() {
+    const wk = E.mode === 'week';
+    stripC.setAttribute('aria-valuenow', String(wk ? E.k + 1 : NK + 1));
+    stripC.setAttribute('aria-valuetext', wk ? `Semana del ${fDay(JW[E.k])}: ${wN[E.k]} tiendas con precio, mediana ${money(wMed[E.k])}` : `Precios del ${recentLabel}: ${J.n} tiendas, mediana ${money(ref)}`);
+  }
+  function play() {
+    hideTip(); E.hover = -1;
+    playing = true; endMode = false; t0 = performance.now();
+    app.dataset.phase = 'opening';
+    skipB.hidden = false; replayB.hidden = true; recentB.hidden = true; $('tlHint').hidden = true;
+    stripC.tabIndex = -1; stripC.setAttribute('aria-disabled', 'true');
+  }
+  function finish() {
+    playing = false; endMode = true;
+    E.mode = 'recent'; E.k = lastK; copyState(E.from, R); E.to = R; E.t0 = -1e9;
+    app.dataset.phase = 'end';
+    skipB.hidden = true; replayB.hidden = false; recentB.hidden = false; $('tlHint').hidden = false;
+    recentB.setAttribute('aria-pressed', 'true');
+    stripC.tabIndex = 0; stripC.removeAttribute('aria-disabled'); sliderAria();
+    dirty = true;
+  }
+  function setEnd(mode, k) {
+    if (!endMode) return;
+    if (mode === E.mode && (mode === 'recent' || k === E.k)) return;
+    const now = performance.now();
+    const p = ease(c01((now - E.t0) / E.dur));
+    const snap = mkState(); lerpState(snap, E.from, E.to, p);
+    E.from = snap; E.to = mode === 'recent' ? R : S[k];
+    E.mode = mode; if (mode === 'week') E.k = k;
+    E.t0 = now; E.dur = reduce.matches ? 1 : 380;
+    recentB.setAttribute('aria-pressed', String(mode === 'recent'));
+    sliderAria();
+    if (E.pinned && E.hover >= 0) showTip(E.hover);
+    dirty = true;
+  }
+  skipB.addEventListener('click', () => { if (playing) finish(); });
+  replayB.addEventListener('click', () => play());
+  recentB.addEventListener('click', () => setEnd('recent'));
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && playing) finish(); });
+
+  // scrub the 26 weeks
+  const kFromX = (x) => clamp(Math.round(x / stripGeom(1).slot - 0.5), 0, NK - 1); // zoomed: week k sits at (k + 0.5) slots
+  let scrubbing = false;
+  stripC.addEventListener('pointerdown', (e) => {
+    if (!endMode) return;
+    scrubbing = true; stripC.setPointerCapture(e.pointerId);
+    const r = stripC.getBoundingClientRect(); setEnd('week', kFromX(e.clientX - r.left));
+  });
+  stripC.addEventListener('pointermove', (e) => {
+    if (!scrubbing) return;
+    const r = stripC.getBoundingClientRect(); setEnd('week', kFromX(e.clientX - r.left));
+  });
+  const endScrub = () => { scrubbing = false; };
+  stripC.addEventListener('pointerup', endScrub); stripC.addEventListener('pointercancel', endScrub);
+  stripC.addEventListener('keydown', (e) => {
+    if (!endMode) return;
+    const k = E.mode === 'week' ? E.k : NK;
+    let n = null;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') n = Math.max(0, k - 1);
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') n = k + 1;
+    else if (e.key === 'Home') n = 0;
+    else if (e.key === 'End') n = NK;
+    if (n == null) return;
+    e.preventDefault();
+    if (n >= NK) setEnd('recent'); else setEnd('week', n);
+  });
+
+  // hover or tap a store
+  function nearest(x, y, maxD) {
+    let best = -1, bd = maxD * maxD;
+    for (const i of jIdx) { const dx = PX[i] - x, dy = PY[i] - y, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = i; } }
+    return best;
+  }
+  function showTip(i) {
+    const s = D.stores[i];
+    let price = null, when = '';
+    if (E.mode === 'recent') { const l = J.latest[i]; if (l) { price = l[0]; when = fDay(l[1]); } }
+    else { const p = J.prices[i][E.k]; if (p != null) price = p; when = `semana del ${fDay(JW[E.k])}`; }
+    tip.textContent = '';
+    const n = document.createElement('div'); n.className = 'n'; n.textContent = storeName(i);
+    const sub = document.createElement('div'); sub.className = 's'; const kind = KIND[s[2]] || s[2];
+    sub.textContent = s[1] && s[1].toLowerCase().includes(kind) ? s[1] : [s[1], kind].filter(Boolean).join(' · ');
+    const p = document.createElement('div'); p.className = 'p';
+    if (price != null) {
+      const b = document.createElement('b'); b.textContent = money(price);
+      const w = document.createElement('span'); w.textContent = when;
+      p.append(b, w);
+      const d = document.createElement('div'); d.className = 'd';
+      const dev = (price - ref) / ref, q = Math.round(Math.abs(dev) * 100);
+      d.textContent = q === 0 ? `igual a la mediana reciente (${money(ref)})` : `${q}${NB}% ${dev < 0 ? 'abajo' : 'arriba'} de la mediana reciente (${money(ref)})`;
+      d.style.color = q === 0 ? C.ink2 : dev < 0 ? C.cheaperInk : C.dearerInk;
+      tip.append(n, sub, p, d);
+    } else {
+      p.textContent = E.mode === 'recent' ? `Sin precio en ${recentLabel}` : `Sin precio la semana del ${fDay(JW[E.k])}`;
+      tip.append(n, sub, p);
+    }
+    tip.hidden = false;
+    const tw = tip.offsetWidth, th = tip.offsetHeight, x = PX[i], y = PY[i];
+    let lx = x + 16, ly = y - th - 12;
+    if (lx + tw > W - 12) lx = x - 16 - tw;
+    if (lx < 12) lx = clamp(x - tw / 2, 12, W - 12 - tw);
+    const pBot = document.querySelector('.panel').getBoundingClientRect().bottom;
+    if (ly < 12 || (phone && ly < pBot)) ly = y + 18;
+    if (ly + th > H - 12) ly = Math.max(12, y - th - 12);
+    tip.style.transform = `translate(${Math.round(lx)}px, ${Math.round(ly)}px)`;
+  }
+  function hideTip() { tip.hidden = true; E.pinned = false; }
+  mapC.addEventListener('pointermove', (e) => {
+    if (!endMode || e.pointerType !== 'mouse') return;
+    const i = nearest(e.clientX, e.clientY, 14);
+    if (i !== E.hover) { E.hover = i; if (i >= 0) showTip(i); else hideTip(); dirty = true; }
+  });
+  mapC.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && E.hover >= 0) { E.hover = -1; hideTip(); dirty = true; } });
+  mapC.addEventListener('click', (e) => {
+    if (!endMode) return;
+    const i = nearest(e.clientX, e.clientY, 22);
+    if (i >= 0) { E.hover = i; E.pinned = true; showTip(i); } else { E.hover = -1; hideTip(); }
+    dirty = true;
+  });
+
+  // ---------- run ----------
+  function frame(now) {
+    if (playing) {
+      const t = now - t0;
+      if (t >= T.done) finish(); else render(compose(t));
+    }
+    if (endMode && (dirty || now - E.t0 < E.dur + 40)) { dirty = false; render(composeEnd(now)); }
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize', () => { resize(); hideTip(); E.hover = -1; });
+  resize();
+  if (freezeAt != null) {
+    if (freezeAt >= T.done) finish();
+    else { app.dataset.phase = 'frozen'; skipB.hidden = true; render(compose(freezeAt)); }
+  } else if (reduce.matches) finish();
+  else play();
+  requestAnimationFrame(frame);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { resize(); });
+  window.__respira = { T, phase: () => app.dataset.phase, xy: (i) => [PX[i], PY[i]], get started() { return t0; }, labels: () => labelsShown.slice(), proj: () => proj }; // for tests
+})();
+</script>

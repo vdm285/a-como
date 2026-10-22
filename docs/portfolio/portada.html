@@ -1,0 +1,1230 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>A cómo · Portada</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0c1118;
+  --ink: #f4f5f7;
+  --ink-2: #b9bec7;
+  --ink-3: #8a919c;
+  --cheaper: #3987e5;
+  --dearer: #e66767;
+  --mid: #5b616a;
+  --accent: #ece6d8;
+  --accent-ink: #14171c;
+  --cheaper-ink: #7db3f0;
+  --dearer-ink: #f29191;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --glass: rgba(14, 19, 28, 0.86);
+  --glass-2: rgba(22, 29, 40, 0.95);
+  --scrim: rgba(12, 17, 24, 0.96);
+  --scrim-2: rgba(12, 17, 24, 0.7);
+  --scrim-0: rgba(12, 17, 24, 0);
+  --rule: rgba(236, 230, 216, 0.62);
+  --rule-2: rgba(236, 230, 216, 0.24);
+  --track: rgba(255, 255, 255, 0.14);
+  --map-zmvm-fill: rgba(255, 255, 255, 0.012);
+  --map-zmvm-line: rgba(255, 255, 255, 0.055);
+  --map-alc-fill: rgba(255, 255, 255, 0.026);
+  --map-alc-line: rgba(255, 255, 255, 0.12);
+  --map-green: rgba(72, 140, 96, 0.11);
+  --map-water: rgba(110, 120, 140, 0.16);
+  --map-road: rgba(255, 255, 255, 0.075);
+  --map-road-hw: rgba(255, 255, 255, 0.12);
+  --map-label: rgba(255, 255, 255, 0.24);
+  --dot-edge: rgba(8, 12, 18, 0.92);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  --font: 'Manrope', system-ui, sans-serif;
+  --display: 'Big Shoulders Display', 'Manrope', system-ui, sans-serif;
+  --gut: 56px;
+  --col: min(520px, 36vw);
+}
+html, body { height: 100%; background: var(--bg); }
+html, body { margin: 0; }
+body { color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.45; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.num { font-variant-numeric: tabular-nums; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+#app { position: relative; min-height: 100%; min-height: 100dvh; display: flex; flex-direction: column; overflow: hidden; touch-action: pan-y; }
+#map, #fx { position: absolute; left: 0; top: 0; display: block; }
+#map { z-index: 0; }
+#fx { z-index: 2; pointer-events: none; }
+.scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    linear-gradient(180deg, var(--scrim) 0, var(--scrim-0) 150px),
+    linear-gradient(90deg, var(--scrim) 0, var(--scrim) calc(var(--gut) + var(--col) - 40px), var(--scrim-2) calc(var(--gut) + var(--col) + 40px), var(--scrim-0) calc(var(--gut) + var(--col) + 200px)); }
+
+/* masthead */
+.mast { position: relative; z-index: 3; display: flex; align-items: center; gap: 22px; padding: 20px var(--gut) 0; }
+.brand { font-family: var(--display); font-weight: 900; font-size: 36px; line-height: 1; letter-spacing: 0.01em; color: var(--accent); text-transform: uppercase; white-space: nowrap; }
+.folio { flex: 1; min-width: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.explore { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 18px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 14px; text-decoration: none; white-space: nowrap; flex: none; transition: filter 150ms; }
+.explore:hover { filter: brightness(1.06); }
+.explore svg { width: 16px; height: 16px; }
+.rules { position: relative; z-index: 3; margin: 14px var(--gut) 0; height: 6px; border-top: 2px solid var(--rule); border-bottom: 1px solid var(--rule-2); transform-origin: 0 50%; }
+
+/* the page */
+main { position: relative; z-index: 3; flex: 1; display: flex; flex-direction: column; padding: 22px var(--gut) 0; pointer-events: none; }
+.stories, .story, .head { pointer-events: none; }
+.kick, .head .wi, .deck, .fig, .legend, .pager { pointer-events: auto; }
+.stories { display: grid; }
+.story { grid-area: 1 / 1; align-self: start; visibility: hidden; min-width: 0; }
+.story.on { visibility: visible; }
+.kick { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+.kick .no { font-size: 15px; letter-spacing: 0; line-height: 1; font-weight: 800; color: var(--ink); }
+.kick .bar { width: 26px; height: 2px; background: var(--rule-2); }
+.head { margin: 0; font-family: var(--display); font-weight: 900; text-transform: uppercase; font-size: calc(clamp(46px, min(5.5vw, 9.6vh), 104px) * var(--fit, 1)); line-height: 0.93; letter-spacing: 0.005em; max-width: min(860px, 56vw); color: var(--ink); text-wrap: balance; }
+.head .g { display: block; white-space: nowrap; }
+.head .w { display: inline-block; overflow: hidden; vertical-align: top; padding: 0.16em 0.04em 0.06em; margin: -0.16em -0.04em -0.06em; }
+.story.open .head .w { overflow: visible; }
+.head .wi { display: inline-block; }
+.head .cheaper { color: var(--cheaper); }
+.head .dearer { color: var(--dearer); }
+.deck { margin: 22px 0 0; max-width: var(--col); font-size: 16.5px; line-height: 1.55; color: var(--ink-2); }
+.deck b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.deck .cheaper { color: var(--cheaper-ink); }
+.deck .dearer { color: var(--dearer-ink); }
+.fig { margin-top: 22px; width: var(--col); max-width: 100%; }
+.fig svg { display: block; overflow: visible; }
+.fig text { font-family: var(--font); }
+.fcap { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--ink-3); margin-bottom: 6px; min-height: 18px; }
+.fcap b { color: var(--ink); font-weight: 800; }
+.legend { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 11.5px; color: var(--ink-3); max-width: var(--col); }
+.legend .ramp { width: 92px; height: 6px; border-radius: 3px; flex: none; }
+.legend .lab { font-variant-numeric: tabular-nums; }
+.glyph { display: inline-block; width: 8px; height: 8px; background: var(--ink-2); vertical-align: 0; margin-right: 4px; }
+.glyph.c { border-radius: 50%; }
+.glyph.ring { background: none; border: 1.5px solid var(--ink); border-radius: 50%; width: 10px; height: 10px; }
+.glyph.ring.d { border-color: var(--dearer); }
+
+/* figure marks */
+.ax { stroke: var(--line-2); stroke-width: 1; }
+.tk { fill: var(--ink-3); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.tk.on { fill: var(--ink-2); font-weight: 700; }
+.rl { fill: var(--ink-2); font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; }
+.rl tspan.m { fill: var(--ink-3); font-weight: 600; letter-spacing: 0; }
+.rl tspan.v { fill: var(--ink); font-weight: 800; letter-spacing: 0; }
+.mk { stroke: var(--ink); stroke-width: 1.25; }
+.sd { stroke: var(--dot-edge); stroke-width: 0.6; }
+.sd.hl { stroke: var(--ink); stroke-width: 1.4; }
+.spark { fill: none; stroke: var(--ink-2); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.spark.part { stroke-dasharray: 2 3; stroke: var(--ink-3); }
+.refl { stroke: var(--accent); stroke-opacity: 0.5; stroke-dasharray: 3 3; stroke-width: 1; }
+.refl-t { fill: var(--accent); fill-opacity: 0.75; font-size: 10.5px; }
+.cur { stroke: var(--accent); stroke-width: 1.25; }
+.knob { fill: none; stroke: var(--ink); stroke-width: 1.75; }
+.ann { fill: var(--ink); font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ann.s { fill: var(--ink-3); font-weight: 600; }
+.scrub { cursor: ew-resize; touch-action: none; }
+.scrub:focus { outline: none; }
+.scrub:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
+.rank { list-style: none; margin: 12px 0 0; padding: 0; font-size: 13px; }
+.rank li { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: baseline; padding: 5px 0; border-top: 1px solid var(--line); cursor: default; }
+.rank li:first-child { border-top: 0; }
+.rank .r { font-weight: 800; font-size: 13px; color: var(--cheaper-ink); }
+.rank .r.d { color: var(--dearer-ink); }
+.rank .n { color: var(--ink); font-weight: 600; min-width: 0; }
+.rank .n small { color: var(--ink-3); font-weight: 600; font-size: 11.5px; }
+.rank .dtag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--dearer); color: var(--dearer-ink); font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; line-height: 16px; vertical-align: 1px; }
+.rank .v { font-weight: 800; font-variant-numeric: tabular-nums; }
+.rank li.sep { color: var(--ink-3); font-size: 11.5px; padding: 3px 0; display: block; }
+
+/* pager */
+.pager { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px 0 0; }
+.ib { width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-2); background: var(--glass); border: 1px solid var(--line); flex: none; transition: color 150ms, border-color 150ms; }
+.ib:hover { color: var(--ink); border-color: var(--line-2); }
+.ib svg { width: 18px; height: 18px; }
+.tabs { display: flex; gap: 8px; flex: 0 1 auto; min-width: 0; }
+.tab { display: flex; flex-direction: column; gap: 7px; width: 138px; min-width: 0; padding: 6px 2px 4px; text-align: left; color: var(--ink-3); font-size: 12px; font-weight: 700; }
+.tab:hover, .tab.on { color: var(--ink); }
+.tab .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tab .t i { font-style: normal; font-weight: 800; margin-right: 6px; color: var(--accent); }
+.tab .tr { height: 2px; background: var(--track); border-radius: 1px; overflow: hidden; }
+.tab .tf { display: block; height: 100%; width: 100%; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); }
+.replay { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 14px 0 12px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); color: var(--ink-2); font-size: 13px; font-weight: 700; flex: none; white-space: nowrap; }
+.replay:hover { color: var(--ink); border-color: var(--line-2); }
+.replay svg { width: 16px; height: 16px; }
+.replay.hot { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+#app.pre .mast, #app.pre .rules, #app.pre main { visibility: hidden; }
+.credit { position: relative; z-index: 3; padding: 10px var(--gut) 14px; font-size: 11px; line-height: 1.5; color: var(--ink-3); max-width: calc(var(--gut) * 2 + 720px); }
+
+/* tooltip */
+.tip { position: absolute; z-index: 8; pointer-events: none; background: var(--glass-2); border: 1px solid var(--line-2); border-radius: 10px; padding: 9px 12px 10px; font-size: 12.5px; box-shadow: var(--shadow); width: max-content; max-width: min(300px, calc(100vw - 32px)); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.tip[hidden] { display: none; }
+.tip .tn { font-weight: 800; font-size: 13px; color: var(--ink); line-height: 1.3; }
+.tip .ts { color: var(--ink-3); margin-top: 1px; }
+.tip .tp { margin-top: 6px; color: var(--ink); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tip .tp small { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.tip .td { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.tip .cheaper { color: var(--cheaper-ink); }
+.tip .dearer { color: var(--dearer-ink); }
+
+/* short wide screens */
+@media (min-width: 900px) and (max-height: 820px) {
+  .mast { padding-top: 14px; }
+  .brand { font-size: 32px; }
+  .rules { margin-top: 10px; }
+  main { padding-top: 16px; }
+  .kick { margin-bottom: 8px; }
+  .deck { margin-top: 14px; font-size: 15.5px; line-height: 1.5; }
+  .fig { margin-top: 14px; }
+  .rank { margin-top: 8px; }
+  .rank li { padding: 3px 0; }
+  .legend { margin-top: 8px; }
+  .wide { display: none; }
+  .pager { padding-top: 8px; }
+}
+
+/* phone and narrow screens */
+@media (max-width: 899px) {
+  :root { --gut: 16px; --col: 100%; }
+  .scrim { background:
+    linear-gradient(180deg, var(--scrim) 0, var(--scrim-0) 96px),
+    linear-gradient(180deg, var(--scrim-0) 0, var(--scrim-0) calc(var(--ptop, 60%) - 70px), var(--scrim-2) calc(var(--ptop, 60%) - 10px), var(--scrim) calc(var(--ptop, 60%) + 50px)); }
+  .mast { gap: 4px 10px; padding-top: 12px; justify-content: space-between; flex-wrap: wrap; }
+  .wide { display: none; }
+  .fig .strip3 { display: none; }
+  .brand { font-size: 28px; }
+  .folio { order: 3; flex: 1 0 100%; font-size: 9.5px; letter-spacing: 0.1em; }
+  .explore { height: 34px; padding: 0 12px 0 14px; font-size: 12.5px; gap: 6px; }
+  .explore svg { width: 14px; height: 14px; }
+  .rules { margin-top: 9px; height: 5px; }
+  main { justify-content: flex-end; padding-top: 0; }
+  main::before { content: ''; flex: 1 0 var(--map-min, 230px); pointer-events: none; }
+  .kick { margin-bottom: 8px; font-size: 11px; }
+  .kick .no { font-size: 19px; }
+  .head { font-size: clamp(34px, 10.4vw, 66px); max-width: none; }
+  .head .g { display: inline; white-space: normal; }
+  .deck { margin-top: 12px; font-size: 14px; line-height: 1.5; max-width: none; }
+  .fig { margin-top: 14px; width: 100%; }
+  .legend { margin-top: 8px; font-size: 11px; max-width: none; }
+  .legend .ramp { width: 64px; }
+  .pager { margin-top: 14px; padding-top: 0; gap: 8px; }
+  .tabs { flex: 1; }
+  .tab { width: auto; flex: 1; }
+  .tab .t { display: none; }
+  .tab { padding: 8px 0; }
+  .replay span { display: none; }
+  .replay { width: 40px; padding: 0; justify-content: center; }
+  .credit { padding: 10px var(--gut) 12px; font-size: 10px; }
+  .rank { margin-top: 8px; font-size: 12.5px; }
+  .rank li { padding: 3px 0; }
+}
+@media (max-width: 899px) and (max-height: 700px) {
+  .head { font-size: clamp(30px, 9vw, 40px); }
+}
+</style>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Manrope:wght@400;600;800&display=swap">
+
+<div id="app" class="pre">
+  <canvas id="map" aria-hidden="true"></canvas>
+  <div class="scrim"></div>
+  <header class="mast" id="mast">
+    <div class="brand" aria-label="A cómo">A cómo</div>
+    <div class="folio" id="folio"></div>
+    <a class="explore" href="https://vdm285.github.io/compa-precio/" target="_blank" rel="noopener">Explorar el mapa <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+  </header>
+  <div class="rules" id="rules"></div>
+  <main id="main">
+    <div class="stories" id="stories" aria-live="polite"></div>
+    <nav class="pager" aria-label="Historias">
+      <button class="ib" id="prev" aria-label="Historia anterior"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div class="tabs" id="tabs"></div>
+      <button class="ib" id="next" aria-label="Historia siguiente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+      <button class="ib" id="play" aria-label="Pausar"></button>
+      <button class="replay" id="replay" aria-label="Repetir la apertura"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg><span>Repetir</span></button>
+    </nav>
+  </main>
+  <footer class="credit" id="credit"></footer>
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <div class="tip" id="tip" hidden></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="demo-data.js"></script>
+<script>
+(() => {
+'use strict';
+const D = window.DEMO;
+const storiesEl = document.getElementById('stories');
+if (!D || !window.d3) { storiesEl.textContent = 'No se pudieron cargar los datos.'; return; }
+
+/* ------------------------------------------------------------------ format */
+const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const MESL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const ymd = (s) => s.split('-').map(Number);
+const fDate = (s) => { const [y, m, d] = ymd(s); return `${d} ${MES[m - 1]} ${y}`; };
+const fDay = (s) => { const [, m, d] = ymd(s); return `${d} ${MES[m - 1]}`; };
+const fRange = (a, b) => { const [y1, m1, d1] = ymd(a), [y2, m2, d2] = ymd(b); if (y1 === y2 && m1 === m2) return `${d1}–${d2} ${MES[m1 - 1]} ${y1}`; if (y1 === y2) return `${d1} ${MES[m1 - 1]}–${d2} ${MES[m2 - 1]} ${y1}`; return `${fDate(a)}–${fDate(b)}`; };
+const NB = ' ';
+const fPrice = (v) => '$' + (Math.abs(v - Math.round(v)) < 1e-9 ? String(Math.round(v)) : v.toFixed(2));
+const fPrice2 = (v) => '$' + v.toFixed(2);
+const fInt = (n) => n.toLocaleString('es-MX');
+const fPct = (v, d = 0) => `${v.toFixed(d)}${NB}%`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const median = (a) => { const v = a.filter((x) => x != null && Number.isFinite(x)).sort((x, y) => x - y); if (!v.length) return null; const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
+const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+const easeIO = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const KIND = { super: 'Supermercado', mercado: 'Mercado', central: 'Central de abasto', tortilleria: 'Tortillería', tradicional: 'Comercio tradicional', farmacia: 'Farmacia', conveniencia: 'Tienda de conveniencia' };
+
+/* ------------------------------------------------------------------ colour (OKLab) */
+const rootCss = getComputedStyle(document.documentElement);
+const tok = (n) => rootCss.getPropertyValue(n).trim();
+const hex = (h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16));
+const s2l = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+const l2s = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
+const toLab = (rgb) => {
+  const [r, g, b] = rgb.map((c) => s2l(c / 255));
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+};
+const fromLab = ([L, A, B]) => {
+  const l = Math.pow(L + 0.3963377774 * A + 0.2158037573 * B, 3);
+  const m = Math.pow(L - 0.1055613458 * A - 0.0638541728 * B, 3);
+  const s = Math.pow(L - 0.0894841775 * A - 1.291485548 * B, 3);
+  return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s].map((c) => Math.round(255 * clamp(l2s(c))));
+};
+const LAB = { c: toLab(hex(tok('--cheaper'))), m: toLab(hex(tok('--mid'))), d: toLab(hex(tok('--dearer'))) };
+const LUT = [];
+for (let k = 0; k <= 200; k++) { const t = k / 100 - 1, a = LAB.m, b = t < 0 ? LAB.c : LAB.d, u = Math.abs(t); LUT.push(fromLab([0, 1, 2].map((j) => a[j] + (b[j] - a[j]) * u))); }
+const div = (t) => LUT[Math.round((clamp(t, -1, 1) + 1) * 100)];
+const rgbS = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+const rampCss = () => `linear-gradient(90deg, ${[0, 25, 50, 75, 100, 125, 150, 175, 200].map((k) => rgbS(LUT[k])).join(', ')})`;
+const MID = hex(tok('--mid'));
+
+/* ------------------------------------------------------------------ data → stories */
+const S = D.stores;
+const NS = S.length;
+const T = D.tortilla, TK = D.stories.tortillaKinds;
+const J = D.jitomate, SJ = D.stories.jitomate;
+const SI = D.stories.index;
+const partial = new Set(D.partialWeeks);
+
+// a store's display name: PROFECO writes "Superissste Sucursal 002"; show the chain's own casing and the branch
+const chainN = new Map();
+for (const s of S) chainN.set(s[1], (chainN.get(s[1]) || 0) + 1);
+const squash = (s) => String(s).normalize('NFD').replace(/[^a-z0-9]/gi, '').toLowerCase();
+const capFirst = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const DN = S.map(([name, chain]) => {
+  const m = /^(.*?)\s*\bSucursal\b\s*(.+)$/i.exec(name);
+  if (!m || !chain) return name;
+  const banner = m[1].trim(), branch = m[2].trim();
+  // keep a banner that names a format of the chain ("Mega Soriana"), else the chain as it writes itself
+  const lead = squash(banner) !== squash(chain) && squash(banner).includes(squash(chain)) ? banner : chain;
+  return `${lead} · ${/^\d/.test(branch) ? 'Suc. ' + branch : capFirst(branch)}`;
+});
+const fromChain = (i) => DN[i] !== S[i][0];
+
+// 1 · tortilla: the recent kilo price at every supermarket and tortillería
+const tStores = Object.entries(T.latest).map(([i, [p, d]]) => ({ i: +i, p, d, k: S[i][2] })).filter((o) => o.k === 'super' || o.k === 'tortilleria');
+const tByI = new Map(tStores.map((o) => [o.i, o]));
+const T_CAP = 0.25;
+const tCol = (p) => div((p - T.ref) / T.ref / T_CAP);
+const cls = (v, ref) => (v < ref ? 'cheaper' : v > ref ? 'dearer' : '');
+
+// 2 · jitomate: 26 weeks, medians computed from prices, matched stores at peak and last full week
+const jPk = J.weeks.indexOf(SJ.peakWeek), jLw = J.weeks.indexOf(SJ.lastWeek);
+const jMed = J.weeks.map((w, k) => median(Object.values(J.prices).map((a) => a[k])));
+const jN = J.weeks.map((w, k) => Object.values(J.prices).filter((a) => a[k] != null).length);
+const jMatched = new Set(Object.entries(J.prices).filter(([, a]) => a[jPk] != null && a[jLw] != null).map(([i]) => +i));
+const J_CAP = 0.5;
+const jCol = (p) => div((p - J.ref) / J.ref / J_CAP);
+const jFall = Math.round((1 - SJ.medianRatio) * 100);
+const seriesTop = J.series.reduce((a, r) => (r[1] > a[1] ? r : a));
+const peakIsTop = seriesTop[0] === SJ.peakWeek;
+let jWeek = jLw;
+
+// 3 · the cheapest supermarket by basket index
+const I_CAP = 0.05;
+const iEntries = Object.entries(SI.indexByStore).map(([i, v]) => ({ i: +i, v }));
+const iByI = new Map(iEntries.map((o) => [o.i, o.v]));
+const iCol = (v) => div((v - 1) / I_CAP);
+const ringSet = [...SI.cheapest.map((c, k) => ({ i: c.i, v: c.index, lab: String(k + 1), d: false })), ...SI.dearest.map((c) => ({ i: c.i, v: c.index, lab: 'más cara', d: true }))];
+const below = (v) => (1 - v) * 100;
+// the headline names the chain only when the chain is that one store
+const top1 = SI.cheapest[0].i;
+const top1Name = chainN.get(S[top1][1]) === 1 ? S[top1][1] : DN[top1];
+
+/* ------------------------------------------------------------------ the three stories (text) */
+const word = (t, c = '') => `<span class="w"><span class="wi${c ? ' ' + c : ''}">${esc(t)}</span></span>`;
+const headHTML = (lines) => lines.map((parts) => `<span class="g">${parts.map((p) => (typeof p === 'string' ? p.split(' ').map((w) => word(w)).join(' ') : word(p.t, p.c))).join(' ')}</span>`).join(' ');
+const nP = (v, ref) => ({ t: fPrice(v), c: cls(v, ref) });
+const B = (t, c = '') => `<b${c ? ` class="${c}"` : ''}>${esc(t)}</b>`;
+const legendRamp = (cap, mid) => `<span class="lab">−${Math.round(cap * 100)}${NB}%<span class="wide"> o más</span></span><span class="ramp" style="background:${rampCss()}"></span><span class="lab">+${Math.round(cap * 100)}${NB}% o más, frente a ${mid}</span>`;
+
+const STORIES = [
+  {
+    key: 'tortilla', tab: 'La tortilla', kick: 'La tortilla · mediana del kilo',
+    head: [[nP(TK.super.median, T.ref), 'en el súper,'], [nP(TK.tortilleria.median, T.ref), 'en la tortillería']],
+    deck: `Precios del ${B(fRange(D.recent.from, D.recent.to))} del producto «${esc(T.name)}, ${esc(T.presentation)}»: mediana de ${B(fPrice(TK.super.median), cls(TK.super.median, T.ref))} en ${B(fInt(TK.super.n))} supermercados y de ${B(fPrice(TK.tortilleria.median), cls(TK.tortilleria.median, T.ref))} en ${B(fInt(TK.tortilleria.n))} tortillerías.<span class="wide"> En toda la zona, ${B(fPrice(T.ref))} (${fInt(T.n)} tiendas).</span>`,
+    legend: legendRamp(T_CAP, `la mediana<span class="wide"> de la zona</span>, ${fPrice(T.ref)}`),
+  },
+  {
+    key: 'jitomate', tab: 'El jitomate', kick: `El jitomate · ${fInt(SJ.matched)} tiendas comparadas`,
+    head: [['El jitomate bajó'], [{ t: `${jFall}${NB}%`, c: 'cheaper' }, 'desde', MESL[ymd(SJ.peakWeek)[1] - 1]]],
+    deck: `En las ${B(fInt(SJ.matched))} tiendas con precio del kilo la semana del ${B(fDate(SJ.peakWeek))} y la del ${B(fDate(SJ.lastWeek))}, el cambio mediano es ${B(`−${jFall}${NB}%`, 'cheaper')}. Mediana de todas las tiendas con precio: ${B(fPrice(SJ.peakMedian))} aquella semana${peakIsTop ? `, la más alta en ${fInt(J.series.length)} semanas de datos<span class="wide"> (desde el ${fDate(J.series[0][0])})</span>` : ''}; ${B(fPrice(SJ.lastMedian))} la del ${fDay(SJ.lastWeek)}.`,
+    legend: legendRamp(J_CAP, `la mediana reciente, ${fPrice(J.ref)}`) + `<span><i class="glyph c"></i>grandes: las ${fInt(SJ.matched)} tiendas comparadas</span>`,
+  },
+  {
+    key: 'tienda', tab: 'El más barato', kick: 'El súper más barato de la semana', kickMore: 'índice de canasta',
+    head: [[`${top1Name},`], [{ t: `${below(SI.cheapest[0].index).toFixed(1)}${NB}%`, c: 'cheaper' }, 'abajo'], ['de la mediana']],
+    deck: `Índice de canasta de ${B(fInt(SI.stores))} supermercados, semana del ${B(fDate(SI.week))}. Compara cada tienda con la mediana de la zona en los productos que PROFECO vio ahí: 1.00 es la mediana<span class="wide">; ${B(SI.cheapest[0].index.toFixed(3), 'cheaper')} quiere decir ${below(SI.cheapest[0].index).toFixed(1)}${NB}% abajo</span>.`,
+    legend: legendRamp(I_CAP, 'la mediana<span class="wide"> de la zona</span>, 1.00'),
+  },
+];
+
+/* ------------------------------------------------------------------ DOM */
+const $ = (id) => document.getElementById(id);
+const app = $('app'), mapC = $('map'), fxC = $('fx'), tip = $('tip');
+const mctx = mapC.getContext('2d'), fctx = fxC.getContext('2d');
+$('credit').textContent = D.credit;
+const totalWhat = D.visits.totalWhat.split(':')[0];
+// longest first; the first one that fits the masthead is shown, never an ellipsis
+const FOLIOS = [
+  `Ciudad de México y zona metropolitana · datos al ${fDate(D.latestDate)} · ${fInt(D.visits.total)} ${totalWhat} desde el ${fDate(D.visits.weeks[0])}`,
+  `Ciudad de México y zona metropolitana · datos al ${fDate(D.latestDate)} · ${fInt(D.visits.total)} ${totalWhat}`,
+  `Ciudad de México y zona metropolitana · datos al ${fDate(D.latestDate)}`,
+  `CDMX y zona metropolitana · datos al ${fDate(D.latestDate)}`,
+  `CDMX y zona metropolitana`,
+];
+function setFolio() {
+  const el = $('folio');
+  for (const t of FOLIOS) { el.textContent = t; if (el.scrollWidth <= el.clientWidth + 0.5) return; }
+}
+
+const arts = STORIES.map((st, k) => {
+  const el = document.createElement('article');
+  el.className = 'story';
+  el.setAttribute('aria-label', st.tab);
+  el.innerHTML = `<div class="kick rv" data-o="450" data-n="160"><span class="no">${k + 1}</span><span class="bar"></span><span>${esc(st.kick)}${st.kickMore ? `<span class="wide"> · ${esc(st.kickMore)}</span>` : ''}</span></div>
+    <h2 class="head">${headHTML(st.head)}</h2>
+    <p class="deck rv" data-o="1150" data-n="420">${st.deck}</p>
+    <div class="fig rv" data-o="1500" data-n="520"></div>
+    <div class="legend rv" data-o="${k === 0 ? 3700 : 2000}" data-n="${k === 0 ? 1300 : 800}">${st.legend}</div>`;
+  storiesEl.appendChild(el);
+  const items = [...el.querySelectorAll('.rv')].map((e) => ({ el: e, k: 'fade', o: +e.dataset.o, n: +e.dataset.n, p: -1 }));
+  el.querySelectorAll('.head .wi').forEach((e, j) => items.push({ el: e, k: 'rise', o: 560 + j * 55, n: 200 + j * 32, p: -1 }));
+  return { el, items, fig: el.querySelector('.fig'), state: 'hidden', t0: 0, mode: 'nav' };
+});
+const tabsEl = $('tabs');
+const tabs = STORIES.map((st, k) => {
+  const b = document.createElement('button');
+  b.className = 'tab';
+  b.setAttribute('aria-label', `Historia ${k + 1}: ${st.tab}`);
+  b.innerHTML = `<span class="t"><i>${k + 1}</i>${esc(st.tab)}</span><span class="tr"><span class="tf"></span></span>`;
+  b.addEventListener('click', () => { userStop(); go(k, 'nav'); });
+  tabsEl.appendChild(b);
+  return { b, f: b.querySelector('.tf') };
+});
+
+/* ------------------------------------------------------------------ geometry */
+let W = 0, H = 0, DPR = 1, phone = false, proj = null, region = null;
+const PX = new Float32Array(NS), PY = new Float32Array(NS);
+const base = document.createElement('canvas');
+let colRight = 0;
+
+const FIGX = [0, 0, 0];   // extra height each story's figure may take on a tall screen
+const FITS = [1, 1, 1];
+// the height the stories may take without the page scrolling
+function storyRoom() {
+  const pr = document.querySelector('.pager').getBoundingClientRect(), sr = storiesEl.getBoundingClientRect();
+  const over = Math.max(0, app.getBoundingClientRect().height - window.innerHeight);
+  return pr.top - sr.top - over;
+}
+function fit() {
+  // on a short wide screen a story's headline gives way first, so the page never scrolls
+  arts.forEach((a, k) => { a.el.style.setProperty('--fit', '1'); FITS[k] = 1; });
+  if (phone) return;
+  const room = storyRoom();
+  arts.forEach((a, j) => {
+    let f = 1;
+    for (let k = 0; k < 8; k++) {
+      const over = a.el.getBoundingClientRect().height - room;
+      if (over <= 0) break;
+      f = Math.max(0.62, f - Math.min(0.1, over / 700 + 0.01));
+      a.el.style.setProperty('--fit', f.toFixed(3));
+      if (f <= 0.62) break;
+    }
+    FITS[j] = f;
+  });
+}
+// on a tall screen a story with air under it lets its figure use that air
+function grow() {
+  if (phone) return;
+  const room = storyRoom() - 14;
+  const builds = [buildFig1, buildFig2, buildFig3];
+  arts.forEach((a, k) => {
+    if (FITS[k] < 1) return;
+    const spare = Math.floor(room - a.el.getBoundingClientRect().height);
+    if (spare < 12) return;
+    FIGX[k] = spare;
+    builds[k]();
+    if (a.el.getBoundingClientRect().height > room + 1) { FIGX[k] = 0; builds[k](); }
+  });
+}
+function layout() {
+  phone = window.innerWidth < 900;
+  H = window.innerHeight;
+  setFolio();
+  FIGX[0] = FIGX[1] = FIGX[2] = 0;
+  buildFigs();
+  fit();
+  grow();
+  const ar = app.getBoundingClientRect();
+  W = Math.round(ar.width); H = Math.round(ar.height);
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  for (const c of [mapC, fxC, base]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); }
+  for (const c of [mapC, fxC]) { c.style.width = W + 'px'; c.style.height = H + 'px'; }
+  const rb = $('rules').getBoundingClientRect().bottom - ar.top;
+  const st = storiesEl.getBoundingClientRect();
+  const deckR = arts[cur].el.querySelector('.deck').getBoundingClientRect().right - ar.left;
+  colRight = deckR;
+  let x0, y0, x1, y1;
+  if (!phone) {
+    x1 = W - 48; y0 = rb + 30; y1 = H - 40;
+    // frame the stores against the right edge so the headline keeps its own air
+    const probe = d3.geoMercator().fitExtent([[0, y0], [W, y1]], { type: 'MultiPoint', coordinates: S.map((s) => [s[4], s[3]]) });
+    const bb = d3.geoPath(probe).bounds({ type: 'MultiPoint', coordinates: S.map((s) => [s[4], s[3]]) });
+    x0 = Math.max(deckR + 60, x1 - (bb[1][0] - bb[0][0]));
+  }
+  else {
+    const top = st.top - ar.top;
+    app.style.setProperty('--ptop', `${Math.round(top)}px`);
+    x0 = 22; x1 = W - 22; y0 = rb + 18; y1 = Math.max(y0 + 160, top - 10);
+  }
+  region = { x0, y0, x1, y1 };
+  proj = d3.geoMercator().fitExtent([[x0, y0], [x1, y1]], { type: 'MultiPoint', coordinates: S.map((s) => [s[4], s[3]]) });
+  for (let i = 0; i < NS; i++) { const p = proj([S[i][4], S[i][3]]); PX[i] = p[0]; PY[i] = p[1]; }
+  drawBase();
+  placeTags();
+  // re-aim the current targets at the new sizes without animating
+  setTargets(cur, 0, 0, true);
+}
+
+function drawBase() {
+  const g = base.getContext('2d');
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  g.clearRect(0, 0, W, H);
+  const path = d3.geoPath(proj, g);
+  const fillAll = (fc, fill, stroke, lw = 1) => { for (const f of fc.features) { g.beginPath(); path(f); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); } } };
+  fillAll(D.geo.zmvm, tok('--map-zmvm-fill'), tok('--map-zmvm-line'));
+  fillAll(D.geo.alcaldias, tok('--map-alc-fill'), null);
+  fillAll(D.geo.green, tok('--map-green'), null);
+  fillAll(D.geo.water, tok('--map-water'), null);
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const f of D.geo.roads.features) { const hw = f.properties.class === 'ring' || f.properties.class === 'expressway'; g.beginPath(); path(f); g.strokeStyle = tok(hw ? '--map-road-hw' : '--map-road'); g.lineWidth = hw ? 1.5 : 1; g.stroke(); }
+  fillAll(D.geo.alcaldias, null, tok('--map-alc-line'), 1);
+  // alcaldía names are placed here and drawn each frame, so story 3's tags can push them aside
+  alcLabels = [];
+  if (!phone) {
+    g.font = LABEL_FONT;
+    try { g.letterSpacing = '1.4px'; } catch (e) { /* older engines */ }
+    // larger alcaldías first; a label that would touch another one, the credit or the pager's buttons is left out
+    // (the pager row itself spans the page, so its buttons are measured instead)
+    const ar = app.getBoundingClientRect();
+    const pad = (r) => ({ x: r.left - ar.left - 8, y: r.top - ar.top - 8, w: r.right - r.left + 16, h: r.bottom - r.top + 16 });
+    const pr = [...document.querySelector('.pager').children].map((e) => e.getBoundingClientRect());
+    const keepOut = [pad($('credit').getBoundingClientRect()), pad({ left: Math.min(...pr.map((r) => r.left)), right: Math.max(...pr.map((r) => r.right)), top: Math.min(...pr.map((r) => r.top)), bottom: Math.max(...pr.map((r) => r.bottom)) })];
+    const meets = (a, o) => a.x < o.x + o.w && a.x + a.w > o.x && a.y < o.y + o.h && a.y + a.h > o.y;
+    const feats = [...D.geo.alcaldias.features].sort((a, b) => path.area(b) - path.area(a));
+    for (const f of feats) {
+      const [x, y] = path.centroid(f);
+      const t = f.properties.name.toUpperCase();
+      const w = g.measureText(t).width + 12, h = 16;
+      const bx = { x: x - w / 2, y: y - h / 2, w, h };
+      if (!(bx.x > colRight + 40 && bx.x + w < W - 16 && y > region.y0 && y < H - 30)) continue;
+      if (keepOut.some((o) => meets(bx, o)) || alcLabels.some(({ b: o }) => meets(bx, o))) continue;
+      alcLabels.push({ t, x, y, b: bx, under3: false });
+    }
+    try { g.letterSpacing = '0px'; } catch (e) { /* older engines */ }
+  }
+}
+const LABEL_FONT = '700 9.5px Manrope, system-ui, sans-serif';
+let alcLabels = [];
+function drawLabels(now, fade) {
+  if (!alcLabels.length) return;
+  // while story 3 is up, a name under one of its tags fades out instead of showing through in pieces
+  const a = arts[2];
+  const k3 = cur !== 2 || a.state === 'hidden' || a.state === 'leave' ? 0 : a.mode === 'static' ? 1 : clamp((now - a.t0 - (a.mode === 'opening' ? 1200 : 450)) / 350);
+  mctx.font = LABEL_FONT;
+  try { mctx.letterSpacing = '1.4px'; } catch (e) { /* older engines */ }
+  mctx.textAlign = 'center'; mctx.textBaseline = 'middle';
+  mctx.fillStyle = tok('--map-label');
+  for (const L of alcLabels) {
+    const al = fade * (L.under3 ? 1 - k3 : 1);
+    if (al < 0.01) continue;
+    mctx.globalAlpha = al;
+    mctx.fillText(L.t, L.x, L.y);
+  }
+  try { mctx.letterSpacing = '0px'; } catch (e) { /* older engines */ }
+  mctx.globalAlpha = 1;
+}
+
+/* ------------------------------------------------------------------ store visuals: from → to, on the wall clock */
+const fr = new Float32Array(NS), fa = new Float32Array(NS), fc = new Float32Array(NS * 3), fs = new Uint8Array(NS);
+const tr = new Float32Array(NS), ta = new Float32Array(NS), tc = new Float32Array(NS * 3), ts = new Uint8Array(NS);
+const dl = new Float32Array(NS);
+let mT0 = 0, mDur = 1;
+let order = [];          // draw order
+let hitSet = [];         // stores the reader can hover in this story
+const rnd = (() => { let s = 7; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; })();
+const JIT = Float32Array.from({ length: NS }, () => rnd());
+
+function radii() { return phone ? { big: 3.3, mid: 2.5, ctx: 1.15 } : { big: 4.5, mid: 3.2, ctx: 1.5 }; }
+
+function visualOf(k, i) {
+  const R = radii();
+  if (k === 0) { const o = tByI.get(i); if (o) return { r: R.big, a: 1, c: tCol(o.p), s: o.k === 'super' ? 1 : 0, on: 1 }; }
+  if (k === 1) { const a = J.prices[i]; const p = a ? a[jWeek] : null; if (p != null) { const m = jMatched.has(i); return { r: m ? R.big : R.mid, a: m ? 1 : 0.72, c: jCol(p), s: 0, on: m ? 2 : 1 }; } }
+  if (k === 2) { const v = iByI.get(i); if (v != null) return { r: R.big, a: 1, c: iCol(v), s: 1, on: 1 }; }
+  return { r: R.ctx, a: 0.42, c: MID, s: 0, on: 0 };
+}
+function current(i, now) {
+  const e = easeIO(clamp((now - mT0 - dl[i]) / mDur));
+  return { e, r: fr[i] + (tr[i] - fr[i]) * e, a: fa[i] + (ta[i] - fa[i]) * e, c0: fc[i * 3] + (tc[i * 3] - fc[i * 3]) * e, c1: fc[i * 3 + 1] + (tc[i * 3 + 1] - fc[i * 3 + 1]) * e, c2: fc[i * 3 + 2] + (tc[i * 3 + 2] - fc[i * 3 + 2]) * e, s: e < 0.5 ? fs[i] : ts[i] };
+}
+// snapshot what is on screen now, aim at story k, start after `delay` ms, spread over `spread` ms
+function setTargets(k, delay, spread, instant = false, dur = 700) {
+  const now = performance.now();
+  const on = [], rest = [];
+  for (let i = 0; i < NS; i++) {
+    if (!instant) { const c = current(i, now); fr[i] = c.r; fa[i] = c.a; fc[i * 3] = c.c0; fc[i * 3 + 1] = c.c1; fc[i * 3 + 2] = c.c2; fs[i] = c.s; }
+    const v = visualOf(k, i);
+    tr[i] = v.r; ta[i] = v.a; tc[i * 3] = v.c[0]; tc[i * 3 + 1] = v.c[1]; tc[i * 3 + 2] = v.c[2]; ts[i] = v.s;
+    if (instant) { fr[i] = v.r; fa[i] = v.a; fc[i * 3] = v.c[0]; fc[i * 3 + 1] = v.c[1]; fc[i * 3 + 2] = v.c[2]; fs[i] = v.s; }
+    dl[i] = JIT[i] * spread;
+    (v.on ? on : rest).push([i, v.on]);
+  }
+  on.sort((a, b) => a[1] - b[1]);
+  order = [...rest.map((x) => x[0]), ...on.map((x) => x[0])];
+  hitSet = on.map((x) => x[0]);
+  mT0 = now + delay; mDur = instant ? 1 : dur;
+}
+
+/* ------------------------------------------------------------------ figures */
+const SVGNS = 'http://www.w3.org/2000/svg';
+const svgEl = (tag, attrs = {}, parent) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+let fig1 = null, fig2 = null, fig3 = null;
+
+function figWidth(k) { return Math.max(240, Math.floor(arts[k].fig.getBoundingClientRect().width)); }
+
+// a stack's width and depth: the densest arrangement that fits, or bigger marks when the story has air
+function stackConf(binPx, groupsList, baseCols, fixedH, extra) {
+  const conf = (cols, cap) => { const pitch = Math.min(cap, binPx / cols); const rows = groupsList.map((g) => Math.max(...[...g.values()].map((v) => Math.ceil(v.length / cols)))); return { cols, pitch, rows, h: fixedH + rows.reduce((s, n) => s + n * pitch, 0) }; };
+  const base = conf(baseCols, 5.4);
+  let best = base;
+  if (extra > 0) for (const cols of [3, 4, 5, 6]) {
+    // the widest marks this many columns allow, then as wide as the air allows
+    const c0 = conf(cols, 7.2), depth = c0.rows.reduce((s, n) => s + n, 0);
+    const c = conf(cols, Math.min(7.2, (base.h + extra - fixedH) / depth));
+    if (c.h <= base.h + extra + 0.5 && c.pitch > best.pitch + 0.2) best = c;
+  }
+  return best;
+}
+
+// dot histogram: one dot per store, stacked on its price rounded to 50 centavos; súper above the axis, tortillerías below
+function buildFig1() {
+  const box = arts[0].fig; box.innerHTML = '';
+  const Wf = figWidth(0);
+  const BIN = 0.5;
+  const binOf = (p) => Math.round(p / BIN + 1e-9);
+  const bs = tStores.map((o) => binOf(o.p));
+  // each stack is centred on its own price, so $20 sits on the $20 tick
+  const lo = (Math.min(...bs) - 0.5) * BIN, hi = (Math.max(...bs) + 0.5) * BIN;
+  const x = (p) => ((p - lo) / (hi - lo)) * Wf;
+  const binPx = (BIN / (hi - lo)) * Wf;
+  const groups = { super: new Map(), tortilleria: new Map() };
+  for (const o of [...tStores].sort((a, b) => a.p - b.p)) { const b = binOf(o.p); const g = groups[o.k]; if (!g.has(b)) g.set(b, []); g.get(b).push(o); }
+  const labH = 18, axH = 22;
+  const cf = stackConf(binPx, [groups.super, groups.tortilleria], binPx >= 17 || phone ? 4 : 3, labH + 6 + 4 + axH + 6 + labH, phone ? 0 : FIGX[0]);
+  const { cols, pitch } = cf;
+  const r = pitch * (phone ? 0.42 : 0.4);
+  const upH = cf.rows[0] * pitch, dnH = cf.rows[1] * pitch;
+  const axisY = labH + 6 + upH + 4;
+  const Hf = axisY + axH + dnH + 6 + labH;
+  const svg = svgEl('svg', { width: Wf, height: Hf, viewBox: `0 0 ${Wf} ${Hf}`, role: 'img', 'aria-label': `Cada punto es una tienda: ${TK.super.n} supermercados arriba, ${TK.tortilleria.n} tortillerías abajo, por precio del kilo redondeado a 50 centavos.` }, box);
+  const tSup = svgEl('text', { class: 'rl', x: 0, y: 12 }, svg);
+  tSup.innerHTML = `<tspan>■ SÚPER</tspan><tspan class="m" dx="6">${fInt(TK.super.n)} tiendas · mediana</tspan><tspan class="v" dx="4">${esc(fPrice(TK.super.median))}</tspan>`;
+  svgEl('line', { class: 'ax', x1: 0, x2: Wf, y1: axisY + 0.5, y2: axisY + 0.5 }, svg);
+  for (let p = Math.ceil(lo / 2) * 2; p <= hi; p += 2) { const tx = x(p); if (tx < 8 || tx > Wf - 8) continue; svgEl('line', { class: 'ax', x1: tx, x2: tx, y1: axisY, y2: axisY + 4 }, svg); svgEl('text', { class: 'tk', x: tx, y: axisY + 15, 'text-anchor': 'middle' }, svg).textContent = '$' + p; }
+  const tTor = svgEl('text', { class: 'rl', x: 0, y: Hf - 4 }, svg);
+  tTor.innerHTML = `<tspan>● TORTILLERÍA</tspan><tspan class="m" dx="6">${fInt(TK.tortilleria.n)} tiendas · mediana</tspan><tspan class="v" dx="4">${esc(fPrice(TK.tortilleria.median))}</tspan>`;
+  // median marks
+  const marks = svgEl('g', { opacity: 0 }, svg);
+  const mx1 = x(TK.super.median), mx2 = x(TK.tortilleria.median);
+  svgEl('line', { class: 'mk', x1: mx1, x2: mx1, y1: axisY - upH - 8, y2: axisY - 1 }, marks);
+  svgEl('path', { d: `M${mx1 - 4},${axisY - upH - 12}h8l-4,5z`, fill: tok('--ink') }, marks);
+  svgEl('line', { class: 'mk', x1: mx2, x2: mx2, y1: axisY + axH - 2, y2: axisY + axH + dnH + 8 }, marks);
+  svgEl('path', { d: `M${mx2 - 4},${axisY + axH + dnH + 12}h8l-4,-5z`, fill: tok('--ink') }, marks);
+  const dots = svgEl('g', {}, svg);
+  const slots = [];
+  for (const k of ['super', 'tortilleria']) {
+    for (const [b, list] of groups[k]) {
+      const cx = x(b * BIN);
+      list.forEach((o, j) => {
+        const col = j % cols, row = Math.floor(j / cols);
+        const inRow = Math.min(cols, list.length - row * cols), sx = cx + (col - (inRow - 1) / 2) * pitch; // a short top row sits centred
+        const sy = k === 'super' ? axisY - 4 - (row + 0.5) * pitch : axisY + axH + (row + 0.5) * pitch;
+        const c = rgbS(tCol(o.p));
+        const el = k === 'super' ? svgEl('rect', { class: 'sd', x: sx - r, y: sy - r, width: 2 * r, height: 2 * r, fill: c }, dots) : svgEl('circle', { class: 'sd', cx: sx, cy: sy, r, fill: c }, dots);
+        el.style.opacity = 0;
+        slots.push({ i: o.i, x: sx, y: sy, r, el, row, landed: false, sq: k === 'super' });
+      });
+    }
+  }
+  const prev = fig1;
+  fig1 = { svg, slots, marks, r };
+  if (prev) { // keep progress across a resize
+    const done = prev.slots.every((s) => s.landed) || cur !== 0;
+    for (const s of slots) { s.landed = done; s.el.style.opacity = done ? 1 : 0; }
+    marks.setAttribute('opacity', prev.marks.getAttribute('opacity'));
+    if (!done && flights) planFlights(flights.mode, flights.t0, true);
+  }
+  hookFigHover(svg, () => fig1.slots, 0);
+}
+
+// sparkline of the 26 weekly medians; also the week scrubber
+function buildFig2() {
+  const box = arts[1].fig; box.innerHTML = '';
+  const Wf = figWidth(1);
+  const cap = document.createElement('div'); cap.className = 'fcap'; box.appendChild(cap);
+  const Hf = phone ? 92 : Math.round(clamp(H - 700, 118, 200) + Math.min(FIGX[1], 110)), top = 18, bot = 18, padL = 4, padR = 30;
+  const n = J.weeks.length;
+  const ymax = Math.max(...jMed.filter((v) => v != null)) * 1.05;
+  const x = (k) => padL + (k / (n - 1)) * (Wf - padL - padR);
+  const y = (v) => top + (1 - v / ymax) * (Hf - top - bot);
+  const svg = svgEl('svg', { width: Wf, height: Hf, viewBox: `0 0 ${Wf} ${Hf}`, class: 'scrub', tabindex: 0, role: 'slider', 'aria-label': 'Semana', 'aria-valuemin': 1, 'aria-valuemax': n }, box);
+  svgEl('line', { class: 'ax', x1: 0, x2: Wf, y1: Hf - bot + 0.5, y2: Hf - bot + 0.5 }, svg);
+  let lastM = -1;
+  J.weeks.forEach((w, k) => { const m = ymd(w)[1]; if (m !== lastM) { lastM = m; if (k > 0 || true) svgEl('text', { class: 'tk', x: x(k), y: Hf - 4 }, svg).textContent = MES[m - 1]; } });
+  const yr = y(J.ref);
+  svgEl('line', { class: 'refl', x1: 0, x2: Wf - padR + 6, y1: yr, y2: yr }, svg);
+  svgEl('text', { class: 'refl-t', x: 0, y: yr - 5 }, svg).textContent = `mediana reciente ${fPrice(J.ref)}`;
+  // the line: full weeks solid, a light last week dashed
+  let full = n - 1; while (full > 0 && partial.has(J.weeks[full])) full--;
+  const pts = jMed.map((v, k) => (v == null ? null : [x(k), y(v)]));
+  const d1 = pts.slice(0, full + 1).filter(Boolean).map((p, k) => `${k ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('');
+  const line = svgEl('path', { class: 'spark', d: d1 }, svg);
+  const tail = full < n - 1 ? svgEl('path', { class: 'spark part', d: `M${pts[full][0]},${pts[full][1]}L${pts[n - 1][0]},${pts[n - 1][1]}` }, svg) : null;
+  const len = line.getTotalLength();
+  const dotsG = svgEl('g', {}, svg);
+  const dots = jMed.map((v, k) => (v == null ? null : svgEl('circle', { cx: x(k), cy: y(v), r: k === jPk || k === jLw ? 3.6 : 2.4, fill: partial.has(J.weeks[k]) ? tok('--bg') : rgbS(jCol(v)), stroke: partial.has(J.weeks[k]) ? rgbS(jCol(v)) : tok('--bg'), 'stroke-width': partial.has(J.weeks[k]) ? 1.5 : 1 }, dotsG)));
+  const annG = svgEl('g', {}, svg);
+  const aPk = svgEl('text', { class: 'ann', x: x(jPk) + 7, y: y(jMed[jPk]) + 1 }, annG); aPk.innerHTML = `${esc(fPrice(SJ.peakMedian))} <tspan class="ann s">${esc(fDay(SJ.peakWeek))}</tspan>`;
+  const aLw = svgEl('text', { class: 'ann', x: x(jLw) - 8, y: y(jMed[jLw]) - 14, 'text-anchor': 'end' }, annG); aLw.innerHTML = `${esc(fPrice(SJ.lastMedian))} <tspan class="ann s">${esc(fDay(SJ.lastWeek))}</tspan>`;
+  const curG = svgEl('g', {}, svg);
+  const cl = svgEl('line', { class: 'cur', y1: top - 6, y2: Hf - bot }, curG);
+  const kn = svgEl('circle', { class: 'knob', r: 6.5 }, curG);
+  const hit = svgEl('rect', { x: 0, y: 0, width: Wf, height: Hf, fill: 'transparent' }, svg);
+  fig2 = { svg, cap, line, tail, len, dots, annG, curG, cl, kn, x, y, n, full, drawn: fig2 ? fig2.drawn : 0, hit };
+  line.style.strokeDasharray = `${len} ${len}`;
+  paintFig2(performance.now());
+  syncWeek();
+  // scrubbing
+  const pick = (ev) => { const r = svg.getBoundingClientRect(); const k = Math.round(clamp((ev.clientX - r.left - padL) / (Wf - padL - padR)) * (n - 1)); if (k !== jWeek) setWeek(k, 380); };
+  let down = false;
+  svg.addEventListener('pointerdown', (ev) => { down = true; userStop(); svg.setPointerCapture(ev.pointerId); pick(ev); ev.stopPropagation(); });
+  svg.addEventListener('pointermove', (ev) => { if (down) pick(ev); });
+  svg.addEventListener('pointerup', () => { down = false; });
+  svg.addEventListener('pointercancel', () => { down = false; });
+  svg.addEventListener('keydown', (ev) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowDown: -1, ArrowUp: 1 }[ev.key];
+    if (step == null && ev.key !== 'Home' && ev.key !== 'End') return;
+    ev.preventDefault(); ev.stopPropagation(); userStop();
+    const k = ev.key === 'Home' ? 0 : ev.key === 'End' ? n - 1 : clamp(jWeek + step, 0, n - 1);
+    setWeek(k, 380);
+  });
+}
+function paintFig2(now) {
+  if (!fig2) return;
+  const a = arts[1];
+  if (a.state === 'leave') return;
+  const p = a.state === 'hidden' ? 0 : a.mode === 'static' ? 1 : clamp((now - a.t0 - (a.mode === 'opening' ? 1500 : 450)) / 1100);
+  const e = easeIO(p);
+  fig2.drawn = e;
+  fig2.line.style.strokeDashoffset = String(fig2.len * (1 - e));
+  const shown = Math.floor(e * (fig2.n - 1) + 1e-6);
+  fig2.dots.forEach((d, k) => { if (d) d.style.opacity = k <= shown || (k === fig2.n - 1 && e >= 1) ? 1 : 0; });
+  if (fig2.tail) fig2.tail.style.opacity = e >= 1 ? 1 : 0;
+  fig2.annG.style.opacity = clamp((e - 0.85) / 0.15);
+  fig2.curG.style.opacity = e >= 1 ? 1 : clamp(e * 3);
+}
+function syncWeek() {
+  if (!fig2) return;
+  const k = jWeek, v = jMed[k];
+  const cx = fig2.x(k), cy = fig2.y(v);
+  fig2.cl.setAttribute('x1', cx); fig2.cl.setAttribute('x2', cx);
+  fig2.kn.setAttribute('cx', cx); fig2.kn.setAttribute('cy', cy);
+  const part = partial.has(J.weeks[k]);
+  fig2.cap.innerHTML = `<span>Semana del <b>${esc(fDate(J.weeks[k]))}</b>${part ? ' (semana parcial)' : ''}</span><span>· mediana <b>${esc(fPrice(v))}</b> · ${fInt(jN[k])} tiendas</span>`;
+  fig2.svg.setAttribute('aria-valuenow', k + 1);
+  fig2.svg.setAttribute('aria-valuetext', `Semana del ${fDate(J.weeks[k])}, mediana ${fPrice(v)}`);
+}
+function setWeek(k, dur) {
+  jWeek = k; jAuto = false;
+  syncWeek();
+  if (cur === 1) setTargets(1, 0, 0, false, dur);
+  if (hoverI >= 0) showTip(hoverI, tipAnchor);
+}
+
+// basket index of every supermarket that week, stacked on the index rounded to 0.005; the three cheapest and the dearest marked
+function buildFig3() {
+  const box = arts[2].fig; box.innerHTML = '';
+  const Wf = figWidth(2);
+  const BIN = 0.005;
+  const binOf = (v) => Math.round(v / BIN + 1e-9);
+  const bs = iEntries.map((o) => binOf(o.v));
+  const lo = (Math.min(...bs) - 0.5) * BIN, hi = (Math.max(...bs) + 0.5) * BIN;
+  const x = (v) => ((v - lo) / (hi - lo)) * Wf;
+  const binPx = (BIN / (hi - lo)) * Wf;
+  const g = new Map();
+  for (const o of [...iEntries].sort((a, b) => a.v - b.v)) { const b = binOf(o.v); if (!g.has(b)) g.set(b, []); g.get(b).push(o); }
+  const top = 22;
+  const cf = stackConf(binPx, [g], binPx >= 22 ? 5 : binPx >= 16 ? 4 : 3, top + 4 + 22, phone ? 0 : FIGX[2]);
+  const { cols, pitch } = cf, r = pitch * 0.42;
+  const axisY = top + cf.rows[0] * pitch + 4, Hf = axisY + 22;
+  const svg = svgEl('svg', { width: Wf, height: Hf, viewBox: `0 0 ${Wf} ${Hf}`, class: 'strip3', role: 'img', 'aria-label': `Índice de canasta de ${SI.stores} supermercados, redondeado a 0.005` }, box);
+  svgEl('line', { class: 'ax', x1: 0, x2: Wf, y1: axisY + 0.5, y2: axisY + 0.5 }, svg);
+  // ticks every 0.02, all at two decimals
+  for (let q = Math.ceil(lo / 0.02 - 1e-9); q * 0.02 <= hi + 1e-9; q++) { const t = q * 0.02, tx = x(t); if (tx < 14 || tx > Wf - 14) continue; const one = q === 50; svgEl('line', { class: 'ax', x1: tx, x2: tx, y1: axisY, y2: axisY + 4 }, svg); svgEl('text', { class: 'tk' + (one ? ' on' : ''), x: tx, y: axisY + 16, 'text-anchor': 'middle' }, svg).textContent = one ? '1.00 mediana' : t.toFixed(2); }
+  const dots = svgEl('g', {}, svg);
+  const slots = [];
+  for (const [b, list] of g) {
+    const cx = x(b * BIN);
+    list.forEach((o, j) => {
+      const col = j % cols, row = Math.floor(j / cols);
+      const inRow = Math.min(cols, list.length - row * cols), sx = cx + (col - (inRow - 1) / 2) * pitch, sy = axisY - 4 - (row + 0.5) * pitch;
+      const el = svgEl('rect', { class: 'sd', x: sx - r, y: sy - r, width: 2 * r, height: 2 * r, fill: rgbS(iCol(o.v)) }, dots);
+      slots.push({ i: o.i, x: sx, y: sy, r, el });
+    });
+  }
+  const labs = svgEl('g', {}, svg);
+  for (const rs of ringSet) {
+    const s = slots.find((q) => q.i === rs.i); if (!s) continue;
+    svgEl('circle', { cx: s.x, cy: s.y, r: r + 3.2, fill: 'none', stroke: rs.d ? tok('--dearer') : tok('--ink'), 'stroke-width': 1.3 }, labs);
+    const t = svgEl('text', { class: 'ann', x: s.x, y: s.y - r - 7, 'text-anchor': rs.d ? 'end' : 'middle' }, labs);
+    t.textContent = rs.d ? 'más cara' : rs.lab;
+    if (rs.d) t.setAttribute('x', s.x + r + 2);
+  }
+  const ol = document.createElement('ol'); ol.className = 'rank';
+  const li = (rs) => `<li data-i="${rs.i}"><span class="r${rs.d ? ' d' : ''}">${rs.d ? '↑' : esc(rs.lab)}</span><span class="n">${rs.d ? '<span class="dtag">más cara</span>' : ''}${esc(DN[rs.i])}</span><span class="v">${esc(rs.v.toFixed(3))}</span></li>`;
+  ol.innerHTML = ringSet.map(li).join('');
+  box.appendChild(ol);
+  ol.querySelectorAll('li[data-i]').forEach((el) => {
+    el.addEventListener('pointerenter', (ev) => { if (ev.pointerType === 'mouse') { const i = +el.dataset.i; setHover(i, { x: PX[i], y: PY[i], map: true }); } });
+    el.addEventListener('pointerleave', (ev) => { if (ev.pointerType === 'mouse') setHover(-1); });
+    el.addEventListener('click', () => { const i = +el.dataset.i; userStop(); pinned = true; setHover(i, { x: PX[i], y: PY[i], map: true }); });
+  });
+  fig3 = { svg, slots };
+  hookFigHover(svg, () => fig3.slots, 2);
+}
+
+function hookFigHover(svg, getSlots, k) {
+  const near = (ev) => { const r = svg.getBoundingClientRect(); const mx = ev.clientX - r.left, my = ev.clientY - r.top; let best = -1, bd = ev.pointerType === 'mouse' ? 9 : 16; for (const s of getSlots()) { if (s.el.style.opacity === '0') continue; const d = Math.hypot(s.x - mx, s.y - my); if (d < bd) { bd = d; best = s; } } return best; };
+  svg.addEventListener('pointermove', (ev) => { if (ev.pointerType !== 'mouse' || cur !== k) return; const s = near(ev); if (s === -1) { if (!pinned) setHover(-1); return; } const r = svg.getBoundingClientRect(), ar = app.getBoundingClientRect(); setHover(s.i, { x: r.left - ar.left + s.x, y: r.top - ar.top + s.y, map: false }); });
+  svg.addEventListener('pointerleave', (ev) => { if (ev.pointerType === 'mouse' && !pinned) setHover(-1); });
+  svg.addEventListener('click', (ev) => { if (cur !== k) return; const s = near(ev); if (s === -1) return; userStop(); pinned = true; const r = svg.getBoundingClientRect(), ar = app.getBoundingClientRect(); setHover(s.i, { x: r.left - ar.left + s.x, y: r.top - ar.top + s.y, map: false }); });
+}
+function buildFigs() { buildFig1(); buildFig2(); buildFig3(); }
+
+/* ------------------------------------------------------------------ map tags for story 3 */
+let tags = [];
+function placeTags() {
+  const boxes = [];
+  const ar = app.getBoundingClientRect();
+  tags = ringSet.map((rs, j) => {
+    const x = PX[rs.i], y = PY[rs.i];
+    const text1 = `${rs.d ? 'Más cara' : rs.lab} · ${rs.v.toFixed(3)}`;
+    const text2 = DN[rs.i];
+    mctx.font = '800 12px Manrope, system-ui, sans-serif';
+    const w1 = mctx.measureText(text1).width;
+    mctx.font = '600 11.5px Manrope, system-ui, sans-serif';
+    const w2 = mctx.measureText(text2).width;
+    const compact = phone;
+    const bw = compact ? (rs.d ? 0 : 22) : Math.ceil(Math.max(w1, w2) + 20), bh = compact ? 20 : 38;
+    const cand = compact ? [[10, -bh - 8], [-bw - 10, -bh - 8], [10, 8], [-bw - 10, 8]] : [[18, -bh - 14], [18, 10], [-bw - 18, -bh - 14], [-bw - 18, 10], [18, -bh / 2], [-bw - 18, -bh / 2]];
+    let pick = null;
+    for (const [dx, dy] of cand) {
+      const b = { x: x + dx, y: y + dy, w: bw, h: bh };
+      const inside = b.x > (phone ? 4 : colRight + 20) && b.x + b.w < W - 8 && b.y > region.y0 - 20 && b.y + b.h < H - 8;
+      const clash = boxes.some((o) => b.x < o.x + o.w + 6 && b.x + b.w + 6 > o.x && b.y < o.y + o.h + 6 && b.y + b.h + 6 > o.y);
+      if (inside && !clash) { pick = b; break; }
+    }
+    if (!pick) pick = { x: x + cand[0][0], y: y + cand[0][1], w: bw, h: bh };
+    if (bw) boxes.push(pick);
+    return { ...rs, x, y, box: pick, text1, text2, compact, j };
+  });
+  // the names a tag, its leader or its ring would cut through
+  const R = radii();
+  const hits = (L, b, pad) => L.b.x < b.x + b.w + pad && L.b.x + L.b.w + pad > b.x && L.b.y < b.y + b.h + pad && L.b.y + L.b.h + pad > b.y;
+  for (const L of alcLabels) {
+    L.under3 = tags.some((t) => {
+      const ring = { x: t.x - R.big - 8, y: t.y - R.big - 8, w: 2 * R.big + 16, h: 2 * R.big + 16 };
+      const bx = clamp(t.x, t.box.x, t.box.x + t.box.w), by = clamp(t.y, t.box.y, t.box.y + t.box.h);
+      const lead = t.box.w ? { x: Math.min(t.x, bx), y: Math.min(t.y, by), w: Math.abs(bx - t.x) + 1, h: Math.abs(by - t.y) + 1 } : null;
+      return hits(L, ring, 0) || (t.box.w && hits(L, t.box, 4)) || (lead && hits(L, lead, -4));
+    });
+  }
+}
+function drawTags(now) {
+  const a = arts[2];
+  if (cur !== 2 || a.state === 'hidden') return;
+  const t = a.mode === 'static' ? 1e9 : now - a.t0;
+  const R = radii();
+  for (const g of tags) {
+    const t0 = (a.mode === 'opening' ? 1400 : 650) + g.j * 230;
+    const pr = easeOut(clamp((t - t0) / 650));
+    const pa = clamp((t - t0 - 250) / 400);
+    if (pr <= 0) continue;
+    const ink = g.d ? tok('--dearer') : tok('--ink');
+    mctx.globalAlpha = 1;
+    mctx.strokeStyle = ink; mctx.lineWidth = 1.6;
+    mctx.beginPath(); mctx.arc(g.x, g.y, R.big + 5.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pr); mctx.stroke();
+    if (pa <= 0 || !g.box.w) continue;
+    const b = g.box;
+    mctx.globalAlpha = pa;
+    // leader
+    const bx = clamp(g.x, b.x, b.x + b.w), by = clamp(g.y, b.y, b.y + b.h);
+    const dx = bx - g.x, dy = by - g.y, dd = Math.hypot(dx, dy) || 1;
+    mctx.strokeStyle = 'rgba(255,255,255,0.45)'; mctx.lineWidth = 1;
+    mctx.beginPath(); mctx.moveTo(g.x + (dx / dd) * (R.big + 6), g.y + (dy / dd) * (R.big + 6)); mctx.lineTo(bx, by); mctx.stroke();
+    mctx.fillStyle = 'rgba(12,17,24,0.94)';
+    mctx.strokeStyle = g.d ? tok('--dearer') : tok('--cheaper'); mctx.lineWidth = 1.5;
+    rr(mctx, b.x, b.y, b.w, b.h, 6); mctx.fill(); mctx.stroke();
+    mctx.textBaseline = 'alphabetic'; mctx.textAlign = 'left';
+    if (g.compact) {
+      mctx.fillStyle = tok('--ink'); mctx.font = '800 12px Manrope, system-ui, sans-serif'; mctx.textAlign = 'center';
+      mctx.fillText(g.lab, b.x + b.w / 2, b.y + 14.5);
+    } else {
+      mctx.fillStyle = g.d ? tok('--dearer-ink') : tok('--cheaper-ink'); mctx.font = '800 12px Manrope, system-ui, sans-serif';
+      mctx.fillText(g.text1, b.x + 10, b.y + 16);
+      mctx.fillStyle = tok('--ink'); mctx.font = '600 11.5px Manrope, system-ui, sans-serif';
+      mctx.fillText(g.text2, b.x + 10, b.y + 31);
+    }
+  }
+  mctx.globalAlpha = 1;
+}
+function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+
+/* ------------------------------------------------------------------ the flight: every tortilla price leaves the map for the strip */
+let flights = null;
+function planFlights(mode, t0, keepLanded = false) {
+  if (!fig1) return;
+  const opening = mode === 'opening';
+  const start = t0 + (opening ? 1950 : 520);
+  const list = fig1.slots.map((s) => {
+    const stag = opening ? s.row * 62 + JIT[s.i] * 260 : s.row * 26 + JIT[s.i] * 110;
+    const dur = opening ? 1050 + JIT[(s.i * 7) % NS] * 250 : 700;
+    if (!keepLanded) { s.landed = false; s.el.style.opacity = 0; }
+    return { s, t0: start + stag, dur, bend: 0.16 + JIT[(s.i * 13) % NS] * 0.14 };
+  });
+  flights = { mode, t0, list, marksAt: start + Math.max(...list.map((f) => f.t0 - start + f.dur)) - 150 };
+}
+let fxDirty = false;
+function drawFlights(now) {
+  if (fxDirty) { fctx.setTransform(1, 0, 0, 1, 0, 0); fctx.clearRect(0, 0, fxC.width, fxC.height); fxDirty = false; }
+  if (!flights || !fig1 || cur !== 0) return;
+  const ar = app.getBoundingClientRect(), sr = fig1.svg.getBoundingClientRect();
+  const ox = sr.left - ar.left, oy = sr.top - ar.top;
+  const R = radii();
+  fctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  let flying = 0;
+  for (const f of flights.list) {
+    const s = f.s;
+    if (s.landed) continue;
+    const p = (now - f.t0) / f.dur;
+    if (p <= 0) { flying++; continue; }
+    if (p >= 1) { s.landed = true; s.el.style.opacity = 1; continue; }
+    flying++;
+    const x0 = PX[s.i], y0 = PY[s.i], x2 = ox + s.x, y2 = oy + s.y;
+    const cx = x0 + (x2 - x0) * f.bend * 0.6, cy = y2 + (y0 - y2) * f.bend;
+    const c = rgbS(tCol(tByI.get(s.i).p));
+    for (let tr = 3; tr >= 0; tr--) {
+      const e = easeIO(clamp(p - tr * 0.035));
+      const u = 1 - e;
+      const x = u * u * x0 + 2 * u * e * cx + e * e * x2, y = u * u * y0 + 2 * u * e * cy + e * e * y2;
+      const r = R.big + (s.r - R.big) * e;
+      fctx.globalAlpha = tr ? 0.16 * (4 - tr) / 3 : 1;
+      fctx.fillStyle = c;
+      if (s.sq) fctx.fillRect(x - r, y - r, 2 * r, 2 * r); else { fctx.beginPath(); fctx.arc(x, y, r, 0, Math.PI * 2); fctx.fill(); }
+    }
+    fxDirty = true;
+  }
+  fctx.globalAlpha = 1;
+  const mk = clamp((now - flights.marksAt) / 450);
+  fig1.marks.setAttribute('opacity', mk.toFixed(3));
+  if (!flying && mk >= 1) flights = null;
+}
+function landAll() { if (!fig1) return; for (const s of fig1.slots) { s.landed = true; s.el.style.opacity = 1; } fig1.marks.setAttribute('opacity', 1); flights = null; fxDirty = true; }
+
+/* ------------------------------------------------------------------ map drawing */
+let openT0 = 0;
+function drawMap(now) {
+  mctx.setTransform(1, 0, 0, 1, 0, 0);
+  mctx.clearRect(0, 0, mapC.width, mapC.height);
+  const fade = reduce && openMode !== 'opening' ? 1 : easeOut(clamp((now - openT0) / 1100));
+  mctx.globalAlpha = fade;
+  mctx.drawImage(base, 0, 0);
+  mctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawLabels(now, fade);
+  const edge = tok('--dot-edge');
+  mctx.lineWidth = 1.1; mctx.strokeStyle = edge;
+  for (const i of order) {
+    const v = current(i, now);
+    const a = v.a * fade;
+    if (a < 0.01 || v.r < 0.2) continue;
+    mctx.globalAlpha = a;
+    mctx.fillStyle = `rgb(${v.c0 | 0},${v.c1 | 0},${v.c2 | 0})`;
+    const x = PX[i], y = PY[i], r = v.r;
+    mctx.beginPath();
+    if (v.s) mctx.rect(x - r, y - r, 2 * r, 2 * r); else mctx.arc(x, y, r, 0, Math.PI * 2);
+    mctx.fill();
+    if (r > 2) mctx.stroke();
+  }
+  mctx.globalAlpha = 1;
+  drawTags(now);
+  if (hoverI >= 0) {
+    const v = current(hoverI, now);
+    mctx.strokeStyle = tok('--ink'); mctx.lineWidth = 2;
+    mctx.beginPath(); mctx.arc(PX[hoverI], PY[hoverI], v.r + 4.5, 0, Math.PI * 2); mctx.stroke();
+  }
+}
+
+/* ------------------------------------------------------------------ text motion */
+function animText(now) {
+  for (const a of arts) {
+    if (a.state === 'enter') {
+      const el = now - a.t0; let done = true;
+      for (const it of a.items) {
+        const d = a.mode === 'opening' ? it.o : it.n;
+        const dur = it.k === 'rise' ? (a.mode === 'opening' ? 820 : 600) : 620;
+        const p = a.mode === 'static' ? 1 : clamp((el - d) / dur);
+        if (p < 1) done = false;
+        if (p === it.p) continue;
+        it.p = p;
+        const e = easeOut(p);
+        if (it.k === 'rise') it.el.style.transform = p >= 1 ? '' : `translateY(${((1 - e) * 135).toFixed(2)}%)`;
+        else { it.el.style.opacity = p >= 1 ? '' : e.toFixed(3); it.el.style.transform = p >= 1 ? '' : `translateY(${((1 - e) * 10).toFixed(2)}px)`; }
+      }
+      if (done) { a.state = 'shown'; a.el.classList.add('open'); }
+    } else if (a.state === 'leave') {
+      const p = clamp((now - a.t0) / 240);
+      a.el.style.opacity = (1 - p).toFixed(3);
+      a.el.style.transform = `translateY(${(-12 * easeOut(p)).toFixed(2)}px)`;
+      if (p >= 1) { a.state = 'hidden'; a.el.classList.remove('on'); a.el.style.opacity = ''; a.el.style.transform = ''; }
+    }
+  }
+  // masthead
+  const m = openMode === 'static' ? 1 : clamp((now - openT0 - 150) / 900);
+  $('rules').style.transform = m >= 1 ? '' : `scaleX(${easeIO(m).toFixed(4)})`;
+  const mo = openMode === 'static' ? 1 : clamp((now - openT0) / 700);
+  $('mast').style.opacity = mo >= 1 ? '' : easeOut(mo).toFixed(3);
+}
+
+/* ------------------------------------------------------------------ story control */
+const STORY_MS = 9000;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let cur = 0, storyT0 = 0, openMode = 'static';
+let autoplay = false, loop = false, held = 0, holdFrom = 0;
+let jAuto = false;
+
+function go(k, mode) {
+  k = (k + STORIES.length) % STORIES.length;
+  if (reduce && mode !== 'opening' && openMode !== 'opening') mode = 'static';
+  const now = performance.now();
+  const prev = cur;
+  if (prev !== k || mode === 'opening' || mode === 'static') {
+    const pa = arts[prev];
+    if (prev !== k && pa.state !== 'hidden') { pa.state = 'leave'; pa.t0 = now; }
+  }
+  cur = k; storyT0 = now; held = 0; holdFrom = 0;
+  const a = arts[k];
+  a.state = 'enter'; a.t0 = now; a.mode = mode; a.el.classList.add('on'); a.el.classList.remove('open');
+  a.el.style.opacity = ''; a.el.style.transform = '';
+  for (const it of a.items) { it.p = -1; }
+  if (mode !== 'static') for (const it of a.items) { if (it.k === 'rise') it.el.style.transform = 'translateY(135%)'; else { it.el.style.opacity = 0; } }
+  setHover(-1); pinned = false;
+  fxDirty = true; flights = null;
+  // map
+  const opening = mode === 'opening';
+  if (k === 1) { jWeek = mode === 'static' ? jLw : jPk; jAuto = mode !== 'static'; syncWeek(); }
+  if (mode === 'static') setTargets(k, 0, 0, true);
+  else setTargets(k, opening ? 1050 : 180, opening ? 520 : 220, false, opening ? 750 : 620);
+  if (k === 0) { if (mode === 'static') landAll(); else planFlights(mode, now); }
+  if (k === 1) paintFig2(now);
+  for (let j = 0; j < tabs.length; j++) { tabs[j].b.classList.toggle('on', j === k); tabs[j].b.setAttribute('aria-current', j === k ? 'true' : 'false'); }
+}
+function next(dir) { go(cur + dir, 'nav'); }
+function userStop() { if (autoplay) { autoplay = false; paintPlay(); } }
+function startOpening() {
+  openT0 = performance.now(); openMode = 'opening';
+  for (const a of arts) { a.state = 'hidden'; a.el.classList.remove('on'); }
+  autoplay = true; loop = false; paintPlay();
+  $('replay').classList.remove('hot');
+  setTargets(-1, 0, 0, true);
+  cur = 0;
+  go(0, 'opening');
+}
+function showStatic() {
+  openT0 = performance.now() - 1e5; openMode = 'static';
+  autoplay = false; paintPlay();
+  go(0, 'static');
+  $('replay').classList.add('hot');
+  $('replay').querySelector('span').textContent = 'Ver la apertura'; $('replay').setAttribute('aria-label', 'Ver la apertura');
+}
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="3.6" height="14" rx="1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1"/></svg>';
+const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.2-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>';
+function paintPlay() { const b = $('play'); b.innerHTML = autoplay ? ICON_PAUSE : ICON_PLAY; b.setAttribute('aria-label', autoplay ? 'Pausar el paso automático' : 'Seguir pasando las historias'); }
+
+function tick(now) {
+  // auto-advance on the wall clock; a hovered store holds the page
+  if (autoplay) {
+    const heldNow = held + (holdFrom ? now - holdFrom : 0);
+    const el = now - storyT0 - heldNow;
+    if (el >= STORY_MS) {
+      if (cur === STORIES.length - 1 && !loop) { autoplay = false; paintPlay(); $('replay').classList.add('hot'); if (reduce) openMode = 'static'; }
+      else go(cur + 1, 'auto');
+    }
+  }
+  // the jitomate goes from its dearest week to the last full week
+  if (cur === 1 && jAuto && arts[1].mode !== 'static') {
+    const at = arts[1].mode === 'opening' ? 2900 : 2000;
+    if (now - storyT0 >= at) { jAuto = false; jWeek = jLw; syncWeek(); setTargets(1, 0, 380, false, 1000); }
+  }
+  // progress
+  const heldNow = held + (holdFrom ? now - holdFrom : 0);
+  for (let j = 0; j < tabs.length; j++) {
+    let p = 0;
+    if (j < cur && (autoplay || openMode === 'opening')) p = 1;
+    if (j === cur) p = autoplay ? clamp((now - storyT0 - heldNow) / STORY_MS) : 1;
+    if (j > cur) p = 0;
+    tabs[j].f.style.transform = `scaleX(${p.toFixed(4)})`;
+  }
+  animText(now);
+  paintFig2(now);
+  drawMap(now);
+  drawFlights(now);
+  requestAnimationFrame(tick);
+}
+
+/* ------------------------------------------------------------------ hover, tap, swipe, keys */
+let hoverI = -1, pinned = false, tipAnchor = null;
+function setHover(i, anchor) {
+  if (i === hoverI && anchor && tipAnchor && anchor.x === tipAnchor.x && anchor.y === tipAnchor.y) return;
+  if (fig1) for (const s of fig1.slots) if (s.i === hoverI) s.el.classList.remove('hl');
+  if (fig3) for (const s of fig3.slots) if (s.i === hoverI) s.el.classList.remove('hl');
+  hoverI = i; tipAnchor = anchor || null;
+  if (i < 0) { tip.hidden = true; if (!pinned && holdFrom) { held += performance.now() - holdFrom; holdFrom = 0; } return; }
+  if (!holdFrom) holdFrom = performance.now();
+  const sl = cur === 0 ? fig1 && fig1.slots : cur === 2 ? fig3 && fig3.slots : null;
+  if (sl) for (const s of sl) if (s.i === i) s.el.classList.add('hl');
+  showTip(i, anchor);
+}
+function showTip(i, anchor) {
+  const st = S[i];
+  const sub = st[1] && st[1] !== KIND[st[2]] && !fromChain(i) ? `${esc(st[1])} · ${esc(KIND[st[2]])}` : esc(KIND[st[2]]);
+  let body = '';
+  if (cur === 0) {
+    const o = tByI.get(i);
+    const dv = (o.p - T.ref) / T.ref * 100;
+    body = `<div class="tp">${esc(fPrice2(o.p))} <small>el kilo de tortilla</small></div><div class="td">precio del ${esc(fDate(o.d))}</div><div class="td ${cls(o.p, T.ref)}">${Math.abs(dv) < 0.05 ? 'igual a la mediana' : `${fPct(Math.abs(dv))} ${dv < 0 ? 'abajo' : 'arriba'} de la mediana`}</div>`;
+  } else if (cur === 1) {
+    const a = J.prices[i];
+    const p = a && a[jWeek];
+    body = p != null ? `<div class="tp">${esc(fPrice2(p))} <small>el kilo de jitomate</small></div><div class="td">semana del ${esc(fDate(J.weeks[jWeek]))}</div>` : `<div class="td">sin precio la semana del ${esc(fDate(J.weeks[jWeek]))}</div>`;
+    if (jMatched.has(i) && p != null && jWeek !== jPk) { const ch = (p / a[jPk] - 1) * 100; body += `<div class="td">semana del ${esc(fDay(SJ.peakWeek))}: ${esc(fPrice2(a[jPk]))} <span class="${ch < 0 ? 'cheaper' : ch > 0 ? 'dearer' : ''}">(${ch < 0 ? '−' : '+'}${fPct(Math.abs(ch))})</span></div>`; }
+  } else {
+    const v = iByI.get(i);
+    const b = below(v);
+    body = `<div class="tp">${esc(v.toFixed(3))} <small>índice de canasta</small></div><div class="td">semana del ${esc(fDate(SI.week))}</div><div class="td ${v < 1 ? 'cheaper' : v > 1 ? 'dearer' : ''}">${Math.abs(b) < 0.05 ? 'igual a la mediana de la zona' : `${fPct(Math.abs(b), 1)} ${b > 0 ? 'abajo' : 'arriba'} de la mediana`}</div>`;
+  }
+  tip.innerHTML = `<div class="tn">${esc(DN[i])}</div><div class="ts">${sub}</div>${body}`;
+  tip.hidden = false;
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let x = anchor.x + 16, y = anchor.y - th - 14;
+  if (x + tw > W - 12) x = anchor.x - tw - 16;
+  if (x < 12) x = Math.max(12, Math.min(W - tw - 12, anchor.x - tw / 2));
+  if (y < 12) y = anchor.y + 18;
+  tip.style.left = `${Math.round(x)}px`; tip.style.top = `${Math.round(y)}px`;
+}
+function nearestStore(mx, my, maxD) {
+  let best = -1, bd = maxD;
+  for (const i of hitSet) { const d = Math.hypot(PX[i] - mx, PY[i] - my); if (d < bd) { bd = d; best = i; } }
+  return best;
+}
+const appXY = (ev) => { const r = app.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+mapC.addEventListener('pointermove', (ev) => {
+  if (ev.pointerType !== 'mouse' || pinned) return;
+  const [mx, my] = appXY(ev);
+  const i = nearestStore(mx, my, 14);
+  mapC.style.cursor = i >= 0 ? 'pointer' : '';
+  if (i !== hoverI) setHover(i, i >= 0 ? { x: PX[i], y: PY[i], map: true } : null);
+});
+mapC.addEventListener('pointerleave', () => { if (!pinned) setHover(-1); });
+
+// taps and swipes anywhere on the page
+let down = null;
+app.addEventListener('pointerdown', (ev) => {
+  if (ev.target.closest('button, a, .scrub')) { down = null; return; }
+  down = { x: ev.clientX, y: ev.clientY, t: performance.now(), target: ev.target, type: ev.pointerType };
+});
+app.addEventListener('pointerup', (ev) => {
+  if (!down) return;
+  const dx = ev.clientX - down.x, dy = ev.clientY - down.y;
+  const d0 = down; down = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) { userStop(); next(dx < 0 ? 1 : -1); return; }
+  if (Math.hypot(dx, dy) > 10) return;
+  if (d0.target === mapC) {
+    const [mx, my] = appXY(ev);
+    const i = nearestStore(mx, my, d0.type === 'mouse' ? 14 : 24);
+    if (i >= 0) { userStop(); pinned = true; setHover(i, { x: PX[i], y: PY[i], map: true }); }
+    else if (pinned) { pinned = false; setHover(-1); }
+  }
+});
+app.addEventListener('pointercancel', () => { down = null; });
+document.addEventListener('keydown', (ev) => {
+  if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); userStop(); next(1); }
+  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); userStop(); next(-1); }
+  else if (ev.key === 'Escape') { pinned = false; setHover(-1); }
+  else if ((ev.key === ' ' || ev.key === 'k') && !ev.target.closest('button, a, .scrub')) { ev.preventDefault(); $('play').click(); }
+});
+$('prev').addEventListener('click', () => { userStop(); next(-1); });
+$('next').addEventListener('click', () => { userStop(); next(1); });
+$('play').addEventListener('click', () => {
+  if (autoplay) { autoplay = false; }
+  else { autoplay = true; loop = true; storyT0 = performance.now(); held = 0; holdFrom = 0; $('replay').classList.remove('hot'); }
+  paintPlay();
+});
+$('replay').addEventListener('click', () => { $('replay').querySelector('span').textContent = 'Repetir'; $('replay').setAttribute('aria-label', 'Repetir la apertura'); startOpening(); });
+
+let rzT = 0;
+window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { layout(); if (cur === 0 && flights) { /* keep flying to the new slots */ } }, 120); });
+
+/* ------------------------------------------------------------------ start */
+paintPlay();
+for (const a of arts) a.el.classList.remove('on');
+arts[0].el.classList.add('on');
+layout();
+const begin = () => { layout(); app.classList.remove('pre'); if (reduce) showStatic(); else startOpening(); requestAnimationFrame(tick); };
+let begun = false;
+const once = () => { if (!begun) { begun = true; begin(); } };
+// start once the two faces are in (or after 1.5 s, with the fallbacks)
+const faces = ['900 60px "Big Shoulders Display"', '800 20px "Big Shoulders Display"', '400 16px Manrope', '600 16px Manrope', '800 16px Manrope'];
+if (document.fonts && document.fonts.load) Promise.all(faces.map((f) => document.fonts.load(f))).then(once, once);
+else once();
+setTimeout(once, 1500);
+})();
+</script>
