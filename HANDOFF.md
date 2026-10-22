@@ -13,7 +13,7 @@ Round 3 ran against the live site with five fresh reviewers (phone, language, ho
 | Found (measured) | Fixed by |
 |---|---|
 | The store card flagged 93 April jitomate prices that the product card showed as normal for that week; a −79 % price was crowned the cheapest; the tooltip and tags never showed the flag | `v.far` decided once in `stage.js` against the stage's comparison set; symmetric ratio rule in `logic/stats.js` (`isFar`, unit-tested) read by every surface |
-| 48 % of products have a tie for the lowest price; the hero named one store by file order | "la más barata, empatada en N tiendas" |
+| In a sample of 94 products with 3 or more stores, 45 had a tie for the lowest price; the hero named one store by file order | "la más barata, empatada en N tiendas" |
 | A "mediana de la ciudad" printed large from one store; "1 tiendas" | Week figures need 3 stores; singular strings |
 | "pico $14.90" on a flat line; a peak from one store or a light week | Peak only from solid weeks, only when the line moves; scale from the median line |
 | A generic product opened from a link kept the 0.2 cap of its empty boot pass (59 % of stores saturated) | Caps memoised only from a real sample |
