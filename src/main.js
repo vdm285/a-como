@@ -197,7 +197,17 @@ function stageTags(stage, locValues) {
   const groups = [];
   for (const r of rows) { const g = groups[groups.length - 1]; if (g && Math.abs(g.value - r[1].value) < 0.005) g.rows.push(r); else groups.push({ value: r[1].value, rows: [r] }); }
   const storesAt = (value) => [...stage.values.values()].filter((v) => v.value != null && !v.far && !v.hatched && Math.abs(v.value - value) < 0.005).length;
-  const tagOf = (g, kind) => { const tg = mk(g.rows[0], kind); const n = storesAt(g.value); if (n > 1) tg.sub = t('tiedStores', { n }); return tg; };
+  const tagOf = (g, kind) => {
+    let anchor = g.rows[0];
+    if (g.rows.length > 1) {
+      const pts = g.rows.map((r) => state.byLoc.get(r[0])).filter(Boolean);
+      const mx = median(pts.map((p) => p.lon)), my = median(pts.map((p) => p.lat));
+      anchor = g.rows.reduce((a, r) => { const p = state.byLoc.get(r[0]), q = state.byLoc.get(a[0]); return p && q && Math.hypot(p.lon - mx, p.lat - my) < Math.hypot(q.lon - mx, q.lat - my) ? r : a; });
+    }
+    const tg = mk(anchor, kind); const n = storesAt(g.value);
+    if (n > 1) { tg.sub = t('tiedStores', { n }); tg.clickId = `tie:${anchor[0]}`; }
+    return tg;
+  };
   // a narrow free area (under 700 px) takes the cheapest and the dearest only (four tags covered a sixth of the data at 1024)
   const narrow = ui.free && ui.free.right - ui.free.left < 700;
   const cheapGroups = groups.slice(0, Math.min(narrow ? 1 : 3, groups.length - 1));
@@ -280,7 +290,7 @@ function applyPadding(animate = true, pass = 0) {
   // between the legend and the corner buttons the timeline (or its chip) needs room; when there is
   // little, it moves above the legend and takes the width up to the card
   if (!phone) {
-    const chip = chrome.querySelector('.timeline.collapsed');
+    const chip = chrome.querySelector('.timeline.collapsed .tl-chip');
     const need = chip ? chip.getBoundingClientRect().width + 24 : 440;
     const right = Math.min(br0 ? br0.left : W, open && ui.side === 'right' && card0 ? card0.left : W);
     const room = right - (lg0 ? lg0.right : 0) - 28;
@@ -296,12 +306,13 @@ function applyPadding(animate = true, pass = 0) {
     const cardW = card ? card.width + 28 : 0;
     const stacked = document.body.classList.contains('tl-stack');
     const chipStacked = stacked && !!chrome.querySelector('.timeline.collapsed');
+    const chipRect = chipStacked ? rect('.timeline.collapsed .tl-chip') : null;
     // a folded chip above the legend sits in the legend's column: it must not reserve the whole bottom band
     const bottom = tl && !chipStacked ? H - tl.top + 14 : 70;
     let left = open && ui.side === 'left' ? cardW + 14 : 28;
     // the legend stack takes the bottom-left corner: keep the stores to its right (the city is taller than wide)
     // (with the timeline stacked above it, the bottom padding already clears it)
-    if (lg && (!stacked || chipStacked)) left = Math.max(left, lg.right + 14, chipStacked && tl ? tl.right + 14 : 0);
+    if (lg && (!stacked || chipStacked)) left = Math.max(left, lg.right + 14, chipRect ? chipRect.right + 14 : 0);
     pad = { left, right: open && ui.side === 'right' ? cardW + 14 : 28, top: (search ? search.bottom : 60) + 16, bottom };
     // the week numeral is a corner too: beside the city when there is room, above it when not
     if (num) {
@@ -327,7 +338,12 @@ function applyPadding(animate = true, pass = 0) {
 }
 
 // ---------------------------------------------------------------- actions
-function openStore(id, from = 'card') { ui.lastStore = id; ui.storeFrom = from; setView('store', id); }
+function openStore(id, from = 'card') {
+  ui.lastStore = id; ui.storeFrom = from;
+  // a store opened over a subject card returns to it; one opened from the bare map returns to the map
+  if (state.view.kind !== 'store') ui.storeReturn = state.view.kind;
+  setView('store', id);
+}
 function openProduct(id) { state.stage = { kind: 'product', id }; setView('product', id); }
 function openGroup(id) { state.stage = { kind: 'group', id }; setView('group', id); }
 function openBasket() { if (state.basket.length) state.stage = { kind: 'basket' }; if (state.view.kind === 'basket') closeCard(); else setView('basket'); }
@@ -353,7 +369,7 @@ function closeCard() {
     if (history.state && history.state.prev === hashFor(b, state.week)) { history.back(); return; }
     setView(b.kind, b.id); return;
   }
-  if (state.view.kind === 'store' && state.stage.kind !== 'index' && ui.storeFrom !== 'map') { openStageCard(); return; }
+  if (state.view.kind === 'store' && state.stage.kind !== 'index' && ['product', 'group', 'basket'].includes(ui.storeReturn)) { openStageCard(); return; }
   if (state.view.kind === 'store' && ui.storeFrom === 'map' && ui.keyboard) ui.opener = stageHost.querySelector('svg');
   if (history.state && history.state.prev === hashFor({ kind: 'city' }, state.week)) { history.back(); return; }
   ui.replaceNext = true;
@@ -504,6 +520,7 @@ function cardView() {
 }
 
 function pickResult(e) {
+  clearTimeout(ui.announceTimer);
   const inp = chrome.querySelector('.search input');
   ui.opener = inp; ui.query = ''; ui.results = null; ui.active = -1;
   if (inp) inp.blur();
@@ -558,15 +575,16 @@ function renderChrome() {
       onBlur: () => setTimeout(() => { if (!chrome.querySelector('.search').contains(document.activeElement) && ui.results) { ui.results = null; renderChrome(); } }, 150),
       onFocus: () => { if (ui.query && !ui.results && ui.searchIndex) { runSearch(ui.query); renderChrome(); } } })}
     ${topRight({ basketCount: state.basket.length, basketOn: state.view.kind === 'basket', onBasket: openBasket })}
-    ${toast({ text: ui.toast, action: ui.toastAction && ui.toastAction.label, onAction: async () => { const a = ui.toastAction; const back = ui.toastReturn; ui.toastReturn = null; hideToast(); if (a) await a.fn(); if (back && document.contains(back)) back.focus(); }, onFocus: () => clearTimeout(ui.toastTimer), onBlur: () => { if (ui.toastAction) { clearTimeout(ui.toastTimer); ui.toastTimer = setTimeout(hideToast, 4000); } } })}
+    ${toast({ text: ui.toast, action: ui.toastAction && ui.toastAction.label, onAction: async () => { const a = ui.toastAction; const back = ui.toastReturn; ui.toastReturn = null; hideToast(); if (a) await a.fn(); requestAnimationFrame(() => { const target = back && back !== document.body && document.contains(back) ? back : chrome.querySelector('.card h2') || chrome.querySelector('.search input'); if (target) target.focus(); }); }, onFocus: () => clearTimeout(ui.toastTimer), onBlur: () => { if (ui.toastAction) { clearTimeout(ui.toastTimer); ui.toastTimer = setTimeout(hideToast, 4000); } } })}
     ${open ? cardView() : nothing}
     <div class="float bottomleft">${legend({ stage: ui.stage, title: stageTitle(), hasOwn: !!(ui.stage && ownForStage(ui.stage).length), onResetStage: resetStage, onTitle: state.stage.kind !== 'index' && !['product', 'group', 'basket'].includes(state.view.kind) ? openStageCard : null })}${credit({ retrieved: retrievedDate() })}</div>
     ${weekNumeral(ui.stage)}
     ${timeline({ stage: ui.stage, width: ui.tlW, compact: ui.phone.matches || innerHeight < 620 || innerWidth < 1100, playing: ui.playing, collapsed: tlCollapsed,
-      onExpand: () => { if (ui.phone.matches && open) ui.tlSheetOpen = true; else ui.tlOpen = true; renderChrome(); requestAnimationFrame(() => { const s = chrome.querySelector('.tl-svg'); if (s) s.focus(); applyPadding(); }); },
+      onFold: ui.phone.matches && open && ui.tlSheetOpen ? () => { ui.tlSheetOpen = false; renderChrome(); requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c) c.focus(); applyPadding(); }); } : null,
+      onExpand: () => { if (ui.phone.matches && open) { ui.tlSheetOpen = true; document.body.classList.remove('sheet-full'); } else ui.tlOpen = true; renderChrome(); requestAnimationFrame(() => { const s = chrome.querySelector('.tl-svg'); if (s) s.focus(); applyPadding(); }); },
       onWeek: (w) => { stopPlay(); ui.announceWeek = true; setWeek(w); },
       // on the index, "Reciente" also folds the strip back into its chip
-      onLive: () => { stopPlay(); ui.announceWeek = true; if (ui.phone.matches && open) ui.tlSheetOpen = false; if (ui.stage && ui.stage.kind === 'index') { ui.tlOpen = false; requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c && ui.keyboard) c.focus(); applyPadding(); }); } if (state.week) setWeek(null); else renderChrome(); },
+      onLive: () => { stopPlay(); ui.announceWeek = true; if (ui.phone.matches && open && ui.tlSheetOpen) { ui.tlSheetOpen = false; requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c && ui.keyboard) c.focus(); applyPadding(); }); } if (ui.stage && ui.stage.kind === 'index') { ui.tlOpen = false; requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c && ui.keyboard) c.focus(); applyPadding(); }); } if (state.week) setWeek(null); else renderChrome(); },
       onPlay: togglePlay, onStep: (d) => { ui.announceWeek = true; stepWeek(d); } })}
     ${bottomRight({ settingsOn: state.view.kind === 'settings', onSettings: openSettings, onReset: () => { map.reset(); ui.moved = false; renderChrome(); requestAnimationFrame(() => { const s = chrome.querySelector('.settings-btn'); if (s) s.focus(); }); }, moved: ui.moved })}
   `;
@@ -622,15 +640,21 @@ async function boot() {
     if (id) announce(tooltipText(state.byLoc.get(id), ui.locValues && ui.locValues.get(id), ui.stage, state.byStore, state.byProduct));
   });
   map.onClick((id) => {
+    ui.tapShield = performance.now();
+    if (typeof id === 'string' && id.startsWith('tie:')) { openStageCard(); return; }
     const loc = state.byLoc.get(id); if (!loc) return;
     const best = ui.locValues && ui.locValues.get(id);
     openStore((best && best.sid) || loc.stores[0], 'map');
   });
+  // a tap opens a card on pointerup; the browser's click then lands wherever the finger is, on chrome
+  // that has just moved there (the stage reset, a card's row): swallow that one click
+  chrome.addEventListener('click', (e) => { if (ui.tapShield && performance.now() - ui.tapShield < 450) { e.preventDefault(); e.stopPropagation(); } ui.tapShield = 0; }, true);
   map.onBackground(() => { if (ui.query) { ui.query = ''; ui.results = null; } if (state.view.kind !== 'city') closeCard(); else renderChrome(); });
   // the reader moved the map (a drag or a wheel, not a tap): a new subject then keeps their view
-  map.onMove(() => { const moved = !map.isAtFit(); if (!moved) ui.readerMoved = false; else if (ui.pointerHeld) ui.readerMoved = true; if (moved !== ui.moved) { ui.moved = moved; renderChrome(); } });
-  stageHost.addEventListener('pointerdown', () => { ui.pointerHeld = true; }, { passive: true });
-  window.addEventListener('pointerup', () => { ui.pointerHeld = false; }, { passive: true });
+  map.onMove(() => { const moved = !map.isAtFit(); if (!moved) ui.readerMoved = false; if (moved !== ui.moved) { ui.moved = moved; renderChrome(); } });
+  stageHost.addEventListener('pointerdown', (e) => { ui.pressAt = [e.clientX, e.clientY]; }, { passive: true });
+  window.addEventListener('pointerup', (e) => { if (ui.pressAt && Math.hypot(e.clientX - ui.pressAt[0], e.clientY - ui.pressAt[1]) > 60) ui.readerMoved = true; ui.pressAt = null; }, { passive: true });
+  stageHost.addEventListener('dblclick', () => { ui.readerMoved = true; });
   stageHost.addEventListener('wheel', () => { ui.readerMoved = true; }, { passive: true });
   stageHost.addEventListener('keydown', (e) => { if (['+', '-', '=', '_'].includes(e.key)) ui.readerMoved = true; });
   veil.classList.add('off');
@@ -670,8 +694,12 @@ async function boot() {
       const wasOpen = !!chrome.querySelector('.card');
       const ae0 = document.activeElement;
       if (!wasOpen && state.view.kind !== 'city') ui.opener = ui.opener || (ae0 && ae0 !== document.body ? ae0 : null);
-      // the phone sheet opens at its normal height for every new card
+      // the phone sheet opens at its normal height for every new card (peek on short phones); a map
+      // squeezed by a full sheet is refitted unless the reader moved it
+      const wasFull = document.body.classList.contains('sheet-full');
       document.body.classList.remove('sheet-full');
+      document.body.classList.toggle('sheet-peek', ui.phone.matches && innerHeight < 700);
+      if (wasFull && !ui.readerMoved) requestAnimationFrame(() => requestAnimationFrame(() => map.reset()));
       ui.side = cardSide(); ui.showAll = false; ui.storeFilter = '';
       if (state.view.kind === 'city') ui.tlSheetOpen = false;
       ui.entering = motionOn(); renderChrome();
@@ -719,7 +747,7 @@ async function boot() {
     const ae = document.activeElement;
     const inInput = ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName);
     if (e.key === 'Escape') {
-      if (inInput) { const emptySearch = ae.matches('.search input') && !ae.value; ae.blur(); if (!emptySearch) return; }
+      if (inInput) { const emptySearch = ae.matches('.search input') && !ae.value; if (!emptySearch) { ae.blur(); return; } clearTimeout(ui.announceTimer); }
       if (state.view.kind !== 'city') closeCard();
       else if (ui.playing) stopPlay();
       else if (state.week) setWeek(null);
@@ -743,10 +771,12 @@ async function boot() {
     if (!sheetDrag) return;
     const dy = e.clientY - sheetDrag.y, b = document.body.classList;
     const grip = sheetDrag.grip; sheetDrag = null;
-    if (dy < -24 || (grip && Math.abs(dy) < 6 && !b.contains('sheet-full'))) { b.add('sheet-full'); b.remove('sheet-peek'); }
+    if (dy < -24 || (grip && Math.abs(dy) < 6 && !b.contains('sheet-full'))) { b.add('sheet-full'); b.remove('sheet-peek'); ui.tlSheetOpen = false; renderChrome(); }
     else if (dy > 24 || (grip && Math.abs(dy) < 6)) { if (b.contains('sheet-full')) b.remove('sheet-full'); else b.add('sheet-peek'); }
     else return;
-    setTimeout(() => applyPadding(true), 320);
+    // the gesture's click must not reach the map that now lies under the finger
+    ui.tapShield = performance.now();
+    setTimeout(() => { applyPadding(true); if (!ui.readerMoved) map.reset(); }, 320);
   });
   if (ui.phone.matches && innerHeight < 700) document.body.classList.add('sheet-peek');
   window.addEventListener('offline', () => showToast(t('offline'), 4000));

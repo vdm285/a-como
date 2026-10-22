@@ -186,7 +186,10 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 .tl-note.ref { fill: var(--accent); fill-opacity: 0.8; }
 .tl-peak { fill: var(--ink-2); }
 .tl-thin { fill: var(--ink-3); opacity: 0.7; }
-.strip-dot.far { stroke: var(--own); stroke-width: 1.4; }
+.tl-solo { fill: var(--ink-2); }
+.rank .nm .s2 { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#stage .dot.hatch.sel { opacity: 1; }
+.strip-dot.far { stroke: var(--ink); stroke-width: 1.2; stroke-dasharray: 1.5 1.5; }
 .search .item .tag.old { color: var(--own); border-color: rgba(242, 193, 78, 0.4); }
 .tl-cursor { stroke: var(--accent); stroke-width: 1.5; }
 .tl-knob { fill: var(--accent); stroke: var(--stage); stroke-width: 2; }
@@ -297,7 +300,7 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 
 /* the chain race in the basket card: rows glide when the order changes; dots never stretch */
 .race { position: relative; margin-top: 12px; }
-.race-row { position: absolute; left: 0; right: 0; top: 0; height: 26px; display: grid; grid-template-columns: 96px minmax(0, 1fr) 124px; gap: 10px; align-items: center; transition: transform 520ms var(--ease); }
+.race-row { position: absolute; left: 0; right: 0; top: 0; height: 26px; display: grid; grid-template-columns: 112px minmax(0, 1fr) 112px; gap: 10px; align-items: center; transition: transform 520ms var(--ease); }
 .race-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .race-track { position: relative; height: 10px; margin: 0 5px; }
 .race-track::before { content: ''; position: absolute; left: -5px; right: -5px; top: 4px; height: 2px; border-radius: 1px; background: rgba(255, 255, 255, 0.07); }
@@ -305,7 +308,7 @@ body.tl-stack .timeline { left: calc(14px + var(--sal)); transform: none; width:
 .race-dot { position: absolute; top: 5px; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--stage); transition: left 520ms var(--ease); }
 .race-val { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .race-val small { color: var(--ink-3); font-weight: 500; }
-.race-axis { position: absolute; left: 106px; right: 134px; display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.race-axis { position: absolute; left: 122px; right: 122px; display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 
 /* sparkline */
 .spark { width: 100%; height: 64px; display: block; cursor: pointer; }
@@ -409,6 +412,7 @@ body.tl-stack .numeral .nwhat, body.tl-stack .numeral .nref { display: none; }
   .numeral .nbig small { font-size: 13px; }
   .numeral .nsub { margin-top: 0; font-size: 11.5px; }
   .numeral .nwhat, .numeral .nref { display: none; }
+  body.card-left .numeral { left: calc(12px + var(--sal)); }
 
   /* the sheet: drag its head (or tap the grip) for more list or more map */
   body.sheet-full { --sheet-h: 86dvh; }
@@ -416,7 +420,7 @@ body.tl-stack .numeral .nwhat, body.tl-stack .numeral .nref { display: none; }
   .card { left: 0 !important; right: 0 !important; top: auto; bottom: 0; width: auto; height: var(--sheet-h); border-radius: var(--radius) var(--radius) 0 0; border-bottom: 0; transition: height 280ms var(--ease), transform 380ms var(--ease), opacity 300ms var(--ease); }
   .card.enter { transform: translateY(24px); }
   .card .head { padding-top: 18px; touch-action: none; }
-  .card .grip { display: block; position: absolute; top: 0; left: 50%; width: 72px; height: 18px; margin-left: -36px; cursor: grab; }
+  .card .grip { display: block; position: absolute; top: 0; left: 50%; width: 88px; height: 26px; margin-left: -44px; cursor: grab; }
   .card .grip::before { content: ''; position: absolute; left: 18px; right: 18px; top: 7px; height: 4px; border-radius: 2px; background: var(--line-2); }
   .card .body { padding-bottom: calc(16px + var(--sab)); }
   .card .x { width: 44px; height: 44px; }
@@ -443,7 +447,9 @@ body.tl-stack .numeral .nwhat, body.tl-stack .numeral .nref { display: none; }
   .bottomright { bottom: calc(10px + var(--sab)); right: calc(10px + var(--sar)); }
   body.card-left .bottomleft, body.card-right .bottomleft { left: calc(10px + var(--sal)); right: auto; }
   body.card-left .bottomright, body.card-right .bottomright { right: calc(10px + var(--sar)); left: auto; }
-  body.sheet-full .bottomleft, body.sheet-full .numeral { display: none; }
+  body.sheet-full .bottomleft, body.sheet-full .numeral, body.sheet-full .bottomright { display: none; }
+  body.sheet-full .toast { top: auto; bottom: calc(16px + var(--sab)); }
+  .toast-btn { min-height: 34px; padding: 6px 12px; }
   .legend { width: min(300px, calc(100vw - 76px)); padding: 8px 12px; }
   .legend .lx { width: 40px; height: 40px; margin: -8px -8px -8px 0; }
   .credit { max-width: calc(100vw - 80px); font-size: 11px; }

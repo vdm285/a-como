@@ -127,10 +127,13 @@ export function trendText(stage) {
   if (!stage || !stage.curve || !stage.curve.rows || stage.curve.kind === 'visits' || stage.curve.kind === 'basket') return '';
   const rows = stage.curve.rows.filter((r) => r[1] != null && (r[4] ?? MIN_N) >= MIN_N && !stage.partial.has(r[0]));
   if (rows.length < 4) return '';
-  const hi = rows.reduce((a, b) => (b[1] > a[1] ? b : a)), lo = rows.reduce((a, b) => (b[1] < a[1] ? b : a));
-  if (!(lo[1] > 0) || hi[1] / lo[1] - 1 < 0.1) return '';
+  const vals = rows.map((r) => r[1]);
+  const hiV = Math.max(...vals), loV = Math.min(...vals);
+  if (!(loV > 0) || hiV / loV - 1 < 0.1) return '';
   const unit = stage.kind === 'group' && stage.unit ? `/${unitName(stage.unit, true)}` : '';
-  return t('trendLine', { since: fdate(rows[0][0], 'monthYear'), hi: money(hi[1]) + unit, hiDate: fdate(hi[0], true), lo: money(lo[1]) + unit, loDate: fdate(lo[0], true) });
+  // a value that holds for several weeks is dated to its latest week, with the count
+  const point = (v) => { const at = rows.filter((r) => Math.abs(r[1] - v) < 0.005); const last = at[at.length - 1][0]; return at.length > 1 ? t('trendPointMany', { price: money(v) + unit, n: at.length, date: fdate(last, true) }) : t('trendPoint', { price: money(v) + unit, date: fdate(last, true) }); };
+  return t('trendLine', { since: fdate(rows[0][0], 'monthYear'), hi: point(hiV), lo: point(loV) });
 }
 
 // ---------------------------------------------------------------- timeline
@@ -144,7 +147,7 @@ function monthLabel(iso, withYear) {
   return getLang() === 'en' ? `${m} '${iso.slice(2, 4)}` : `${m} ${iso.slice(0, 4)}`;
 }
 
-export function timeline({ stage, width, compact, playing, collapsed, onWeek, onLive, onPlay, onStep, onExpand }) {
+export function timeline({ stage, width, compact, playing, collapsed, onWeek, onLive, onPlay, onStep, onExpand, onFold }) {
   if (!stage || !stage.weeks || stage.weeks.length < 2) return nothing;
   if (collapsed) {
     return html`<div class="float timeline collapsed">${(() => { const chipText = stage.week ? t('week', { date: fdate(stage.week) }) : stage.weekSpan ? t('indexSpan', { span: fspan(stage.weekSpan[0], stage.weekSpan[1]) }) : t('recentSpan', { span: fspan(stage.win.from, stage.win.to, true) }); return html`<button class="tl-chip" @click=${onExpand} aria-label=${`${chipText}, ${t('timelineCollapsed')}`}>${I.clock()}<span>${chipText}</span>${I.chevronR()}</button>`; })()}</div>`;
@@ -163,7 +166,7 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
   const cx = curIdx != null && curIdx >= 0 ? xAt(curIdx) : null;
   const unit = stage.kind === 'group' && stage.unit ? `/${unitName(stage.unit, true)}` : '';
   const neverComplete = stage.kind === 'basket' && stage.anyComplete === false;
-  const emptyNow = stage.kind === 'basket' && stage.ranking && !stage.ranking.completeCount && !neverComplete;
+  const emptyNow = stage.kind === 'basket' && stage.weekIdx != null && stage.ranking && !stage.ranking.completeCount && !neverComplete;
   let curve = nothing, notes = nothing;
   if (stage.curve && stage.curve.rows && !neverComplete) {
     const byWeek = new Map(stage.curve.rows.map((r) => [r[0], r]));
@@ -176,8 +179,9 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
       const rows = axis.map((w) => byWeek.get(w) || null);
       // the scale follows the median line and the reference; the min–max band is clipped to it,
       // so one store's spike never flattens the line the reader is meant to see
-      const meds = rows.filter((r) => r && r[1] != null).map((r) => r[1]);
-      if (stage.ref != null) meds.push(stage.ref);
+      // the scale follows the solid weeks (3 stores) and the reference: one store's spike never sets it
+      const meds = rows.filter((r) => r && r[1] != null && (r[4] ?? MIN_N) >= MIN_N).map((r) => r[1]);
+      if (stage.ref != null && !stage.tooFew) meds.push(stage.ref);
       if (meds.length > 1) {
         let lo = Math.min(...meds), hi = Math.max(...meds);
         const pad = (hi - lo) * 0.18 || Math.max(0.5, hi * 0.05);
@@ -187,14 +191,23 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
         const pts = rows.map((r, i) => (solidRow(r) ? [i, r] : null)).filter(Boolean);
         const thin = rows.map((r, i) => (r && r[1] != null && !solidRow(r) ? [i, r] : null)).filter(Boolean);
         // runs of consecutive solid weeks: a thin week breaks the line instead of pulling it
+        // a thin week breaks the line; a week with no data at all does not (the line simply spans it)
         const runs = [];
-        rows.forEach((r, i) => { if (solidRow(r)) { if (!runs.length || runs[runs.length - 1].last !== i - 1) runs.push({ list: [], last: i }); const run = runs[runs.length - 1]; run.list.push([i, r]); run.last = i; } });
+        let thinSince = false;
+        rows.forEach((r, i) => {
+          if (r && r[1] != null && !solidRow(r)) { thinSince = true; return; }
+          if (!solidRow(r)) return;
+          if (!runs.length || thinSince) runs.push({ list: [] });
+          runs[runs.length - 1].list.push([i, r]); thinSince = false;
+        });
         const path = (list, k) => list.map(([i, r], j) => `${j ? 'L' : 'M'}${xAt(i).toFixed(1)},${y(r[k] ?? r[1]).toFixed(1)}`).join('');
-        const line = runs.map((run) => path(run.list, 1)).join('');
+        const line = runs.filter((run) => run.list.length > 1).map((run) => path(run.list, 1)).join('');
+        const solos = runs.filter((run) => run.list.length === 1).map((run) => run.list[0]);
+        const clampY = (v) => Math.max(yTop - 2, Math.min(yBot, y(v)));
         const band = runs.filter((run) => run.list.length > 1).map((run) => `${path(run.list, 3)}${[...run.list].reverse().map(([i, r]) => `L${xAt(i).toFixed(1)},${y(r[2] ?? r[1]).toFixed(1)}`).join('')}Z`).join('');
         const refY = stage.ref != null && !stage.tooFew ? y(stage.ref) : null;
         const clipId = `tlc-${stage.kind}`;
-        curve = svg`<defs><clipPath id=${clipId}><rect x=${x0} y=${yTop - 3} width=${x1 - x0} height=${yBot - yTop + 3}></rect></clipPath></defs><path class="tl-band" clip-path=${`url(#${clipId})`} d=${band}></path><path class="tl-line" d=${line}></path>${thin.map(([i, r]) => svg`<circle class="tl-thin" cx=${xAt(i)} cy=${y(r[1])} r="1.6"></circle>`)}${refY != null ? svg`<line class="tl-ref" x1=${x0} x2=${x1} y1=${refY} y2=${refY}></line>` : nothing}`;
+        curve = svg`<defs><clipPath id=${clipId}><rect x=${x0} y=${yTop - 3} width=${x1 - x0} height=${yBot - yTop + 3}></rect></clipPath></defs><path class="tl-band" clip-path=${`url(#${clipId})`} d=${band}></path><path class="tl-line" d=${line}></path>${solos.map(([i, r]) => svg`<circle class="tl-solo" cx=${xAt(i)} cy=${y(r[1])} r="2.2"></circle>`)}${thin.map(([i, r]) => svg`<circle class="tl-thin" cx=${xAt(i)} cy=${clampY(r[1])} r="1.6"></circle>`)}${refY != null ? svg`<line class="tl-ref" x1=${x0} x2=${x1} y1=${refY} y2=${refY}></line>` : nothing}`;
         if (!compact && pts.length > 3) {
           // a note goes where it fits: inside the strip and clear of the cursor, else nowhere
           const wNote = (txt) => txt.length * 5.6 + 6;
@@ -210,8 +223,9 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
           const sv = solid.map(([, r]) => r[1]);
           const typical = median(sv);
           const moves = sv.length > 3 && typical > 0 && Math.max(...sv) / Math.min(...sv) - 1 >= 0.03;
-          const standsOut = moves && Math.max(...sv) >= typical * 1.03;
-          const dipsOut = moves && !standsOut && Math.min(...sv) <= typical * 0.97;
+          const share = (v) => sv.filter((x) => Math.abs(x - v) < 0.005).length / sv.length;
+          const standsOut = moves && Math.max(...sv) >= typical * 1.03 && share(Math.max(...sv)) < 0.2;
+          const dipsOut = moves && !standsOut && Math.min(...sv) <= typical * 0.97 && share(Math.min(...sv)) < 0.2;
           let peakY = null;
           if (standsOut || dipsOut) {
             const peak = solid.reduce((p, q) => (standsOut ? q[1][1] > p[1][1] : q[1][1] < p[1][1]) ? q : p);
@@ -224,7 +238,7 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
             }
           }
           if (refY != null && (peakY == null || Math.abs(refY - 4 - peakY) > 12)) {
-            const txt = `${t('recentWord')} ${money(stage.ref)}${unit}`;
+            const txt = `${stage.refKind === 'week' ? t('weekWord') : t('recentWord')} ${money(stage.ref)}${unit}`;
             const pos = place(x1, wNote(txt), 'end');
             if (pos) items.push(svg`<text class="tl-note ref" x=${pos.tx} y=${refY - 4} text-anchor=${pos.an}>${txt}</text>`);
           }
@@ -274,6 +288,7 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
         ${partialNow ? html`<span class="tl-pill">${t('partialShort')}</span>` : nothing}
         <button class="step" @click=${() => onStep(1)} ?disabled=${live || neverComplete} aria-label=${t('nextWeek')} title=${t('nextWeek')}>${I.chevronR()}</button>
         ${caption ? html`<span class="tl-cap">${caption}</span>` : nothing}
+        ${onFold ? html`<button class="step fold" @click=${onFold} aria-label=${t('foldTimeline')} title=${t('foldTimeline')}>${I.x()}</button>` : nothing}
       </div>
       <div class="tl-row">
         <svg class="tl-svg" width=${W} height=${H} viewBox="0 0 ${W} ${H}" role="slider" tabindex="0"

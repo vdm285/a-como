@@ -43,7 +43,7 @@ function heroOf(rows, key, nameOf, { thinKey = 'storesWithPrice', dateOf = (r) =
   const ds = tied.flatMap((r) => dateOf(r)).filter(Boolean).sort();
   const dateText = !ds.length ? '' : ds[0] === ds[ds.length - 1] ? fdate(ds[0]) : fspan(ds[0], ds[ds.length - 1]);
   let line;
-  if (rows.length < MIN_N) line = t(thinKey, { n: rows.length });
+  if (fair.length < MIN_N) line = t(thinKey, { n: fair.length, name: nameOf(best) });
   else if (tied.length > 1) line = t('tiedCheapest', { n: tied.length });
   else line = `${t('cheapestHere')} · ${nameOf(best)}`;
   return { best, line, dateText };
@@ -55,7 +55,7 @@ export function branchName(st) {
   const chain = String((st && st.chain) || '');
   if (chain && fold(name).startsWith(`${fold(chain)} `)) {
     const rest = name.slice(chain.length).trim();
-    if (rest.length >= 2 && !/^\(?\d+\)?$/.test(rest)) return rest;
+    if (rest.length >= 2 && !/^\(?\d+\)?$/.test(rest) && !rest.startsWith('(')) return rest;
   }
   return name;
 }
@@ -141,7 +141,7 @@ export function priceStrip({ rows, ref, refLabel, ownPrice, onPick, selected, un
   return svg`<svg class="strip" viewBox="0 0 ${W} ${H}" role="img" aria-label=${t('stripAria')}>
     ${kinds.map((k, i) => svg`<text class="strip-k" x=${padL} y=${i * rowH + 10}>${t(`kind_${k}`)} · ${counts.get(k)}</text><line class="strip-row" x1=${padL} x2=${W - padR} y1=${lineY(i)} y2=${lineY(i)}></line>`)}
     ${ref != null && !flat ? svg`<line class="strip-ref" x1=${x(ref)} x2=${x(ref)} y1="12" y2=${H - axisH + 2}></line>` : nothing}
-    ${placed.map((p) => svg`<circle class="strip-dot ${selected === p.sid ? 'sel' : ''} ${p.far ? 'far' : ''}" cx=${p.cx} cy=${lineY(p.row) + OFF[p.k] * STEP} r=${R} style="fill:${p.color}" @click=${() => onPick(p.sid)}><title>${p.name} · ${money(p.value)}${unitSuffix} · ${fdate(p.date)}</title></circle>`)}
+    ${placed.map((p) => svg`<circle class="strip-dot ${selected === p.sid ? 'sel' : ''} ${p.far ? 'far' : ''}" cx=${p.cx} cy=${lineY(p.row) + OFF[p.k] * STEP} r=${R} style="fill:${p.color}" @click=${() => onPick(p.sid)}><title>${p.name} · ${money(p.value)}${unitSuffix} · ${fdate(p.date)}${p.far ? ` · ${t('outlier')}` : ''}</title></circle>`)}
     ${ownPrice != null ? svg`<line class="strip-own" x1=${x(ownPrice)} x2=${x(ownPrice)} y1="12" y2=${H - axisH + 2}></line>` : nothing}
     ${axisLabels.map((a) => svg`<text class="strip-ax ${a.cls || ''}" x=${a.x} y=${H - 3} text-anchor=${a.anchor}>${a.text}</text>`)}
   </svg>`;
@@ -260,7 +260,7 @@ export function productCard(c) {
   const ownByStore = new Map(); for (const o of ownHere) if (!ownByStore.has(o.storeId)) ownByStore.set(o.storeId, o);
   const latestOwn = ownHere[0];
   const when = mine ? (weekMode ? t('week', { date: fdate(mine.week) }) : t('recentSpan', { span: fspan(win.from, win.to) })) : '';
-  const hero = heroOf(ranked, 'price', (r) => r.s.name);
+  const hero = heroOf(ranked, 'price', (r) => `${r.s.name}${r.s.unplaced ? ` (${t('noDot')})` : ''}`);
   const best = hero && hero.best;
   const sizeInPres = summary.size && summary.presentation && fold(summary.presentation).startsWith(fold(sizeLabel(summary.size, getLang())).split(' ')[0]);
   return html`<div class="card ${c.side} ${c.entering ? 'enter' : ''}" role="dialog" aria-labelledby="card-title">
@@ -321,13 +321,13 @@ export function groupCard(c) {
   ranked.sort((a, b) => a.value - b.value);
   const limit = showAll ? ranked.length : 10;
   const pLimit = showAll ? sized.length : 12;
-  const hero = heroOf(ranked, 'value', (r) => r.s.name);
+  const hero = heroOf(ranked, 'value', (r) => `${r.s.name}${r.s.unplaced ? ` (${t('noDot')})` : ''}`);
   const best = hero && hero.best;
   const bestP = best && byProduct.get(best.pid);
   const excluded = (mine && mine.excluded) || new Map();
   const weekMode = mine && mine.weekIdx != null;
   const memberRow = (p, per, label) => rowLink(`#p/${p.id}`, () => c.onOpenProduct(p.id), `${p.brand || p.name}, ${p.presentation || ''}`, html`
-    <span class="sw" style="background:${per != null && mine && mine.ref && okChip ? swColor(deviation(per, mine.ref)) : 'transparent'}"></span>
+    <span class="sw ${excluded.has(p.id) ? 'empty' : ''}" style="background:${per != null && mine && mine.ref && okChip && !excluded.has(p.id) ? swColor(deviation(per, mine.ref)) : 'transparent'}"></span>
     <div class="nm"><div class="n">${p.brand || p.presentation || p.name}</div><div class="s">${p.brand ? `${p.presentation || ''} · ` : ''}${p.stores ? t('storesRecentShort', { n: p.stores }) : t('noRecentShort')}${excluded.has(p.id) ? html` · <span class="out">${t(excluded.get(p.id) === 'size' ? 'memberOutSize' : 'memberOutFew')}</span>` : nothing}</div></div>
     <div class="pr">${per != null ? html`<div class="p num">${money(per)}<small class="pu">/${label}</small></div>${Math.abs(per - p.median) > 0.005 ? html`<div class="u">${money(p.median)} ${t('label')}</div>` : nothing}` : p.median != null ? html`<div class="p num">${money(p.median)}</div><div class="u">${t('label')}</div>` : nothing}</div>`);
   return html`<div class="card ${c.side} ${c.entering ? 'enter' : ''}" role="dialog" aria-labelledby="card-title">
@@ -355,7 +355,7 @@ export function groupCard(c) {
         <h3>${t('ranking')} · ${t('perUnit', { unit: unitName(unit) })}${weekMode && okChip ? html` · ${t('vsRecentShort')}` : nothing}</h3>
         ${!mine ? html`<div class="muted">${t('loadingCard')}</div>` : ranked.length === 0 ? html`<div class="note">${t('noRecentPrice')}</div>` : html`<ul class="rank">${ranked.slice(0, limit).map((r) => { const p = byProduct.get(r.pid); return rowLink(`#t/${r.sid}`, () => c.onOpenStore(r.sid), `${r.s.name}, ${money(r.value)} / ${unitName(unit)}`, html`
           <span class="sw" style="background:${r.color}"></span>
-          <div class="nm"><div class="n">${branchName(r.s)}</div><div class="s">${r.s.municipio ? `${r.s.municipio} · ` : ''}${p ? `${p.brand || p.name} · ${p.presentation || ''} · ${money(r.price)}` : ''}</div></div>
+          <div class="nm"><div class="n">${branchName(r.s)}</div><div class="s">${r.s.chain}${r.s.municipio ? ` · ${r.s.municipio}` : ''}</div>${p ? html`<div class="s2">${money(r.price)} · ${p.brand || p.name} · ${p.presentation || ''}</div>` : nothing}</div>
           <div class="pr"><div class="p num">${money(r.value)}<small class="pu">/${uShort}</small></div><div class="u">${fdate(r.date, true)}${okChip ? html` · ${chipOrFlag(r.dev, true, r.far, mine.farKind)}` : nothing}</div></div>`, c.selectedStore === r.sid); })}</ul>
         ${ranked.length > limit ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: ranked.length - limit })}</button>` : nothing}`}
         ${sourceLine(c.retrieved, '')}
@@ -416,10 +416,10 @@ export function basketCard(c) {
       ${items.length === 0 ? html`<section><div class="note" id="basket-empty" tabindex="-1">${t('basketEmpty')}</div></section>
       ${c.pacicGroups && c.pacicGroups.length ? html`<section><h3>${t('canasta')} · PACIC</h3><div class="note" style="margin-bottom:8px">${t('pacicHint', { n: c.pacicGroups.length })}</div><div class="chips">${c.pacicGroups.map((g) => html`<button class="chip" @click=${() => c.onOpenGroup(g.id)}>${g.name}</button>`)}</div></section>` : nothing}` : html`
       <section>
-        <h3>${t('rankingBasket')} · ${when}${weekMode && okChip && stage.refKind === 'recent' ? html` · ${t('vsRecentShort')}` : nothing}</h3>
+        <h3>${t('rankingBasket')} · ${when}${weekMode && okChip && stage.refKind === 'recent' && ranking && ranking.completeCount > 0 ? html` · ${t('vsRecentShort')}` : nothing}</h3>
         ${best ? html`<div class="hero"><span class="big num">${money(best.total)}</span></div>
           <div class="unitline">${bHero.line}${bHero.dateText ? ` · ${bHero.dateText}` : ''}</div>
-          ${ranking.base != null && ranking.completeCount >= MIN_N && ranking.base > best.total ? html`<div class="refline">${t(weekMode ? 'savingsMedianWeek' : 'savingsMedian', { amount: money(ranking.base - best.total), n: ranking.completeCount, median: money(ranking.base) })}</div>` : nothing}` : html`<div class="note">${onlyComplete ? t('noCompleteStore') : t('noCompleteStoreAll')}</div>`}
+          ${ranking.base != null && ranking.completeCount >= MIN_N && ranking.base > best.total ? html`<div class="refline">${t(weekMode ? 'savingsMedianWeek' : 'savingsMedian', { amount: money(ranking.base - best.total), n: ranking.completeCount, median: money(ranking.base) })}</div>` : nothing}` : !ranking ? html`<div class="muted">${t('loadingCard')}</div>` : html`<div class="note">${onlyComplete ? t('noCompleteStore') : t('noCompleteStoreAll')}</div>`}
         ${chainRace(chainList)}
         <div class="chips" style="margin:10px 0 8px"><button class="chip ${!onlyComplete ? 'on' : ''}" aria-pressed=${!onlyComplete ? 'true' : 'false'} @click=${() => c.onOnlyComplete(false)}>${t('allStores')}</button><button class="chip ${onlyComplete ? 'on' : ''}" aria-pressed=${onlyComplete ? 'true' : 'false'} @click=${() => c.onOnlyComplete(true)}>${t('onlyComplete')}</button></div>
         ${!ranking ? html`<div class="muted">${t('loadingCard')}</div>` : list.length === 0 ? html`<div class="note">${t('noCompleteStore')}</div>` : html`<ul class="rank">${list.slice(0, limit).map((r) => { const s = byStore.get(r.storeId); return rowLink(`#t/${r.storeId}`, () => c.onOpenStore(r.storeId), `${s ? s.name : r.storeId}, ${money(r.total)}`, html`
@@ -431,7 +431,7 @@ export function basketCard(c) {
       </section>
       <section>
         <h3>${t('yourList')}</h3>
-        <ul class="bitems">${repeat(items, (it) => it.id, (it) => { const p = byProduct.get(it.id); const name = p ? p.name + (p.brand ? ' · ' + p.brand : '') : it.id; return html`<li>
+        <ul class="bitems">${repeat(items, (it) => it.id, (it) => { const p = byProduct.get(it.id); const name = p ? p.name + (p.brand ? ' · ' + p.brand : '') : c.catalogReady ? it.id : t('loadingShort'); return html`<li>
           <div><a class="n linkish" href=${`#p/${it.id}`} @click=${(e) => { e.preventDefault(); c.onOpenProduct(it.id); }}>${name}</a><div class="s">${p && p.median != null ? html`<b class="num nowrap">${money(p.median)}</b> · ` : nothing}${p ? (p.presentation || '') : ''}${p && p.median != null ? ` · ${t('storesRecentShort', { n: p.stores })}` : p ? ` · ${t('noRecentShort')}` : ''}</div></div>
           <div class="qty"><button @click=${() => c.onQty(it.id, it.qty - 1)} aria-label=${`${t('less')}: ${name}`}>−</button><span class="num" aria-label=${t('qty')}>${it.qty}</span><button @click=${() => c.onQty(it.id, it.qty + 1)} ?disabled=${it.qty >= 99} aria-label=${`${t('more1')}: ${name}`}>+</button></div>
           <button class="rm" @click=${() => c.onQty(it.id, 0)} title=${t('removeFromBasket')} aria-label=${`${t('removeFromBasket')}: ${name}`}>${I.x()}</button>

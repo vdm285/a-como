@@ -210,7 +210,9 @@ export async function computeStage(stage, week) {
     const medSize = median(inDim.map((p) => p.size.value));
     const excluded = new Map();
     const bySize = inDim.filter((p) => { if (medSize && (p.size.value < medSize / 3 || p.size.value > medSize * 3)) { excluded.set(p.id, 'size'); return false; } return true; });
-    let usable = bySize.filter((p) => (p.storesAll ?? p.stores ?? 0) >= MIN_N);
+    // "sold in 3 stores" counts stores with a recent price, the count the rows show (storesAll
+    // counted 20 months and let a grade sold in one store be the cheapest jitomate)
+    let usable = bySize.filter((p) => (p.stores ?? 0) >= MIN_N);
     if (usable.length) for (const p of bySize) { if (!usable.includes(p)) excluded.set(p.id, 'few'); }
     else usable = bySize; // no member reaches 3 stores: keep them all rather than compare nothing
     const usableIds = new Set(usable.map((p) => p.id));

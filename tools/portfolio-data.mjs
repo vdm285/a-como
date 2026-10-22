@@ -7,7 +7,11 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 const Q = 'public/data/qqp';
 const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
 const meta = read(`${Q}/meta.json`);
-const stores = read(`${Q}/stores.json`);
+// only stores with a position are drawn: a store whose PROFECO point is another store's is unplaced
+// by curation (unplaceStores) and has no coordinates; the demos are over the stores they can draw
+const allStores = read(`${Q}/stores.json`);
+const stores = allStores.filter((s) => s.lat != null && s.lon != null);
+if (stores.length < allStores.length) console.log(`${allStores.length - stores.length} stores without a position left out of the demos`);
 const products = read(`${Q}/products.json`).map((p) => (p.id ? p : { id: p.i, group: p.g, name: p.n, brand: p.b, presentation: p.p, size: p.z, stores: p.s, median: p.md }));
 const visits = read(`${Q}/visits.json`);
 const index = read(`${Q}/index.json`);

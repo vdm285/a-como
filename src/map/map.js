@@ -203,15 +203,40 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   }
 
   // ---- labels in screen space, collision-culled ----
-  // candidate offsets for a label, nearest the centroid first (in label-height units)
-  const LABEL_OFFSETS = [];
-  for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) LABEL_OFFSETS.push([dx, dy]);
-  LABEL_OFFSETS.sort((a, b) => Math.hypot(a[0], a[1] * 1.4) - Math.hypot(b[0], b[1] * 1.4));
-  // dots inside a screen box (any dot: a name over rings reads as fragments too)
-  function dotsIn(box, pad = 2) {
-    let n = 0;
-    for (const p of located) { if (p._x == null) continue; const dx = p._x * view.k + view.x, dy = p._y * view.k + view.y; if (dx > box[0] - pad && dx < box[2] + pad && dy > box[1] - pad && dy < box[3] + pad) n++; }
-    return n;
+  // Alcaldía names. For each zoom level (quarter-octave buckets) every alcaldía gets, once, a list
+  // of spots inside it in world space with at most two dots under the name, emptiest and nearest
+  // its centre first. Each frame only picks the first spot that is on screen and clear of the chrome
+  // and the tags: no per-frame search (it cost 13 ms a frame), no hopping while the map pans, and a
+  // name wherever part of its alcaldía shows.
+  const labelCache = new Map();
+  function labelCandidates(size) {
+    const bk = Math.round(Math.log2(Math.max(view.k, 0.05)) * 4) / 4;
+    const key = `${bk}|${size}`;
+    if (labelCache.has(key)) return labelCache.get(key);
+    const kq = Math.pow(2, bk), hW = (size + 4) / kq, padW = 2 / kq;
+    const out = labelItems.map((it) => {
+      const wW = (it.name.length * size * 0.7 + 6) / kq;
+      const bb = path.bounds(it.f);
+      // the dots near this alcaldía, found once (counting all 411 for every spot made a zoom step hitch)
+      if (!it._near) { const m = Math.max(bb[1][0] - bb[0][0], bb[1][1] - bb[0][1]) * 0.1; it._near = located.filter((p) => p._x != null && p._x > bb[0][0] - m && p._x < bb[1][0] + m && p._y > bb[0][1] - m && p._y < bb[1][1] + m); }
+      const step = Math.max(hW * 1.2, Math.max(bb[1][0] - bb[0][0], bb[1][1] - bb[0][1]) / 14);
+      const cands = [];
+      for (let y = bb[0][1] + step / 2; y < bb[1][1]; y += step) {
+        for (let x = bb[0][0] + step / 2; x < bb[1][0]; x += step) {
+          const ll = projection.invert([x, y]);
+          if (!ll || !geoContains(it.f, ll)) continue;
+          let dots = 0;
+          for (const p of it._near) { if (Math.abs(p._x - x) < wW / 2 + padW && Math.abs(p._y - y) < hW / 2 + padW) dots++; }
+          if (dots > 2) continue;
+          cands.push({ x, y, cost: dots * 3 + Math.hypot(x - it.x, y - it.y) / hW / 4 });
+        }
+      }
+      cands.sort((p, q) => p.cost - q.cost);
+      return { it, cands: cands.slice(0, 80) };
+    });
+    if (labelCache.size > 48) labelCache.clear();
+    labelCache.set(key, out);
+    return out;
   }
   function drawLabels() {
     labelsG.innerHTML = '';
@@ -220,28 +245,20 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     { const fb = frameBounds(); if ((fb[1][0] - fb[0][0]) * view.k < 200) return; }
     const placed = [...obstacles, ...placedTags];
     const size = W < 520 ? 9 : 10.5;
-    const hit = (box, b) => !(box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3]);
-    // a screen point inside the label's own alcaldía?
-    const inside = (feature, sx, sy) => { const ll = projection.invert([(sx - view.x) / view.k, (sy - view.y) / view.k]); return !!ll && geoContains(feature, ll); };
-    for (const it of labelItems) {
-      const cx = it.x * view.k + view.x, cy = it.y * view.k + view.y;
+    const hit = (box, q) => !(box[2] < q[0] || box[0] > q[2] || box[3] < q[1] || box[1] > q[3]);
+    for (const { it, cands } of labelCandidates(size)) {
       const w = it.name.length * size * 0.7 + 6, h = size + 4;
-      // the centroid first, then nearby spots inside the alcaldía, preferring the emptiest one
-      let best = null, bestCost = Infinity;
-      for (const [dx, dy] of LABEL_OFFSETS) {
-        const x = cx + dx * size * 1.6, y = cy + dy * size * 1.4;
+      for (const c of cands) {
+        const x = c.x * view.k + view.x, y = c.y * view.k + view.y;
         const box = [x - w / 2, y - h / 2, x + w / 2, y + h / 2];
         if (box[0] < 4 || box[2] > W - 4 || box[1] < 4 || box[3] > H - 4) continue;
-        if (placed.some((b) => hit(box, b))) continue;
-        if (!inside(it.f, x, y)) continue;
-        const cost = dotsIn(box) * 4 + Math.hypot(dx, dy);
-        if (cost < bestCost) { best = { x, y, box }; bestCost = cost; if (cost === 0) break; }
+        if (placed.some((q) => hit(box, q))) continue;
+        placed.push(box);
+        const t = el('text', { x, y, class: 'alc-label' }, labelsG);
+        t.style.fontSize = `${size}px`;
+        t.textContent = it.name;
+        break;
       }
-      if (!best || dotsIn(best.box) > 2) continue;
-      placed.push(best.box);
-      const t = el('text', { x: best.x, y: best.y, class: 'alc-label' }, labelsG);
-      t.style.fontSize = `${size}px`;
-      t.textContent = it.name;
     }
   }
 
@@ -280,7 +297,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       // never bury the data a tag annotates: a spot over more than two coloured dots is no spot
       if (!spot || spotCost > 2) continue;
       placed.push(spot); placedTags.push(spot);
-      const g = el('g', { class: `tag ${tg.kind || ''}`, 'data-id': tg.id, role: 'button', tabindex: '-1', 'aria-label': `${tg.text}, ${sub}` }, tagsG);
+      const g = el('g', { class: `tag ${tg.kind || ''}`, 'data-id': tg.clickId || tg.id, role: 'button', tabindex: '-1', 'aria-label': `${tg.text}, ${sub}` }, tagsG);
       const ax = spot[0] < x ? spot[2] : spot[0], ay = spot[1] < y ? spot[3] : spot[1];
       el('line', { x1: x, y1: y, x2: ax, y2: ay, class: 'tag-leader' }, g);
       el('rect', { x: spot[0], y: spot[1], width: w, height: h, rx: 8, class: 'tag-box', style: tg.color ? `stroke:${tg.color}` : null }, g);
@@ -469,8 +486,17 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     else if (k === '-' || k === '_') { e.preventDefault(); const [x, y] = active ? screenOf(active) : [W / 2, H / 2]; const r = host.getBoundingClientRect(); zoomAt(x + r.left, y + r.top, 1 / 1.6); }
     else if (k === '0') { e.preventDefault(); atFit = true; animateTo(fitView()); }
   });
-  svg.addEventListener('focus', () => { if (!active) { move(0, 1); if (!active) move(1, 0); } else setActive(active); });
-  svg.addEventListener('blur', () => { active = null; drawActive(); for (const h of handlers.active) h(null); });
+  // a tap or a click focuses the svg too: that must not start the keyboard walk (a second ring, an
+  // announcement, a pan); a keyboard focus resumes the walk where it was
+  let pointerFocus = false, lastActive = null;
+  svg.addEventListener('pointerdown', () => { pointerFocus = true; setTimeout(() => { pointerFocus = false; }, 0); }, true);
+  svg.addEventListener('focus', () => {
+    if (pointerFocus) return;
+    if (active) { setActive(active); return; }
+    if (lastActive && dotEls.has(lastActive)) { setActive(lastActive); return; }
+    move(0, 1); if (!active) move(1, 0);
+  });
+  svg.addEventListener('blur', () => { if (active) lastActive = active; active = null; drawActive(); for (const h of handlers.active) h(null); });
 
   // ---- public API ----
   const api = {
@@ -478,6 +504,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     resize() {
       W = host.clientWidth || W; H = host.clientHeight || H;
       fitProjection();
+      labelCache.clear(); for (const it of labelItems) it._near = null; // world coordinates change with the projection
       drawAll();
       if (atFit) { view = fitView(); applyView(); }
     },
