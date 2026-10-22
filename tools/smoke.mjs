@@ -155,7 +155,9 @@ try {
     await sleep(900);
     check('Enter on the map opens that store', /#t\//.test(page.url()), page.url().split('#')[1]);
     await page.goto(`${BASE}#p/jitomate-3532af`, { waitUntil: 'networkidle2' });
-    await sleep(2000);
+    // wait for the condition, not a fixed time: a cold cache after a deploy is slow
+    await page.waitForFunction(() => document.querySelectorAll('#stage .tag').length >= 3, { timeout: 15000 }).catch(() => {});
+    await sleep(400);
     const tags = await count(page, '#stage .tag');
     check('a product shows price tags', tags >= 3, tags);
     const box = await page.$eval('#stage .tag .tag-box', (e) => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }).catch(() => null);
@@ -167,6 +169,7 @@ try {
   {
     const { ctx, page } = await fresh();
     await open(page, 'p/leche-ultrapasteurizada-a3d941');
+    await page.waitForSelector('.card h2', { timeout: 15000 }).catch(() => {});
     await page.click('.search input');
     await page.type('.search input', 'hue');
     await page.keyboard.press('Escape');
