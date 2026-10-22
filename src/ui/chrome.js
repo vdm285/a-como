@@ -5,9 +5,18 @@ import { t, pct, money, fdate, fspan, unitName, getLang } from '../app/i18n.js';
 import { I } from './icons.js';
 import { divergingGradient } from '../logic/color.js';
 import { median } from '../logic/stats.js';
+import { MIN_N } from '../app/stage.js';
 
 const DEFAULT_GIRO = /supermercado|autoservicio/i;
-export const giroLabel = (s) => (s && s.giro && !DEFAULT_GIRO.test(s.giro) && s.giro !== s.chain ? s.giro : '');
+const fold6 = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 6);
+// the store type, unless it only repeats the chain ("Tortillería · Tortillerías")
+export const giroLabel = (s) => (s && s.giro && !DEFAULT_GIRO.test(s.giro) && s.giro !== s.chain && fold6(s.giro) !== fold6(s.chain) ? s.giro : '');
+// several stores on one point: "puestos" only when they are all Central de Abasto stalls
+export function nHereText(loc, byStore) {
+  const all = loc.stores.map((id) => byStore.get(id)).filter(Boolean);
+  const stalls = all.length > 0 && all.every((x) => /central de abasto/i.test(`${x.giro || ''} ${x.chain || ''}`));
+  return t(stalls ? 'nStallsHere' : 'nHere', { n: loc.stores.length });
+}
 
 export function topRight({ basketCount, basketOn, onBasket }) {
   return html`<div class="float topright">
@@ -26,8 +35,8 @@ export function bottomRight({ settingsOn, onSettings, onReset, moved }) {
 export function refText(stage) {
   if (!stage || stage.kind === 'index') return '';
   if (stage.ref == null) return '';
-  if (stage.tooFew) return t('refTooFew', { n: stage.refN });
-  const unit = stage.kind === 'group' && stage.unit ? ` / ${unitName(stage.unit)}` : '';
+  if (stage.tooFew) return t(stage.kind === 'basket' ? 'refTooFewBasket' : 'refTooFew', { n: stage.refN });
+  const unit = stage.kind === 'group' && stage.unit ? `/${unitName(stage.unit, true)}` : '';
   if (stage.refKind === 'week') return t('refWeekOnly', { ref: money(stage.ref) + unit });
   if (stage.kind === 'group') return t('refGroup', { ref: money(stage.ref) + unit, n: stage.refN });
   if (stage.kind === 'basket') return t('refBasket', { ref: money(stage.ref), n: stage.refN });
@@ -59,8 +68,9 @@ export function legend({ stage, title, hasOwn, onResetStage, onTitle }) {
   const when = index
     ? (stage.weekIdx == null ? (stage.weekSpan ? t('indexSpan', { span: fspan(stage.weekSpan[0], stage.weekSpan[1]) }) : '') : t('week', { date: fdate(stage.week) }))
     : '';
+  const noneComplete = stage.kind === 'basket' && stage.ranking && !stage.ranking.completeCount && stage.ranking.list.length > 0;
   const emptyRows = index
-    ? (stage.weekIdx == null ? [t('emptyIndexFew'), t('emptyIndexStale')] : [t('emptyIndexWeek')])
+    ? (stage.weekIdx == null ? [t('emptyIndexFew'), t('emptyIndexStale', { span: fspan(stage.win.from, stage.win.to, true) })] : [t('emptyIndexWeek')])
     : stage.kind === 'basket' ? [stage.weekIdx == null ? t('emptyBasketRecent') : t('noVisitWeek')]
     : [stage.weekIdx == null ? t('emptyPriceRecent') : t('noVisitWeek')];
   return html`<div class="legend" role="group" aria-label=${title}>
@@ -68,10 +78,10 @@ export function legend({ stage, title, hasOwn, onResetStage, onTitle }) {
       ${onTitle ? html`<button class="ltitle" @click=${onTitle} title=${t('openCard')}>${title}</button>` : html`<span class="ltitle">${title}</span>`}
       ${!index ? html`<button class="lx" title=${t('backToIndex')} aria-label=${t('backToIndex')} @click=${onResetStage}>${I.x()}</button>` : nothing}
     </div>
-    ${stage.tooFew ? nothing : html`<div class="bar" style="background:${divergingGradient()}"></div>
+    ${stage.tooFew || noneComplete ? nothing : html`<div class="bar" style="background:${divergingGradient()}"></div>
     <div class="ticks"><span>−${cap}${pctSign()} ${t('orMore')}</span><span>${t('median')}</span><span>+${cap}${pctSign()} ${t('orMore')}</span></div>
     <div class="ticks words"><span>${index ? t('storeCheaperWord') : t('cheaper')}</span><span></span><span>${index ? t('storeDearerWord') : t('dearer')}</span></div>`}
-    ${ref ? html`<div class="ref">${ref}</div>` : nothing}
+    ${noneComplete ? html`<div class="ref">${t('noneCompleteLegend')}</div>` : ref ? html`<div class="ref">${ref}</div>` : nothing}
     ${index ? html`<div class="ref">${t('indexWhat')}</div>` : nothing}
     ${emptyRows.map((r) => html`<div class="row"><span class="sw empty"></span><span>${r}</span></div>`)}
     ${stage.kind === 'basket' ? html`<div class="row"><span class="sw hatch"></span><span>${t('missingLegend')}</span></div>` : nothing}
@@ -87,27 +97,33 @@ export function credit({ retrieved }) {
 }
 
 // ---------------------------------------------------------------- the week numeral
-// While a week is on stage, its city median in large type over the map: the magnitude reads even
-// when the colours saturate.
+// The week's own value (its city median, its median cheapest per unit, its median basket total),
+// said only when at least 3 stores give it: a "median" of one or two stores is their own price.
+export function weekValue(stage) {
+  if (!stage || stage.weekIdx == null || stage.kind === 'index') return null;
+  if (stage.kind === 'product') return stage.weekN >= MIN_N && stage.weekMed != null ? { value: stage.weekMed, n: stage.weekN, what: t('cityMedian') } : null;
+  if (stage.kind === 'group') return stage.weekN >= MIN_N && stage.weekRef != null ? { value: stage.weekRef, n: stage.weekN, what: t('groupMedianWhat') } : null;
+  if (stage.kind === 'basket') return stage.weekN >= MIN_N && stage.weekMed != null ? { value: stage.weekMed, n: stage.weekN, what: t('basketMedianWhat') } : null;
+  return null;
+}
+// While a week is on stage, that value in large type over the map: the magnitude reads even when
+// the colours saturate.
 export function weekNumeral(stage) {
-  if (!stage || stage.weekIdx == null || stage.kind === 'index') return nothing;
-  let value = null, what = '';
-  if (stage.kind === 'product') { value = median([...stage.values.values()].filter((v) => v.value != null).map((v) => v.value)); what = t('cityMedian'); }
-  else if (stage.kind === 'group') { value = stage.weekRef; what = t('groupMedianWhat'); }
-  else if (stage.kind === 'basket') { value = stage.ranking ? stage.ranking.base : null; what = t('basketMedianWhat'); }
-  if (value == null) return nothing;
-  const unit = stage.kind === 'group' && stage.unit ? ` / ${unitName(stage.unit, true)}` : '';
+  const wv = weekValue(stage);
+  if (!wv) return nothing;
+  const unit = stage.kind === 'group' && stage.unit ? `/${unitName(stage.unit, true)}` : '';
   return html`<div class="float numeral" aria-hidden="true">
-    <div class="nbig num">${money(value)}<small>${unit}</small></div>
-    <div class="nsub">${what} · ${t('weekOf', { date: fdate(stage.week) })}${stage.partial.has(stage.week) ? ` · ${t('partialWeek')}` : ''}</div>
-    ${stage.ref != null && stage.refKind !== 'week' ? html`<div class="nref">${t('recentWord')}: ${money(stage.ref)}${unit}</div>` : nothing}
+    <div class="nbig num">${money(wv.value)}<small>${unit}</small></div>
+    <div class="nsub"><span class="nwhat">${wv.what} · </span>${t('weekOf', { date: fdate(stage.week) })}${stage.partial.has(stage.week) ? ` · ${t('partialWeek')}` : ''}</div>
+    ${stage.ref != null && stage.refKind !== 'week' && !stage.tooFew ? html`<div class="nref">${t('recentWord')}: ${money(stage.ref)}${unit}</div>` : nothing}
   </div>`;
 }
 
 // ---------------------------------------------------------------- timeline
 // The weeks as a strip drawn in real pixels (no stretched viewBox): the curve over every week the
-// data has (for a product, 88), the weeks that can be picked shaded, light weeks hatched, the
-// recent reference as a dashed line, the peak annotated, and a knob. "Reciente" is a real button.
+// data has (on a phone, only the weeks that can be picked), the pickable weeks unshaded, the
+// recent reference dashed, the peak annotated when the line moves, and a knob. "Reciente" is a
+// real button.
 function monthLabel(iso, withYear) {
   const m = fdate(iso, 'month');
   if (!withYear) return m;
@@ -117,22 +133,24 @@ function monthLabel(iso, withYear) {
 export function timeline({ stage, width, compact, playing, collapsed, onWeek, onLive, onPlay, onStep, onExpand }) {
   if (!stage || !stage.weeks || stage.weeks.length < 2) return nothing;
   if (collapsed) {
-    return html`<div class="float timeline collapsed"><button class="tl-chip" @click=${onExpand} aria-label=${t('timelineCollapsed')}>${I.clock()}<span>${stage.weekIdx == null && stage.weekSpan ? t('indexSpan', { span: fspan(stage.weekSpan[0], stage.weekSpan[1]) }) : stage.week ? t('week', { date: fdate(stage.week) }) : ''}</span>${I.chevronR()}</button></div>`;
+    return html`<div class="float timeline collapsed"><button class="tl-chip" @click=${onExpand} aria-label=${t('timelineCollapsed')}>${I.clock()}<span>${stage.week ? t('week', { date: fdate(stage.week) }) : stage.weekSpan ? t('indexSpan', { span: fspan(stage.weekSpan[0], stage.weekSpan[1]) }) : t('recentSpan', { span: fspan(stage.win.from, stage.win.to, true) })}</span>${I.chevronR()}</button></div>`;
   }
   const sel = stage.weeks;                       // weeks that can be picked
-  const axis = stage.axisWeeks && stage.axisWeeks.length >= sel.length ? stage.axisWeeks : sel;
+  const axis = !compact && stage.axisWeeks && stage.axisWeeks.length >= sel.length ? stage.axisWeeks : sel;
   const n = axis.length;
-  const selStart = axis.indexOf(sel[0]);
+  const selStart = Math.max(0, axis.indexOf(sel[0]));
   const live = stage.weekIdx == null;
   const W = Math.max(160, Math.round(width || 600)), H = compact ? 50 : 88;
-  const padL = 6, padR = 6, top = compact ? 6 : 14, bot = compact ? 14 : 18;
+  const padL = 6, padR = 6, top = compact ? 6 : 16, bot = compact ? 14 : 18;
   const x0 = padL, x1 = W - padR;
   const xAt = (i) => x0 + (n > 1 ? (i * (x1 - x0)) / (n - 1) : 0);
   const yTop = top, yBot = H - bot;
   const curIdx = live ? null : axis.indexOf(stage.week);
-
+  const cx = curIdx != null && curIdx >= 0 ? xAt(curIdx) : null;
+  const unit = stage.kind === 'group' && stage.unit ? `/${unitName(stage.unit, true)}` : '';
+  const noneComplete = stage.kind === 'basket' && stage.ranking && !stage.ranking.completeCount;
   let curve = nothing, notes = nothing;
-  if (stage.curve && stage.curve.rows) {
+  if (stage.curve && stage.curve.rows && !noneComplete) {
     const byWeek = new Map(stage.curve.rows.map((r) => [r[0], r]));
     if (stage.curve.kind === 'visits') {
       const vals = axis.map((w) => (byWeek.get(w) || [w, 0])[1] || 0);
@@ -141,43 +159,74 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
       curve = svg`${vals.map((v, i) => svg`<rect class="tl-bar ${stage.partial.has(axis[i]) ? 'partial' : ''}" x=${xAt(i) - bw / 2} y=${yBot - ((yBot - yTop) * v) / max} width=${bw} height=${((yBot - yTop) * v) / max}></rect>`)}`;
     } else {
       const rows = axis.map((w) => byWeek.get(w) || null);
-      const vals = rows.flatMap((r) => (r ? [r[1], r[2], r[3]] : [])).filter((v) => v != null && Number.isFinite(v));
-      if (stage.ref != null) vals.push(stage.ref);
-      if (vals.length > 1) {
-        let lo = Math.min(...vals), hi = Math.max(...vals);
-        if (hi === lo) { hi += 1; lo -= 1; }
+      // the scale follows the median line and the reference; the min–max band is clipped to it,
+      // so one store's spike never flattens the line the reader is meant to see
+      const meds = rows.filter((r) => r && r[1] != null).map((r) => r[1]);
+      if (stage.ref != null) meds.push(stage.ref);
+      if (meds.length > 1) {
+        let lo = Math.min(...meds), hi = Math.max(...meds);
+        const pad = (hi - lo) * 0.18 || Math.max(0.5, hi * 0.05);
+        lo -= pad; hi += pad;
         const y = (v) => yBot - ((v - lo) / (hi - lo)) * (yBot - yTop);
         const pts = rows.map((r, i) => (r && r[1] != null ? [i, r] : null)).filter(Boolean);
         const path = (list, k) => list.map(([i, r], j) => `${j ? 'L' : 'M'}${xAt(i).toFixed(1)},${y(r[k] ?? r[1]).toFixed(1)}`).join('');
         const line = path(pts, 1);
         const band = pts.length > 1 ? `${path(pts, 3)}${[...pts].reverse().map(([i, r]) => `L${xAt(i).toFixed(1)},${y(r[2] ?? r[1]).toFixed(1)}`).join('')}Z` : '';
         const refY = stage.ref != null ? y(stage.ref) : null;
-        curve = svg`<path class="tl-band" d=${band}></path><path class="tl-line" d=${line}></path>${refY != null ? svg`<line class="tl-ref" x1=${x0} x2=${x1} y1=${refY} y2=${refY}></line>` : nothing}`;
-        // annotate the peak and the recent reference, where there is room
+        const clipId = `tlc-${stage.kind}`;
+        curve = svg`<defs><clipPath id=${clipId}><rect x=${x0} y=${yTop - 3} width=${x1 - x0} height=${yBot - yTop + 3}></rect></clipPath></defs><path class="tl-band" clip-path=${`url(#${clipId})`} d=${band}></path><path class="tl-line" d=${line}></path>${refY != null ? svg`<line class="tl-ref" x1=${x0} x2=${x1} y1=${refY} y2=${refY}></line>` : nothing}`;
         if (!compact && pts.length > 3) {
-          const peak = pts.reduce((a, b) => (b[1][1] > a[1][1] ? b : a));
-          const unit = stage.kind === 'group' && stage.unit ? `/${unitName(stage.unit, true)}` : '';
-          const px = xAt(peak[0]), py = y(peak[1][1]);
-          const cx = curIdx != null && curIdx >= 0 ? xAt(curIdx) : null;
-          const nearCursor = cx != null && Math.abs(cx - px) < 70;
-          const anchor = nearCursor ? (px > W / 2 ? 'end' : 'start') : px > W - 120 ? 'end' : px < 80 ? 'start' : 'middle';
-          const tx = nearCursor ? (anchor === 'end' ? Math.min(px, cx) - 7 : Math.max(px, cx) + 7) : px;
-          notes = svg`<circle class="tl-peak" cx=${px} cy=${py} r="2.5"></circle><text class="tl-note" x=${tx} y=${Math.max(9, py - 5)} text-anchor=${anchor}>${t('peak')} ${money(peak[1][1])}${unit} · ${fdate(peak[1][0], true)}</text>
-            ${refY != null && Math.abs(refY - py) > 12 ? svg`<text class="tl-note ref" x=${x1} y=${refY - 4} text-anchor="end">${t('recentWord')} ${money(stage.ref)}${unit}</text>` : nothing}`;
+          // a note goes where it fits: inside the strip and clear of the cursor, else nowhere
+          const wNote = (txt) => txt.length * 5.6 + 6;
+          const ext = (an, tx, w) => (an === 'start' ? [tx, tx + w] : an === 'end' ? [tx - w, tx] : [tx - w / 2, tx + w / 2]);
+          const fits = (an, tx, w) => { const [l, r] = ext(an, tx, w); return l >= 0 && r <= W && (cx == null || cx < l - 4 || cx > r + 4); };
+          const place = (px, w, pref) => {
+            for (const [an, tx] of [[pref, px], ['end', px - 6], ['start', px + 6], ['end', (cx ?? px) - 8], ['start', (cx ?? px) + 8]]) if (fits(an, tx, w)) return { an, tx };
+            return null;
+          };
+          const items = [];
+          // the peak: only weeks with 3 stores that are not light weeks, and only when the line moves
+          const solid = pts.filter(([, r]) => (r[4] ?? MIN_N) >= MIN_N && !stage.partial.has(r[0]));
+          const sv = solid.map(([, r]) => r[1]);
+          const moves = sv.length > 3 && Math.min(...sv) > 0 && Math.max(...sv) / Math.min(...sv) - 1 >= 0.03;
+          let peakY = null;
+          if (moves) {
+            const peak = solid.reduce((p, q) => (q[1][1] > p[1][1] ? q : p));
+            if (!(stage.ref != null && Math.abs(peak[1][1] / stage.ref - 1) < 0.005)) {
+              const px = xAt(peak[0]), py = y(peak[1][1]);
+              const txt = `${t('peak')} ${money(peak[1][1])}${unit} · ${fdate(peak[1][0], true)}`;
+              const pos = place(px, wNote(txt), px > W - 120 ? 'end' : px < 80 ? 'start' : 'middle');
+              items.push(svg`<circle class="tl-peak" cx=${px} cy=${py} r="2.5"></circle>`);
+              if (pos) { items.push(svg`<text class="tl-note" x=${pos.tx} y=${Math.max(9, py - 5)} text-anchor=${pos.an}>${txt}</text>`); peakY = Math.max(9, py - 5); }
+            }
+          }
+          if (refY != null && (peakY == null || Math.abs(refY - 4 - peakY) > 12)) {
+            const txt = `${t('recentWord')} ${money(stage.ref)}${unit}`;
+            const pos = place(x1, wNote(txt), 'end');
+            if (pos) items.push(svg`<text class="tl-note ref" x=${pos.tx} y=${refY - 4} text-anchor=${pos.an}>${txt}</text>`);
+          }
+          notes = svg`${items}`;
         }
       }
     }
   }
-  // month labels thinned by their real width; a year shown where it changes
+  // month labels on a regular step chosen from the room, always including the last month; the
+  // year where it changes; each label's real extent is checked against the one before
+  const starts = [];
+  let lastM = '';
+  axis.forEach((w, i) => { const m = w.slice(0, 7); if (m !== lastM) { starts.push({ i, w }); lastM = m; } });
+  const perMonth = (x1 - x0) / Math.max(1, starts.length);
+  const step = [1, 2, 3, 4, 6, 12].find((k) => k * perMonth >= (compact ? 36 : 42)) || 12;
   const months = [];
-  let lastM = '', lastY = '', lastRight = -Infinity;
-  axis.forEach((w, i) => {
-    const m = w.slice(0, 7); if (m === lastM) return; lastM = m;
-    const y = w.slice(0, 4); const withYear = y !== lastY;
-    const label = monthLabel(w, withYear); const x = xAt(i); const wpx = label.length * 5.8 + 4;
-    if (x - wpx / 2 < lastRight + 6 && !withYear) return;
-    if (x - wpx / 2 < lastRight + 6 && withYear && months.length) months.pop();
-    months.push({ x, label, w: wpx }); lastRight = x + wpx / 2; lastY = y;
+  let prevYear = '', lastRight = -Infinity;
+  starts.filter((_, k) => (starts.length - 1 - k) % step === 0).forEach(({ i, w }, k) => {
+    const yr = w.slice(0, 4), label = monthLabel(w, k === 0 || yr !== prevYear);
+    const wpx = label.length * 5.8 + 4, x = xAt(i);
+    let an = 'middle', left = x - wpx / 2;
+    if (left < 0) { an = 'start'; left = 0; } else if (x + wpx / 2 > W) { an = 'end'; left = W - wpx; }
+    if (left < lastRight + 6) return;
+    months.push({ x: an === 'start' ? 0 : an === 'end' ? W : x, an, label });
+    lastRight = left + wpx; prevYear = yr;
   });
   const pickIdx = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -185,23 +234,27 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
     const i = Math.max(0, Math.min(n - 1, Math.round(((sx - x0) / (x1 - x0)) * (n - 1))));
     onWeek(axis[Math.max(selStart, i)]);
   };
+  const partialNow = !live && stage.partial.has(stage.week);
   const label = live
     ? (stage.kind === 'index' && stage.weekSpan ? t('indexSpan', { span: fspan(stage.weekSpan[0], stage.weekSpan[1]) }) : t('recentSpan', { span: fspan(stage.win.from, stage.win.to) }))
-    : `${t('week', { date: fdate(stage.week) })}${stage.partial.has(stage.week) ? ` · ${t('partialWeek')}` : ''}`;
-  const caption = !stage.curve ? '' : stage.curve.kind === 'visits' ? t('tlVisits') : stage.curve.kind === 'basket' ? t('tlBasket') : stage.curve.kind === 'group' ? t('tlGroupMedian') : t('tlPrice');
+    : t('week', { date: fdate(stage.week) });
+  const wv = weekValue(stage);
+  const valueText = `${label}${partialNow ? `, ${t('partialWeek')}` : ''}${wv ? `, ${wv.what} ${money(wv.value)}${unit}` : ''}`;
+  const caption = noneComplete ? t('noneCompleteLegend') : !stage.curve ? '' : stage.curve.kind === 'visits' ? t('tlVisits') : stage.curve.kind === 'basket' ? t('tlBasket') : stage.curve.kind === 'group' ? t('tlGroupMedian') : t('tlPrice');
   const atStart = !live && stage.weekIdx === 0;
   return html`<div class="float timeline ${compact ? 'compact' : ''}">
-    <button class="play" @click=${onPlay} title=${playing ? t('pause') : t('play')} aria-label=${playing ? t('pause') : t('play')}>${playing ? I.pause() : I.play()}</button>
+    <button class="play" @click=${onPlay} ?disabled=${noneComplete} title=${playing ? t('pause') : t('play')} aria-label=${playing ? t('pause') : t('play')}>${playing ? I.pause() : I.play()}</button>
     <div class="tl-main">
       <div class="tl-head">
-        <button class="step" @click=${() => onStep(-1)} ?disabled=${atStart} aria-label=${t('prevWeek')} title=${t('prevWeek')}>${I.chevronL()}</button>
+        <button class="step" @click=${() => onStep(-1)} ?disabled=${atStart || noneComplete} aria-label=${t('prevWeek')} title=${t('prevWeek')}>${I.chevronL()}</button>
         <span class="tl-label">${label}</span>
-        <button class="step" @click=${() => onStep(1)} ?disabled=${live} aria-label=${t('nextWeek')} title=${t('nextWeek')}>${I.chevronR()}</button>
+        ${partialNow ? html`<span class="tl-pill">${t('partialShort')}</span>` : nothing}
+        <button class="step" @click=${() => onStep(1)} ?disabled=${live || noneComplete} aria-label=${t('nextWeek')} title=${t('nextWeek')}>${I.chevronR()}</button>
         ${caption ? html`<span class="tl-cap">${caption}</span>` : nothing}
       </div>
       <div class="tl-row">
         <svg class="tl-svg" width=${W} height=${H} viewBox="0 0 ${W} ${H}" role="slider" tabindex="0"
-          aria-label=${t('timeline')} aria-valuemin="0" aria-valuemax=${sel.length} aria-valuenow=${live ? sel.length : stage.weekIdx} aria-valuetext=${label}
+          aria-label=${t('timeline')} aria-valuemin="0" aria-valuemax=${sel.length} aria-valuenow=${live ? sel.length : stage.weekIdx} aria-valuetext=${valueText}
           @pointerdown=${(e) => { e.currentTarget.setPointerCapture(e.pointerId); pickIdx(e); }}
           @pointermove=${(e) => { if (e.buttons) pickIdx(e); }}
           @keydown=${(e) => {
@@ -218,7 +271,7 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
           ${notes}
           <line class="tl-axis" x1=${x0} x2=${x1} y1=${yBot} y2=${yBot}></line>
           ${sel.map((w) => { const i = axis.indexOf(w); return svg`<line class="tl-tick" x1=${xAt(i)} x2=${xAt(i)} y1=${yBot} y2=${yBot + 3}></line>`; })}
-          ${months.map((m) => { const a = m.x - m.w / 2 < 0 ? 'start' : m.x + m.w / 2 > W ? 'end' : 'middle'; return svg`<text class="tl-month" x=${a === 'start' ? 0 : a === 'end' ? W : m.x} y=${H - 3} text-anchor=${a}>${m.label}</text>`; })}
+          ${months.map((m) => svg`<text class="tl-month" x=${m.x} y=${H - 3} text-anchor=${m.an}>${m.label}</text>`)}
           ${curIdx != null && curIdx >= 0 ? svg`<line class="tl-cursor" x1=${xAt(curIdx)} x2=${xAt(curIdx)} y1=${yTop - 4} y2=${yBot + 2}></line><circle class="tl-knob" cx=${xAt(curIdx)} cy=${yBot} r="5"></circle>` : nothing}
         </svg>
         <button class="tl-live ${live ? 'on' : ''}" @click=${onLive} aria-pressed=${live ? 'true' : 'false'}>${t('recentShort')}</button>
@@ -230,11 +283,17 @@ export function timeline({ stage, width, compact, playing, collapsed, onWeek, on
 // ---------------------------------------------------------------- tooltip
 export function tooltipText(loc, val, stage, byStore, byProduct) {
   if (!loc || !byStore) return '';
-  const s = byStore.get((val && val.sid) || loc.stores[0]);
-  const name = loc.stores.length > 1 ? t('nHere', { n: loc.stores.length }) : s ? s.name : '';
-  if (!val || val.value == null) return `${name}. ${reasonText(val)}`;
-  if (stage.kind === 'index') return `${name}. ${storeIndexWords(val.value)}`;
-  return `${name}. ${money(val.value)}`;
+  const st = byStore.get((val && val.sid) || loc.stores[0]);
+  const shared = loc.stores.length > 1;
+  const priced = val && val.value != null;
+  const name = shared ? `${nHereText(loc, byStore)}${st && priced && stage && stage.kind !== 'index' ? `, ${t('cheapestOfThem')}: ${st.name}` : ''}` : st ? st.name : '';
+  if (!priced) return `${name}. ${reasonText(val)}`;
+  if (stage.kind === 'index') return `${name}. ${storeIndexWords(val.value)}${val.week ? `, ${t('week', { date: fdate(val.week) })}` : ''}`;
+  const unit = stage.kind === 'group' && stage.unit ? ` / ${unitName(stage.unit)}` : '';
+  if (val.hatched) return `${name}. ${money(val.value)}, ${val.missing.length === 1 ? t('missingOne') : t('missing', { n: val.missing.length })}`;
+  const cmp = val.far ? t('outlier') : val.dev != null ? vsText(stage, val.dev) : '';
+  const when = val.dateMin && val.date && val.dateMin !== val.date ? fspan(val.dateMin, val.date) : val.date ? fdate(val.date) : '';
+  return `${name}. ${money(val.value)}${unit}${cmp ? `, ${cmp}` : ''}${when ? `, ${when}` : ''}`;
 }
 function reasonText(v) {
   if (!v || !v.reason) return t('reasonNone');
@@ -251,8 +310,8 @@ export function tooltip({ loc, val, stage, byStore, byProduct, x, y, free, own }
   const dateLine = (d) => (d ? html`<div class="m">${fdate(d)}</div>` : nothing);
   if (v && v.value != null) {
     if (stage.kind === 'index') line = html`<div><b>${storeIndexWords(v.value)}</b> <span class="s">${shared && v.n > 1 ? t('medianOfN', { n: v.n }) : t('indexShort')}</span></div>${v.week ? html`<div class="m">${t('week', { date: fdate(v.week) })}</div>` : nothing}`;
-    else if (stage.kind === 'product') line = html`<div><b class="num">${money(v.value)}</b> ${v.dev != null ? html`<span class="s">${vsText(stage, v.dev)}</span>` : nothing}</div>${dateLine(v.date)}`;
-    else if (stage.kind === 'group') { const p = v.pid && byProduct ? byProduct.get(v.pid) : null; line = html`<div><b class="num">${money(v.value)}</b> <span class="s">/ ${unitName(stage.unit)}${v.dev != null ? ` · ${vsText(stage, v.dev)}` : ''}</span></div>${p ? html`<div class="m">${p.brand || p.name} · ${p.presentation || ''} · ${money(v.price)}</div>` : nothing}${dateLine(v.date)}`; }
+    else if (stage.kind === 'product') line = html`<div><b class="num">${money(v.value)}</b> ${v.far ? html`<span class="flag">${t('outlier')}</span>` : v.dev != null ? html`<span class="s">${vsText(stage, v.dev)}</span>` : nothing}</div>${dateLine(v.date)}`;
+    else if (stage.kind === 'group') { const p = v.pid && byProduct ? byProduct.get(v.pid) : null; line = html`<div><b class="num">${money(v.value)}</b> <span class="s">/ ${unitName(stage.unit)}${v.far ? ` · ${t('outlier')}` : v.dev != null ? ` · ${vsText(stage, v.dev)}` : ''}</span></div>${p ? html`<div class="m">${p.brand || p.name} · ${p.presentation || ''} · ${money(v.price)}</div>` : nothing}${dateLine(v.date)}`; }
     else if (stage.kind === 'basket') line = v.hatched ? html`<div><b class="num">${money(v.value)}</b> <span class="s">${v.missing.length === 1 ? t('missingOne') : t('missing', { n: v.missing.length })}</span></div>` : html`<div><b class="num">${money(v.value)}</b> ${v.dev != null ? html`<span class="s">${vsText(stage, v.dev)}</span>` : nothing}</div>${v.dateMin && v.date ? html`<div class="m">${fspan(v.dateMin, v.date)}</div>` : nothing}`;
   } else line = html`<div class="m">${reasonText(v)}</div>`;
   const ownLine = own ? html`<div class="m own">${t('ownMark')}: ${money(own.price)} · ${fdate(own.date)}</div>` : nothing;
@@ -260,13 +319,13 @@ export function tooltip({ loc, val, stage, byStore, byProduct, x, y, free, own }
   const left = Math.max((free ? free.left : 0) + 150, Math.min((free ? free.right : window.innerWidth) - 150, x));
   const flip = y < 130;
   return html`<div class="tip" style="left:${left}px;top:${y}px;${flip ? 'transform:translate(-50%,16px)' : ''}">
-    <div class="n">${shared ? t('nHere', { n: loc.stores.length }) : s.name}</div>
+    <div class="n">${shared ? nHereText(loc, byStore) : s.name}</div>
     <div class="s">${shared ? (stage.kind === 'index' ? '' : `${t('cheapestOfThem')}: ${s.name}`) : `${s.chain}${giroLabel(s) ? ' · ' + giroLabel(s) : ''}${s.municipio ? ' · ' + s.municipio : ''}`}</div>
     ${line}
     ${ownLine}
   </div>`;
 }
 
-export function toast({ text, action, onAction }) {
-  return html`<div class="toast ${text ? 'on' : ''}" role="status">${text || ''}${text && action ? html` <button class="toast-btn" @click=${onAction}>${action}</button>` : nothing}</div>`;
+export function toast({ text, action, onAction, onFocus, onBlur }) {
+  return html`<div class="toast ${text ? 'on' : ''}" role="status">${text || ''}${text && action ? html` <button class="toast-btn" @click=${onAction} @focus=${onFocus} @blur=${onBlur}>${action}</button>` : nothing}</div>`;
 }

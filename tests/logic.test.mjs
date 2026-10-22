@@ -117,3 +117,13 @@ test('per-unit refuses another dimension', () => {
   assert.equal(perUnit(35, { value: 1000, unit: 'g' }, 'kg'), 35);
   assert.equal(sizeLabel({ value: 18, unit: 'pza' }, 'en'), '18 pcs');
 });
+
+test('the review flag is symmetric: 2.5 times or 0.4 times the median', async () => {
+  const { isFar } = await import('../src/logic/stats.js');
+  assert.equal(isFar(49, 64), false);      // a dear week's cheap price is not an outlier against its week
+  assert.equal(isFar(49, 19), true);       // ...but is against the recent median
+  assert.equal(isFar(10.5, 49.9), true);   // −79 %: crowned as cheapest before; now flagged
+  assert.equal(isFar(20, 49.9), false);    // −60 %: within the set
+  assert.equal(isFar(null, 10), false);
+  assert.equal(isFar(10, 0), false);
+});

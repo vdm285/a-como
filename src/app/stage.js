@@ -12,6 +12,9 @@
 //   product has no recent price at all, a chosen week is coloured against that week's own
 //   median and the legend says so (refKind 'week').
 // - A reference from fewer than 3 stores colours nothing and gives no chips (tooFew).
+// - "Revísalo": a price 2.5 times or more, or 0.4 times or less, its comparison set's median is
+//   marked far (v.far) once here, so every card, tooltip and tag agrees. The set is that week's
+//   prices in a chosen week, the recent ones otherwise, and it needs 3 stores (farKind says which).
 // - The colour cap is computed once per stage and kept while the reader scrubs.
 // Empty values carry a reason: 'none' (never seen here), 'stale' (seen, not recently),
 // 'otherUnit' (only in another presentation), 'few' (under 30 comparable products, index),
@@ -19,12 +22,19 @@
 
 import { state } from './state.js';
 import { loadProduct, loadProductWeeks, loadIndex, loadVisits, peekVisits } from '../data/qqp.js';
-import { median, minMax, deviation, autoCap, clampDev } from '../logic/stats.js';
+import { median, minMax, deviation, autoCap, clampDev, FAR_HI, FAR_LO, isFar } from '../logic/stats.js';
 import { divergingColor, COLORS } from '../logic/color.js';
 import { perUnit, DIM } from '../logic/unit.js';
 import { basketLatest, basketAtWeek, rankBasket } from '../logic/basket.js';
 
 export const MIN_N = 3;
+export { FAR_HI, FAR_LO, isFar };
+// mark the far values of a stage against its comparison set; returns the set's description
+function markFar(values, setRef, setN, kind) {
+  if (setRef == null || setN < MIN_N) return { farRef: null, farKind: null };
+  for (const v of values.values()) if (v.value != null && !v.hatched && isFar(v.value, setRef)) v.far = true;
+  return { farRef: setRef, farKind: kind };
+}
 const DAY = 86400000;
 const iso = (t) => new Date(t).toISOString().slice(0, 10);
 export function weekOf(date) { const t = Date.parse(`${date}T12:00:00Z`); const dow = (new Date(t).getUTCDay() + 6) % 7; return iso(t - dow * DAY); }
@@ -86,8 +96,11 @@ export function groupUnit(group, members) {
 // Cap memo: one cap per stage (and per basket content), frozen while the reader scrubs.
 const capMemo = new Map();
 function capFor(key, devs) {
-  if (!capMemo.has(key)) capMemo.set(key, autoCap(devs));
-  return capMemo.get(key);
+  if (capMemo.has(key)) return capMemo.get(key);
+  const cap = autoCap(devs);
+  // memoise only a real sample: a pass made before the catalogue arrived must not freeze the cap
+  if (devs.length >= MIN_N) capMemo.set(key, cap);
+  return cap;
 }
 export function basketSignature(items) { return items.map((b) => `${b.id}:${b.qty}`).sort().join(','); }
 
@@ -152,7 +165,7 @@ export async function computeStage(stage, week) {
     let ref = median([...recent.values()].map((o) => o[0]));
     let refN = recent.size, refKind = 'recent';
     let weeks = recentWeeks, pw = { week: null, idx: null };
-    let cap;
+    let cap, weekMed = null, weekN = 0;
     if (week) {
       const w = await loadProductWeeks(stage.id);
       weeks = w.weeks; pw = pickWeek(weeks, week);
@@ -160,7 +173,8 @@ export async function computeStage(stage, week) {
       const weekPrices = [];
       for (const sid of storeIds) { const row = w.stores[sid]; const v = row && col >= 0 ? row[col] : null; if (v != null) weekPrices.push(v); }
       // no recent price: the week is compared with itself, and the legend says so
-      if (ref == null) { ref = median(weekPrices); refN = weekPrices.length; refKind = 'week'; }
+      weekMed = median(weekPrices); weekN = weekPrices.length;
+      if (ref == null) { ref = weekMed; refN = weekN; refKind = 'week'; }
       cap = capFor(`p:${stage.id}:${refKind === 'week' ? pw.week : ''}`, refKind === 'week' ? weekPrices.map((v) => deviation(v, ref)) : [...recent.values()].map((o) => deviation(o[0], ref)));
       for (const sid of storeIds) {
         const row = w.stores[sid]; const v = row && col >= 0 ? row[col] : null;
@@ -175,17 +189,20 @@ export async function computeStage(stage, week) {
         else values.set(sid, { value: null, dev: null, reason: 'none' });
       }
     }
+    const far = pw.idx != null ? markFar(values, weekMed, weekN, 'week') : markFar(values, ref, refN, 'recent');
     const tooFew = ref != null && gate(values, refN);
     const curve = p.series && p.series.length > 1 ? { kind: 'price', rows: p.series } : null;
     const live = [...values.values()].filter((v) => v.value != null).map((v) => v.value);
     const [lo, hi] = minMax(live);
-    return { ...base, kind: 'product', id: stage.id, values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: curve ? curve.rows.map((r) => r[0]) : weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind, tooFew, n: recent.size, lo, hi, product: p, summary, curve };
+    return { ...base, kind: 'product', id: stage.id, values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: curve ? curve.rows.map((r) => r[0]) : weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind, tooFew, weekMed, weekN, ...far, n: recent.size, lo, hi, product: p, summary, curve };
   }
 
   // ---------------------------------------------------------------- group
   if (stage.kind === 'group') {
     const group = state.byGroup.get(stage.id);
     const members = d.products.filter((p) => p.group === stage.id);
+    // before the catalogue arrives there is nothing to compute (and nothing must be memoised)
+    if (!group || !members.length) return { ...base, kind: 'group', id: stage.id, loading: true, values, colors: new Map(), cap: 0.2, weeks: recentWeeks, axisWeeks: recentWeeks, week: null, weekIdx: null, ref: null, refN: 0, tooFew: false, members: [], usable: [], curve: null };
     const { unit, dim } = groupUnit(group, members);
     const usable = dim ? members.filter((p) => p.size && p.size.unit === dim && p.size.value > 0) : [];
     const usableIds = new Set(usable.map((p) => p.id));
@@ -233,13 +250,14 @@ export async function computeStage(stage, week) {
     } else {
       for (const sid of storeIds) { const b = bestRecent.get(sid); values.set(sid, b ? { value: b.per, dev: deviation(b.per, ref), pid: b.pid, price: b.price, date: b.date } : { value: null, dev: null, ...emptyReason(sid) }); }
     }
+    const far = pw.idx != null ? markFar(values, weekRef, weekN, 'week') : markFar(values, ref, refN, 'recent');
     const tooFew = ref != null && gate(values, refN);
     // the curve: each week, the median over stores of the cheapest per-unit price (the
     // reference's own definition)
     const curve = usable.length ? { kind: 'group', unit, rows: recentWeeks.map((w) => { const v = [...bestAt(w).values()].map((b) => b.per); const [lo, hi] = minMax(v); return [w, median(v), lo, hi, v.length]; }) } : null;
     const live = [...values.values()].filter((v) => v.value != null).map((v) => v.value);
     const [lo, hi] = minMax(live);
-    return { ...base, kind: 'group', id: stage.id, values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind: 'recent', tooFew, weekRef, weekN, n: refN, otherN: [...otherRecent.keys()].filter((sid) => !bestRecent.has(sid)).length, lo, hi, unit, dim, members, usable, curve, failed, total: members.length };
+    return { ...base, kind: 'group', id: stage.id, values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind: 'recent', tooFew, weekRef, weekN, ...far, n: refN, otherN: [...otherRecent.keys()].filter((sid) => !bestRecent.has(sid)).length, lo, hi, unit, dim, members, usable, curve, failed, total: members.length };
   }
 
   // ---------------------------------------------------------------- basket
@@ -286,8 +304,9 @@ export async function computeStage(stage, week) {
       if (!r) { values.set(sid, { value: null, dev: null, reason: week ? 'novisit' : 'none' }); continue; }
       values.set(sid, r.complete ? { value: r.total, dev: r.dev, missing: [], date: r.date, dateMin: r.dateMin } : { value: r.total, dev: null, hatched: true, missing: r.missing, reason: 'missing' });
     }
+    const weekMed = pw.idx != null ? ranking.base : null, weekN = pw.idx != null ? ranking.completeCount : 0;
     const tooFew = ref != null && gate(values, refN);
-    return { ...base, kind: 'basket', values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind: 'recent', tooFew, ranking, curve: { kind: 'basket', rows: curveRows }, failed, total: items.length };
+    return { ...base, kind: 'basket', values, colors: colorsFrom(values, cap), cap, weeks, axisWeeks: weeks, week: pw.week, weekIdx: pw.idx, ref, refN, refKind: 'recent', tooFew, weekMed, weekN, ranking, curve: { kind: 'basket', rows: curveRows }, failed, total: items.length };
   }
   return null;
 }

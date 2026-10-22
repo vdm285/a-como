@@ -5,7 +5,7 @@ import '@fontsource-variable/manrope';
 import './style.css';
 import { html, render, nothing } from 'lit';
 import { state, subscribe, notify, setPref, setView, setWeek, basketAdd, basketSet, basketReplace, inBasket } from './app/state.js';
-import { t, setLang, getLang, money, setDataYear, unitName, fdate } from './app/i18n.js';
+import { t, setLang, getLang, money, setDataYear, unitName, fdate, fspan } from './app/i18n.js';
 import { loadStage, loadCatalog, loadVisits } from './data/qqp.js';
 import { createMap } from './map/map.js';
 import { computeStage, recentWindow, groupUnit, partialWeeks, MIN_N } from './app/stage.js';
@@ -13,7 +13,7 @@ import { median, clampDev } from './logic/stats.js';
 import { divergingColor, COLORS } from './logic/color.js';
 import { unitFor, DIM } from './logic/unit.js';
 import { buildSearchIndex, search, searchView } from './ui/search.js';
-import { topRight, bottomRight, legend, credit, timeline, tooltip, tooltipText, toast, weekNumeral } from './ui/chrome.js';
+import { topRight, bottomRight, legend, credit, timeline, tooltip, tooltipText, toast, weekNumeral, weekValue, nHereText } from './ui/chrome.js';
 import { storeCard, productCard, groupCard, basketCard, settingsCard } from './ui/cards.js';
 import { listOwn, addOwn, deleteOwn, importOwn, persistStorage, ownToJson, ownToCsv, download } from './local/prices.js';
 
@@ -37,17 +37,20 @@ const ui = {
   offer: null, moved: false, catalogReady: false, pendingCheck: false,
   phone: matchMedia('(max-width: 720px)'),
   free: { left: 0, right: innerWidth, h: innerHeight },
-  tlW: 600, tlOpen: false, beneath: null,
+  tlW: 600, tlOpen: false, tlSheetOpen: false, beneath: null, announceWeek: false, padPass: 0,
 };
 let map = null;
 const BASE = import.meta.env.BASE_URL;
 const reducedOS = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const motionOn = () => (state.prefs.motion === undefined || state.prefs.motion === null ? !reducedOS() : state.prefs.motion !== false);
 
+function hideToast() { ui.toast = ''; ui.toastAction = null; renderChrome(); }
 function showToast(text, ms = 2600, action = null) {
   ui.toast = text; ui.toastAction = action; renderChrome();
   clearTimeout(ui.toastTimer);
-  ui.toastTimer = setTimeout(() => { ui.toast = ''; ui.toastAction = null; renderChrome(); }, action ? 6500 : ms);
+  ui.toastTimer = setTimeout(hideToast, action ? 6500 : ms);
+  // an undo must be reachable before it expires: a keyboard reader is taken to it
+  if (action && ui.keyboard) requestAnimationFrame(() => { const b = chrome.querySelector('.toast-btn'); if (b) { ui.toastReturn = document.activeElement; b.focus(); } });
 }
 const retrievedDate = () => {
   const files = (state.data.meta.source && state.data.meta.source.files) || [];
@@ -174,21 +177,24 @@ const locOf = (storeId) => state.locOf.get(storeId) || null;
 // price tags on the stage: the three cheapest locations and the dearest one that is a fair
 // comparison (no flagged outlier, never when every store charges the same)
 function stageTags(stage, locValues) {
-  if (!stage || stage.kind === 'index' || state.prefs.tags === false || stage.tooFew || (ui.free && ui.free.h < 240)) return [];
-  const all = [...locValues.entries()].filter(([, v]) => v && v.value != null && !v.hatched && v.dev != null);
-  const weekMed = stage.weekIdx != null ? median(all.map(([, v]) => v.value)) : null;
-  const rows = all.filter(([, v]) => (weekMed ? Math.abs(v.value / weekMed - 1) <= 1.5 : Math.abs(v.dev) <= 1.5));
-  if (rows.length < 4) return [];
+  if (!stage || stage.kind === 'index' || state.prefs.tags === false || stage.tooFew || ui.phone.matches || (ui.free && ui.free.h < 240)) return [];
+  // a price flagged "revísalo" is never tagged as a store's extreme
+  const rows = [...locValues.entries()].filter(([, v]) => v && v.value != null && !v.hatched && v.dev != null && !v.far);
+  if (!rows.length) return [];
   rows.sort((a, b) => a[1].value - b[1].value);
-  if (rows[0][1].value === rows[rows.length - 1][1].value) return [];
   const unit = stage.kind === 'group' && stage.unit ? `/${unitName(stage.unit, true)}` : '';
   const mk = ([id, v], kind) => {
     const s = state.byStore.get(v.sid);
     const loc = state.byLoc.get(id);
-    const sub = loc && loc.stores.length > 1 ? t('nHere', { n: loc.stores.length }) : s ? s.name.replace(/\s+Sucursal\s+/i, ' ') : '';
+    const sub = loc && loc.stores.length > 1 ? nHereText(loc, state.byStore) : s ? s.name.replace(/\s+Sucursal\s+/i, ' ') : '';
     return { id, text: `${money(v.value)}${unit}`, sub, color: divergingColor(clampDev(v.dev, stage.cap)), kind };
   };
-  const cheap = rows.slice(0, 3);
+  // a handful of stores among hundreds of rings: tag them all so they can be found
+  if (rows.length <= 5) return rows.map((r) => mk(r, 'cheap'));
+  if (rows[0][1].value === rows[rows.length - 1][1].value) return [];
+  // a narrow free area (under 700 px) takes the cheapest and the dearest only (four tags covered a sixth of the data at 1024)
+  const narrow = ui.free && ui.free.right - ui.free.left < 700;
+  const cheap = rows.slice(0, narrow ? 1 : 3);
   const dear = rows[rows.length - 1];
   return [...cheap.map((r) => mk(r, 'cheap')), ...(dear[1].value > cheap[cheap.length - 1][1].value ? [mk(dear, 'dear')] : [])];
 }
@@ -212,6 +218,11 @@ async function updateStage() {
     if (tok !== ui.stageToken) return;
     ui.stage = res;
     if (res && res.kind !== 'index') ui.tlOpen = true;
+    if (ui.announceWeek && res && !ui.playing) {
+      ui.announceWeek = false;
+      const wv = weekValue(res);
+      announce(res.weekIdx == null ? t('recentSpan', { span: fspan(res.win.from, res.win.to) }) : `${t('week', { date: fdate(res.week) })}${wv ? `, ${wv.what} ${money(wv.value)}` : ''}`);
+    }
     const agg = aggregateByLocation(res);
     ui.locValues = agg.values;
     map.setColors(agg.colors);
@@ -245,23 +256,32 @@ function cardSide() {
 }
 // The map's free area, measured from the chrome on screen: search, timeline, card, legend and the
 // corner buttons. Labels and tags avoid the same rectangles.
-function applyPadding(animate = true) {
+function applyPadding(animate = true, pass = 0) {
   if (!map) return;
   const [W, H] = map.size();
   const open = state.view.kind !== 'city';
+  const phone = ui.phone.matches;
   const rect = (sel) => { const e = chrome.querySelector(sel); if (!e) return null; const r = e.getBoundingClientRect(); return r.width && r.height ? r : null; };
-  // between the legend and the corner buttons the timeline needs room; when there is little,
-  // it moves above the legend and takes the width up to the card
-  if (!ui.phone.matches) {
-    const lg0 = rect('.bottomleft'), br0 = rect('.bottomright'), card0 = rect('.card');
+  const bs = document.body.style;
+  // First the corners that place the timeline (legend stack, buttons, card), then the timeline:
+  // reading it before these were set measured where it used to be (1024 px: 146 dots under it).
+  const lg0 = rect('.bottomleft'), br0 = rect('.bottomright'), card0 = rect('.card');
+  bs.setProperty('--lgh', `${lg0 ? Math.round(H - lg0.top) : 0}px`);
+  bs.setProperty('--tll', `${phone ? 10 : Math.round((lg0 ? lg0.right : 300) + 14)}px`);
+  bs.setProperty('--tlr', `${Math.max(open && ui.side === 'right' ? (card0 ? W - card0.left + 14 : 28) : 28, br0 ? W - br0.left + 10 : 28)}px`);
+  // between the legend and the corner buttons the timeline (or its chip) needs room; when there is
+  // little, it moves above the legend and takes the width up to the card
+  if (!phone) {
+    const chip = chrome.querySelector('.timeline.collapsed');
+    const need = chip ? chip.getBoundingClientRect().width + 24 : 440;
     const right = Math.min(br0 ? br0.left : W, open && ui.side === 'right' && card0 ? card0.left : W);
     const room = right - (lg0 ? lg0.right : 0) - 28;
-    document.body.classList.toggle('tl-stack', room < 440);
+    document.body.classList.toggle('tl-stack', room < need);
   } else document.body.classList.remove('tl-stack');
   const search = rect('.search .box'), tl = rect('.timeline'), card = rect('.card'), lg = rect('.bottomleft'), br = rect('.bottomright'), tr = rect('.topright'), num = rect('.numeral');
   let pad;
-  if (ui.phone.matches) {
-    const top = Math.max(search ? search.bottom : 60, tl && tl.top < H / 2 ? tl.bottom : 0) + 10;
+  if (phone) {
+    const top = Math.max(search ? search.bottom : 60, tl && tl.top < H / 2 ? tl.bottom : 0, num ? num.bottom : 0) + 10;
     const lowest = Math.min(open && card ? card.top : H, lg ? lg.top : H);
     pad = { left: 16, right: 16, top, bottom: H - lowest + 10 };
   } else {
@@ -272,21 +292,26 @@ function applyPadding(animate = true) {
     // (with the timeline stacked above it, the bottom padding already clears it)
     if (lg && !document.body.classList.contains('tl-stack')) left = Math.max(left, lg.right + 14);
     pad = { left, right: open && ui.side === 'right' ? cardW + 14 : 28, top: (search ? search.bottom : 60) + 16, bottom };
+    // the week numeral is a corner too: beside the city when there is room, above it when not
+    if (num) {
+      const besides = num.right + 14;
+      if (W - pad.right - besides >= Math.max(420, (W - pad.left - pad.right) * 0.6)) pad.left = Math.max(pad.left, besides);
+      else pad.top = Math.max(pad.top, num.bottom + 10);
+    }
   }
   ui.free = { left: pad.left, right: W - pad.right, h: H - pad.top - pad.bottom };
-  const bs = document.body.style;
   bs.setProperty('--fl', `${pad.left}px`);
   bs.setProperty('--fr', `${pad.right}px`);
-  bs.setProperty('--tll', `${ui.phone.matches ? 10 : Math.round((lg ? lg.right : 300) + 14)}px`);
-  // the timeline also ends before the corner buttons
-  bs.setProperty('--tlr', `${Math.max(open && ui.side === 'right' ? (card ? W - card.left + 14 : 28) : 28, br ? W - br.left + 10 : 28)}px`);
+  bs.setProperty('--fcx', `${Math.round((pad.left + W - pad.right) / 2)}px`);
   bs.setProperty('--brw', `${br ? Math.round(br.width) : 0}px`);
-  bs.setProperty('--lgh', `${lg ? Math.round(H - lg.top) : 0}px`);
   bs.setProperty('--tlh', `${tl ? Math.round(H - tl.top) : 0}px`);
   bs.setProperty('--tlb', `${tl ? Math.round(tl.bottom) : 60}px`);
   map.setPadding(pad, animate);
   map.setObstacles([search, tl, card, lg, br, tr, num].filter(Boolean).map((r) => [r.left - 4, r.top - 4, r.right + 4, r.bottom + 4]));
   if (ui.stage && ui.locValues) map.setTags(stageTags(ui.stage, ui.locValues));
+  // the variables just set can move the timeline: measure once more when they did
+  const sig = `${tl ? Math.round(tl.top) : 0}|${tl ? Math.round(tl.left) : 0}|${document.body.classList.contains('tl-stack')}`;
+  if (pass < 1 && sig !== ui.padSig) { ui.padSig = sig; requestAnimationFrame(() => applyPadding(false, pass + 1)); } else ui.padSig = sig;
 }
 
 // ---------------------------------------------------------------- actions
@@ -323,6 +348,7 @@ function closeCard() {
 }
 function resetStage() {
   stopPlay();
+  if (document.activeElement && document.activeElement.closest && document.activeElement.closest('.timeline')) requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c) c.focus(); });
   const wasStageCard = ['product', 'group', 'basket'].includes(state.view.kind);
   state.stage = { kind: 'index' }; state.week = null; ui.tlOpen = false;
   if (wasStageCard) closeCard(); else { writeHash(false); notify('stage'); }
@@ -454,7 +480,7 @@ function cardView() {
       onCopyLink: () => copyLink(`${location.origin}${location.pathname}#c?items=${state.basket.map((b) => `${b.id}:${b.qty}`).join(',')}`) });
   }
   if (v.kind === 'settings') {
-    return settingsCard({ ...common, prefs: state.prefs, own: state.own, meta: state.data.meta, canInstall: !!ui.installPrompt,
+    return settingsCard({ ...common, phone: ui.phone.matches, prefs: state.prefs, own: state.own, meta: state.data.meta, canInstall: !!ui.installPrompt,
       onPref: (k, val) => setPref(k, val),
       onInstall: async () => { const p = ui.installPrompt; if (!p) return; p.prompt(); const r = await p.userChoice; if (r && r.outcome === 'accepted') { ui.installPrompt = null; showToast(t('installed')); } renderChrome(); },
       onExport: (kind) => { const rows = state.own; const lookup = { product: (id) => state.byProduct.get(id), store: (id) => state.byStore.get(id) }; if (kind === 'csv') download('acomo-mis-precios.csv', ownToCsv(rows, lookup), 'text/csv'); else download('acomo-mis-precios.json', ownToJson(rows)); },
@@ -469,7 +495,7 @@ function pickResult(e) {
   if (inp) inp.blur();
   if (e.kind === 'group') openGroup(e.id);
   else if (e.kind === 'product') openProduct(e.id);
-  else { openStore(e.id); requestAnimationFrame(() => map.zoomTo(locOf(e.id), 3)); }
+  else { openStore(e.id); requestAnimationFrame(() => { const l = locOf(e.id); if (l) map.zoomTo(l, 3); }); }
 }
 function runSearch(q) {
   ui.query = q; ui.active = -1;
@@ -500,7 +526,7 @@ function renderChrome() {
   b.toggle('no-motion', !motionOn());
   const flat = ui.results ? [...ui.results.groups, ...ui.results.products, ...ui.results.stores] : [];
   const narrow = innerWidth < 520 || (ui.phone.matches);
-  const tlCollapsed = ui.stage && ui.stage.kind === 'index' && !ui.tlOpen && ui.stage.weekIdx == null;
+  const tlCollapsed = !!ui.stage && ((ui.stage.kind === 'index' && !ui.tlOpen && ui.stage.weekIdx == null) || (ui.phone.matches && open && !ui.tlSheetOpen));
   const tpl = html`
     ${searchView({ query: ui.query, results: ui.results, active: ui.active, placeholder: narrow ? t('searchPhShort') : t('searchPh'),
       onInput: (q) => { runSearch(q); renderChrome(); },
@@ -516,12 +542,17 @@ function renderChrome() {
       onBlur: () => setTimeout(() => { if (!chrome.querySelector('.search').contains(document.activeElement) && ui.results) { ui.results = null; renderChrome(); } }, 150),
       onFocus: () => { if (ui.query && !ui.results && ui.searchIndex) { runSearch(ui.query); renderChrome(); } } })}
     ${topRight({ basketCount: state.basket.length, basketOn: state.view.kind === 'basket', onBasket: openBasket })}
-    ${bottomRight({ settingsOn: state.view.kind === 'settings', onSettings: openSettings, onReset: () => { map.reset(); ui.moved = false; renderChrome(); requestAnimationFrame(() => { const s = chrome.querySelector('.settings-btn'); if (s) s.focus(); }); }, moved: ui.moved })}
+    ${toast({ text: ui.toast, action: ui.toastAction && ui.toastAction.label, onAction: async () => { const a = ui.toastAction; const back = ui.toastReturn; ui.toastReturn = null; hideToast(); if (a) await a.fn(); if (back && document.contains(back)) back.focus(); }, onFocus: () => clearTimeout(ui.toastTimer), onBlur: () => { if (ui.toastAction) { clearTimeout(ui.toastTimer); ui.toastTimer = setTimeout(hideToast, 4000); } } })}
+    ${open ? cardView() : nothing}
     <div class="float bottomleft">${legend({ stage: ui.stage, title: stageTitle(), hasOwn: !!(ui.stage && ownForStage(ui.stage).length), onResetStage: resetStage, onTitle: state.stage.kind !== 'index' && !['product', 'group', 'basket'].includes(state.view.kind) ? openStageCard : null })}${credit({ retrieved: retrievedDate() })}</div>
     ${weekNumeral(ui.stage)}
-    ${timeline({ stage: ui.stage, width: ui.tlW, compact: ui.phone.matches || innerHeight < 620, playing: ui.playing, collapsed: tlCollapsed, onExpand: () => { ui.tlOpen = true; renderChrome(); requestAnimationFrame(() => { const s = chrome.querySelector('.tl-svg'); if (s) s.focus(); applyPadding(); }); }, onWeek: (w) => { stopPlay(); setWeek(w); }, onLive: () => { stopPlay(); setWeek(null); }, onPlay: togglePlay, onStep: stepWeek })}
-    ${open ? cardView() : nothing}
-    ${toast({ text: ui.toast, action: ui.toastAction && ui.toastAction.label, onAction: async () => { const a = ui.toastAction; ui.toast = ''; ui.toastAction = null; renderChrome(); if (a) await a.fn(); } })}
+    ${timeline({ stage: ui.stage, width: ui.tlW, compact: ui.phone.matches || innerHeight < 620 || innerWidth < 1100, playing: ui.playing, collapsed: tlCollapsed,
+      onExpand: () => { if (ui.phone.matches && open) ui.tlSheetOpen = true; else ui.tlOpen = true; renderChrome(); requestAnimationFrame(() => { const s = chrome.querySelector('.tl-svg'); if (s) s.focus(); applyPadding(); }); },
+      onWeek: (w) => { stopPlay(); ui.announceWeek = true; setWeek(w); },
+      // on the index, "Reciente" also folds the strip back into its chip
+      onLive: () => { stopPlay(); ui.announceWeek = true; if (ui.stage && ui.stage.kind === 'index') { ui.tlOpen = false; requestAnimationFrame(() => { const c = chrome.querySelector('.tl-chip'); if (c && ui.keyboard) c.focus(); applyPadding(); }); } if (state.week) setWeek(null); else renderChrome(); },
+      onPlay: togglePlay, onStep: (d) => { ui.announceWeek = true; stepWeek(d); } })}
+    ${bottomRight({ settingsOn: state.view.kind === 'settings', onSettings: openSettings, onReset: () => { map.reset(); ui.moved = false; renderChrome(); requestAnimationFrame(() => { const s = chrome.querySelector('.settings-btn'); if (s) s.focus(); }); }, moved: ui.moved })}
   `;
   render(tpl, chrome);
   // keep the highlighted search result in view; measure the timeline for pixel-true drawing
@@ -567,7 +598,7 @@ async function boot() {
   state.locOf = new Map(); for (const l of state.locations) for (const sid of l.stores) state.locOf.set(sid, l.id);
 
   map = createMap(stageHost, geo, state.locations, { motion: motionOn });
-  map.setName(t('mapLabel'));
+  map.setName(t('mapLabel'), t('mapRole'));
   map.setLabels(state.prefs.labels !== false);
   map.onHover((id, x, y) => { const same = id === ui.hover; ui.hover = id; ui.hx = x; ui.hy = y; renderTip(same); });
   map.onActive((id, x, y) => {
@@ -610,7 +641,7 @@ async function boot() {
   subscribe((kinds) => {
     if (kinds.has('prefs')) {
       setLang(state.prefs.lang || 'es'); document.title = t('appName');
-      map.setName(t('mapLabel'));
+      map.setName(t('mapLabel'), t('mapRole'));
       map.setLabels(state.prefs.labels !== false);
       if (ui.stage) map.setTags(stageTags(ui.stage, ui.locValues || new Map()));
     }
@@ -618,6 +649,7 @@ async function boot() {
       const wasOpen = !!chrome.querySelector('.card');
       if (!wasOpen && state.view.kind !== 'city') ui.opener = ui.opener || document.activeElement;
       ui.side = cardSide(); ui.showAll = false; ui.storeFilter = '';
+      if (state.view.kind === 'city') ui.tlSheetOpen = false;
       ui.entering = motionOn(); renderChrome();
       if (ui.entering) requestAnimationFrame(() => requestAnimationFrame(() => { ui.entering = false; renderChrome(); }));
       map.clearHover();
@@ -630,8 +662,12 @@ async function boot() {
       requestAnimationFrame(() => {
         const bd = chrome.querySelector('.card .body'); if (bd) bd.scrollTop = 0;
         const h = chrome.querySelector('.card h2');
-        if (h) { announce(h.textContent); if (ui.keyboard) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); } }
-        else if (state.view.kind === 'city' && ui.opener && ui.keyboard && document.contains(ui.opener)) { ui.opener.focus({ preventScroll: true }); ui.opener = null; }
+        if (h) { if (!(ui.offer && state.view.kind === 'basket')) announce(h.textContent); if (ui.keyboard) h.focus({ preventScroll: true }); }
+        else if (state.view.kind === 'city' && ui.keyboard && (!document.activeElement || document.activeElement === document.body || !document.contains(document.activeElement))) {
+          const back = ui.opener && document.contains(ui.opener) ? ui.opener : chrome.querySelector('.search input');
+          if (back) back.focus({ preventScroll: true });
+          ui.opener = null;
+        }
         if (state.view.kind === 'city') ui.opener = null;
       });
     } else if (kinds.has('week')) { writeHash(false); updateStage(); }
@@ -659,7 +695,7 @@ async function boot() {
     const ae = document.activeElement;
     const inInput = ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName);
     if (e.key === 'Escape') {
-      if (inInput) { ae.blur(); return; }
+      if (inInput) { const emptySearch = ae.matches('.search input') && !ae.value; ae.blur(); if (!emptySearch) return; }
       if (state.view.kind !== 'city') closeCard();
       else if (ui.playing) stopPlay();
       else if (state.week) setWeek(null);
@@ -674,6 +710,21 @@ async function boot() {
       if (items[i]) items[i].focus();
     }
   });
+  let sheetDrag = null;
+  chrome.addEventListener('pointerdown', (e) => {
+    if (!ui.phone.matches || !e.target.closest('.card .head') || e.target.closest('button, a')) return;
+    sheetDrag = { y: e.clientY, grip: !!e.target.closest('.grip') };
+  });
+  window.addEventListener('pointerup', (e) => {
+    if (!sheetDrag) return;
+    const dy = e.clientY - sheetDrag.y, b = document.body.classList;
+    const grip = sheetDrag.grip; sheetDrag = null;
+    if (dy < -24 || (grip && Math.abs(dy) < 6 && !b.contains('sheet-full'))) { b.add('sheet-full'); b.remove('sheet-peek'); }
+    else if (dy > 24 || (grip && Math.abs(dy) < 6)) { if (b.contains('sheet-full')) b.remove('sheet-full'); else b.add('sheet-peek'); }
+    else return;
+    setTimeout(() => applyPadding(true), 320);
+  });
+  if (ui.phone.matches && innerHeight < 700) document.body.classList.add('sheet-peek');
   window.addEventListener('offline', () => showToast(t('offline'), 4000));
   window.addEventListener('online', () => { for (const [k, v] of ui.storeFiles) if (v && v.error) ui.storeFiles.delete(k); renderChrome(); });
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); ui.installPrompt = e; renderChrome(); });

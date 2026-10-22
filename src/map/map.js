@@ -203,9 +203,17 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   }
 
   // ---- labels in screen space, collision-culled ----
+  // dots inside a screen box (any dot: a name over rings reads as fragments too)
+  function dotsIn(box, pad = 2) {
+    let n = 0;
+    for (const p of located) { if (p._x == null) continue; const dx = p._x * view.k + view.x, dy = p._y * view.k + view.y; if (dx > box[0] - pad && dx < box[2] + pad && dy > box[1] - pad && dy < box[3] + pad) n++; }
+    return n;
+  }
   function drawLabels() {
     labelsG.innerHTML = '';
     if (!labelsOn || view.k > 4.5) return;
+    // a city drawn smaller than its own names gets none
+    { const fb = frameBounds(); if ((fb[1][0] - fb[0][0]) * view.k < 200) return; }
     const placed = [...obstacles, ...placedTags];
     const size = W < 520 ? 9 : 10.5;
     const hit = (box, b) => !(box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3]);
@@ -215,6 +223,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       const box = [x - w / 2, y - h / 2, x + w / 2, y + h / 2];
       if (box[0] < 4 || box[2] > W - 4 || box[1] < 4 || box[3] > H - 4) continue;
       if (placed.some((b) => hit(box, b))) continue;
+      if (dotsIn(box) > 2) continue;
       placed.push(box);
       const t = el('text', { x, y, class: 'alc-label' }, labelsG);
       t.style.fontSize = `${size}px`;
@@ -243,8 +252,9 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       const tw = Math.max(p1.getComputedTextLength(), p2 ? p2.getComputedTextLength() : 0);
       probe.remove();
       const w = Math.ceil(tw) + 16, h = tg.sub ? 36 : 22;
-      // try above-right, above-left, below-right, below-left
-      const spots = [[x + 10, y - h - 10], [x - w - 10, y - h - 10], [x + 10, y + 10], [x - w - 10, y + 10]];
+      // above, below and beside the dot, at three leader lengths: the nearest spot that covers no data wins
+      const spots = [];
+      for (const d of [10, 30, 56]) spots.push([x + d, y - h - d], [x - w - d, y - h - d], [x + d, y + d], [x - w - d, y + d], [x + d + 8, y - h / 2], [x - w - d - 8, y - h / 2]);
       let spot = null, spotCost = Infinity;
       for (const [bx, by] of spots) {
         const box = [bx, by, bx + w, by + h];
@@ -253,7 +263,8 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
         const cost = colouredNear(box);
         if (cost < spotCost) { spot = box; spotCost = cost; if (!cost) break; }
       }
-      if (!spot) continue;
+      // never bury the data a tag annotates: a spot over more than two coloured dots is no spot
+      if (!spot || spotCost > 2) continue;
       placed.push(spot); placedTags.push(spot);
       const g = el('g', { class: `tag ${tg.kind || ''}`, 'data-id': tg.id, role: 'button', tabindex: '-1', 'aria-label': `${tg.text}, ${sub}` }, tagsG);
       const ax = spot[0] < x ? spot[2] : spot[0], ay = spot[1] < y ? spot[3] : spot[1];
@@ -407,7 +418,16 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     el('circle', { cx: c.getAttribute('cx'), cy: c.getAttribute('cy'), r: (Number(c.getAttribute('r')) || DOT_R / view.k) + 5 / view.k, class: 'kbd-ring' }, layers.halo);
   }
   function setActive(id) {
-    active = id; drawActive();
+    active = id;
+    // the keyboard's store stays in view: pan (never zoom) when it leaves the free area
+    if (id && !api.inFreeArea(id)) {
+      const p = byId.get(id);
+      const cx = pad.left + (W - pad.left - pad.right) / 2, cy = pad.top + (H - pad.top - pad.bottom) / 2;
+      atFit = false;
+      view = clampView({ k: view.k, x: cx - p._x * view.k, y: cy - p._y * view.k });
+      applyView();
+    }
+    drawActive();
     if (id) { const [x, y] = screenOf(id); for (const h of handlers.active) h(id, x, y); }
   }
   function move(dx, dy) {
@@ -483,7 +503,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     setLabels(on) { labelsOn = on; drawLabels(); },
     // screen rectangles the labels and tags must avoid (search, legend, timeline, card, buttons)
     setObstacles(list) { obstacles = list || []; drawTags(); drawLabels(); },
-    setName(text) { svg.setAttribute('aria-label', text); },
+    setName(text, role) { svg.setAttribute('aria-label', text); if (role) svg.setAttribute('aria-roledescription', role); },
     onActive(h) { handlers.active.push(h); },
     isAtFit() { return atFit; },
     screenXY(id) {

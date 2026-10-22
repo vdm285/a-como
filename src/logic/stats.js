@@ -45,3 +45,8 @@ export function autoCap(devs) {
   for (const s of steps) if (q <= s) return s;
   return 0.5;
 }
+
+// "Revísalo": a price 2.5 times or more, or 0.4 times or less, the median of its comparison set.
+// Symmetric in log terms: a price at a third of the median is as suspect as one at three times it.
+export const FAR_HI = 2.5, FAR_LO = 0.4;
+export const isFar = (value, ref) => value != null && ref > 0 && (value / ref >= FAR_HI || value / ref <= FAR_LO);

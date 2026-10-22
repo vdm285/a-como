@@ -12,9 +12,9 @@ import { median, minMax, deviation } from '../logic/stats.js';
 import { perUnit, sizeLabel, DIM } from '../logic/unit.js';
 import { fold } from './search.js';
 import { giroLabel, storeIndexWords, refText } from './chrome.js';
+import { isFar } from '../logic/stats.js';
 
 const MIN_N = 3; // a chip or a flag needs a median from at least this many stores
-const FLAG = 1.5; // beyond ±150 % from the reference: "revísalo", never a win or a loss
 
 export function devChip(dev, digits = 0) {
   if (dev == null) return nothing;
@@ -22,28 +22,34 @@ export function devChip(dev, digits = 0) {
   const txt = Math.abs(dev) < 0.005 ? t('atMedian') : dev < 0 ? t('pctBelow', { pct: pct(-dev, digits).replace('+', '') }) : t('pctAbove', { pct: pct(dev, digits).replace('+', '') });
   return html`<span class="d num" style="color:${color}">${txt}</span>`;
 }
-// a chip, or the review flag when the price is too far from the reference to be a fair comparison
-// far: whether the price is far from its own comparison set (in a chosen week, that week's
-// median); when not given, the distance from the reference decides
-function chipOrFlag(dev, ok = true, far = null) {
+// a chip, or the review flag when the price is too far from its comparison set to be a fair
+// comparison. far: the stage's own decision (v.far, see stage.js); when not given, the ratio to
+// the reference decides, symmetrically (2.5 times or 0.4 times). farKind names the set.
+function chipOrFlag(dev, ok = true, far = null, farKind = 'recent') {
   if (!ok || dev == null) return nothing;
-  if (far == null ? Math.abs(dev) > FLAG : far) return html`<span class="flag" title=${t('outlierHint')}>${t('outlier')}</span>`;
+  if (far == null ? isFar(1 + dev, 1) : far) return html`<span class="flag" title=${farKind === 'week' ? t('outlierHintWeek') : t('outlierHint')}>${t('outlier')}</span>`;
   return devChip(dev);
 }
 const swColor = (dev) => (dev == null ? 'transparent' : dev < -0.005 ? 'var(--cheaper)' : dev > 0.005 ? 'var(--dearer)' : 'var(--mid)');
+// how many rows share the lowest value: a tie is said as a tie, never as one store's win
+const tiesAtMin = (rows, key) => (rows.length ? rows.filter((r) => Math.abs(r[key] - rows[0][key]) < 0.005).length : 0);
+const cheapestLine = (n, name) => (n > 1 ? t('tiedCheapest', { n }) : `${t('cheapestHere')} · ${name}`);
+const fmtInt = (n) => new Intl.NumberFormat(getLang() === 'en' ? 'en-US' : 'es-MX').format(n);
 
 // a whole row as a real link to its route: Enter opens, middle-click opens a tab, a screen reader
-// hears a link; the click is intercepted so the app keeps its own history
-function rowLink(href, open, label, content, selected = false) {
-  return html`<li class=${selected ? 'sel' : ''}><a class="row" href=${href} aria-label=${label} @click=${(e) => { if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey) { e.preventDefault(); open(); } }}>${content}</a></li>`;
+// hears a link named by everything the row shows (an aria-label dropped "falta 1" and "revísalo");
+// the click is intercepted so the app keeps its own history
+function rowLink(href, open, label, content, selected = false, extra = '') {
+  return html`<li class=${`${selected ? 'sel' : ''} ${extra}`}><a class="row" href=${href} @click=${(e) => { if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey) { e.preventDefault(); open(); } }}>${content}</a></li>`;
 }
 
 function head({ kicker, title, sub, onClose, onKicker, id }) {
   const k = kicker && fold(kicker) !== fold(title) ? kicker : null;
   return html`<div class="head">
+    <div class="grip" aria-hidden="true"></div>
     <div class="titles">
       ${k ? html`<div class="kicker">${onKicker ? html`<button class="klink" @click=${onKicker}>${I.chevronL()}${k}</button>` : k}</div>` : nothing}
-      <h2 id=${id}>${title}</h2>
+      <h2 id=${id} tabindex="-1">${title}</h2>
       ${sub ? html`<div class="sub">${sub}</div>` : nothing}
     </div>
     <button class="x" @click=${onClose} title=${t('close')} aria-label=${t('close')}>${I.x()}</button>
@@ -134,7 +140,7 @@ export function storeCard(c) {
       const dev = recent && p.median != null && (p.stores ?? 0) >= MIN_N ? deviation(price, p.median) : null;
       (recent ? recentRows : olderRows).push({ p, price, date, dev });
     }
-    const eligible = recentRows.filter((r) => r.dev != null && Math.abs(r.dev) <= FLAG && (pharmacy || !/medicamento/i.test(r.p.category || '')));
+    const eligible = recentRows.filter((r) => r.dev != null && !isFar(1 + r.dev, 1) && (pharmacy || !/medicamento/i.test(r.p.category || '')));
     wins = [...eligible].sort((a, b) => a.dev - b.dev).slice(0, 5).filter((r) => r.dev < -0.02);
     losses = [...eligible].sort((a, b) => b.dev - a.dev).slice(0, 5).filter((r) => r.dev > 0.02);
   }
@@ -147,21 +153,21 @@ export function storeCard(c) {
   const row = (r) => rowLink(`#p/${r.p.id}`, () => c.onOpenProduct(r.p.id), `${r.p.name}${r.p.brand ? ' ' + r.p.brand : ''}, ${money(r.price)}, ${fdate(r.date)}`, html`
     <span class="sw" style="background:${swColor(r.dev)}"></span>
     <div class="nm"><div class="n">${r.p.name}${r.p.brand ? ` · ${r.p.brand}` : ''}</div><div class="s">${r.p.presentation || ''}</div></div>
-    <div class="pr"><div class="p num">${money(r.price)}</div><div class="u">${fdate(r.date, true)}${r.dev != null ? html` · ${chipOrFlag(r.dev)}` : nothing}</div></div>`);
+    <div class="pr"><div class="p num">${money(r.price)}</div><div class="u">${fdate(r.date, true)}${r.dev != null ? html` · ${chipOrFlag(r.dev)}` : nothing}</div></div>`, false, r.date < win.from ? 'old' : '');
   const siblings = c.siblings || [];
   return html`<div class="card ${c.side} ${c.entering ? 'enter' : ''}" role="dialog" aria-labelledby="card-title">
     ${head({ id: 'card-title', kicker: `${store.chain}${giroLabel(store) ? ' · ' + giroLabel(store) : ''}`, title: store.name, sub: `${store.address || ''}${store.municipio ? ' · ' + store.municipio : ''}`, onClose: c.onClose })}
     <div class="body">
       ${stage && stage.kind !== 'index' && stageVal ? html`<section class="stagebox">
         <button class="h3link" @click=${c.onStageCard}>${I.chevronL()}${stageTitle}</button>
-        ${stageVal.value != null ? html`<div class="hero"><span class="big num">${money(stageVal.value)}</span>${stage.kind === 'group' && stage.unit ? html`<span class="unit">/ ${unitName(stage.unit)}</span>` : nothing}${stageVal.hatched ? html`<span class="delta">${stageVal.missing.length === 1 ? t('missingOne') : t('missing', { n: stageVal.missing.length })}</span>` : stageVal.dev != null ? html`<span class="delta">${chipOrFlag(stageVal.dev)}</span>` : nothing}</div>
+        ${stageVal.value != null ? html`<div class="hero"><span class="big num">${money(stageVal.value)}</span>${stage.kind === 'group' && stage.unit ? html`<span class="unit">/ ${unitName(stage.unit)}</span>` : nothing}${stageVal.hatched ? html`<span class="delta">${stageVal.missing.length === 1 ? t('missingOne') : t('missing', { n: stageVal.missing.length })}</span>` : stageVal.dev != null ? html`<span class="delta">${chipOrFlag(stageVal.dev, true, !!stageVal.far, stage.farKind)}</span>` : nothing}</div>
           <div class="muted">${stageVal.dateMin && stageVal.date && stageVal.dateMin !== stageVal.date ? fspan(stageVal.dateMin, stageVal.date) : fdate(stageVal.date)}${refText(stage) ? ` · ${refText(stage)}` : ''}</div>`
           : html`<div class="note">${{ stale: stageVal.lastDate ? t('reasonStaleDate', { date: fdate(stageVal.lastDate) }) : t('reasonStale'), none: t('reasonNone'), novisit: t('noVisitWeek'), otherUnit: t('reasonOtherUnit') }[stageVal.reason] || t('reasonNone')}${stageVal.lastPrice ? html` · ${money(stageVal.lastPrice)}` : nothing}</div>`}
       </section>` : nothing}
       ${siblings.length ? html`<section>
         <h3>${t('sameSpot')} · ${siblings.length + 1}</h3>
         <ul class="rank">${siblings.slice(0, showAll ? siblings.length : 8).map(({ store: s, val }) => rowLink(`#t/${s.id}`, () => c.onOpenStore(s.id), s.name, html`
-          <span class="sw" style="background:${swColor(val && val.dev)}"></span>
+          <span class="sw ${val && val.dev != null ? '' : 'empty'}" style="background:${swColor(val && val.dev)}"></span>
           <div class="nm"><div class="n">${s.name}</div><div class="s">${s.chain}${giroLabel(s) ? ' · ' + giroLabel(s) : ''}</div></div>
           <div class="pr">${val && val.value != null ? html`<div class="p num">${stage && stage.kind === 'index' ? storeIndexWords(val.value) : money(val.value)}</div>${stage && stage.kind !== 'index' ? devChip(val.dev) : nothing}` : nothing}</div>`))}</ul>
         ${siblings.length > 8 && !showAll ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: siblings.length - 8 })}</button>` : nothing}
@@ -169,24 +175,25 @@ export function storeCard(c) {
       <section>
         <h3>${t('indexCardTitle')}</h3>
         ${latestIdx ? html`<div class="hero"><span class="big">${storeIndexWords(latestIdx[1])}</span></div>
-          <div class="muted">${t('indexSub', { date: fdate(latestIdx[0]) })}${latestIdx[0] < win.fromWeek ? html` · <span class="flag">${t('notRecent')}</span>` : nothing}</div>`
+          <div class="muted">${t(Math.abs(latestIdx[1] - 1) < 0.005 ? 'indexSubAt' : 'indexSub', { date: fdate(latestIdx[0]) })}${latestIdx[0] < win.fromWeek ? html` · <span class="flag">${t('notRecent')}</span>` : nothing}</div>`
           : html`<div class="note">${t('reasonFew')}</div>`}
         <div class="muted">${t('visitLine', { date: fdate(store.lastSeen), n: store.lastVisitProducts ?? 0 })} · ${t('allTimeLine', { n: store.products, date: fdate(store.firstSeen, 'monthYear') })}</div>
         ${series.length > 1 ? html`<div style="margin-top:8px">${sparkline(series, { band: false, cursor: stage && stage.kind === 'index' && stage.weekIdx != null ? series.findIndex((r) => r[0] === stage.week) : null, onPick: c.onPickWeek, ref: 1 })}</div>` : nothing}
         <details><summary class="muted">${t('howIndex')}</summary><p class="note">${t('indexMethod')}${latestIdx ? html` ${t('indexRatio', { v: latestIdx[1].toFixed(3) })}` : nothing}</p></details>
         <div class="actions">${copyBtn(c)}</div>
       </section>
-      ${wins.length ? html`<section><h3>${t('bestHere')} · ${t('lastDays', { n: win.days })}</h3><ul class="rank">${wins.map(row)}</ul></section>` : nothing}
-      ${losses.length ? html`<section><h3>${t('worstHere')} · ${t('lastDays', { n: win.days })}</h3><ul class="rank">${losses.map(row)}</ul></section>` : nothing}
+      ${store.unplaced ? html`<section><div class="note">${t('unplacedNote')}</div></section>` : nothing}
+      ${wins.length ? html`<section><h3>${t('bestHere')} · ${fspan(win.from, win.to, true)}</h3><ul class="rank">${wins.map(row)}</ul></section>` : nothing}
+      ${losses.length ? html`<section><h3>${t('worstHere')} · ${fspan(win.from, win.to, true)}</h3><ul class="rank">${losses.map(row)}</ul></section>` : nothing}
       ${ownHere.length ? html`<section><h3>${t('ownPrices')}</h3>${ownList(ownHere, c, { showStore: false })}</section>` : nothing}
       <section>
         <h3>${t('storeList')}</h3>
         ${items == null ? html`<div class="muted">${t('loadingCard')}</div>` : storeFile.error ? html`<div class="note">${t('loadFailedCard')}</div>` : recentRows.length + olderRows.length === 0 ? html`<div class="note">${t('emptyStore')}</div>` : html`
           <div class="ownform" style="margin:0 0 8px"><input id="store-filter" type="search" enterkeyhint="search" aria-label=${t('searchInStore')} placeholder=${t('searchInStore')} .value=${filter || ''} @input=${(e) => c.onFilter(e.target.value)} @keydown=${(e) => { if (e.key === 'Escape' && e.target.value) { e.stopPropagation(); c.onFilter(''); } }} style="flex:1" /></div>
-          <div class="subh">${t('lastDays', { n: win.days })} · ${listed.length}</div>
+          <div class="subh">${t('recentSpan', { span: fspan(win.from, win.to, true) })} · ${fmtInt(listed.length)}</div>
           <ul class="rank">${listed.slice(0, limit).map(row)}</ul>
           ${listed.length > limit ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: listed.length - limit })}</button>` : nothing}
-          ${listedOld.length ? html`<details class="older"><summary class="subh">${t('before')} · ${listedOld.length}</summary><ul class="rank old">${listedOld.slice(0, showAll ? Infinity : 40).map(row)}</ul></details>` : nothing}`}
+          ${listedOld.length ? html`<details class="older"><summary class="subh">${t('before')} · ${fmtInt(listedOld.length)}</summary><ul class="rank old">${listedOld.slice(0, showAll ? Infinity : 40).map(row)}</ul></details>` : nothing}`}
         ${sourceLine(c.retrieved, store.lastSeen ? t('visitShort', { date: fdate(store.lastSeen) }) : '')}
       </section>
     </div>
@@ -211,12 +218,13 @@ export function productCard(c) {
   const mine = stage && stage.kind === 'product' && stage.id === summary.id ? stage : null;
   const okChip = !!(mine && !mine.tooFew);
   const ranked = [];
-  if (mine) for (const [sid, v] of mine.values) if (v.value != null) { const s = byStore.get(sid); if (s) ranked.push({ sid, s, price: v.value, dev: v.dev, date: v.date, kind: KIND(s), color: v.neutral ? 'var(--mid)' : swColor(v.dev) }); }
+  if (mine) for (const [sid, v] of mine.values) if (v.value != null) { const s = byStore.get(sid); if (s) ranked.push({ sid, s, price: v.value, dev: v.dev, far: !!v.far, date: v.date, kind: KIND(s), color: v.neutral ? 'var(--mid)' : swColor(v.dev) }); }
   ranked.sort((a, b) => a.price - b.price);
   const weekMode = mine && mine.weekIdx != null;
   const ref = mine ? mine.ref : summary.median;
-  const weekMed = weekMode ? median(ranked.map((r) => r.price)) : null;
-  const farOf = (price) => (weekMode && ranked.length >= MIN_N && weekMed ? Math.abs(price / weekMed - 1) > FLAG : null);
+  // a week's median is said only when 3 stores give it; the recent reference is named only when it is one
+  const weekMedOk = weekMode && mine.weekN >= MIN_N;
+  const recentRef = !!(mine && mine.refKind === 'recent');
   const limit = showAll ? ranked.length : 10;
   const ownHere = (own || []).filter((o) => o.productId === summary.id);
   const group = byGroup ? byGroup.get(summary.group) : null;
@@ -231,23 +239,23 @@ export function productCard(c) {
     <div class="body">
       <section>
         <h3>${t('cityWide')} · ${when}</h3>
-        ${best ? html`<div class="hero"><span class="big num">${money(best.price)}</span><span class="unit">${t('cheapestHere')} · ${best.s.name}${unitInline(best.price, summary.size, unit) ? ` · ${unitInline(best.price, summary.size, unit)}` : ''}</span></div>
-          <div class="muted">${fdate(best.date)}</div>
-          <div class="refline">${weekMode ? html`${t('weekMedian')}: <b class="num">${money(weekMed)}</b> · ${t('storesThisWeek', { n: ranked.length })}${refText(mine) ? html` · ${refText(mine)}` : nothing}` : refText(mine) || nothing}</div>`
+        ${best ? html`<div class="hero"><span class="big num">${money(best.price)}${unitInline(best.price, summary.size, unit) ? html`<small> · ${unitInline(best.price, summary.size, unit)}</small>` : nothing}</span></div>
+          <div class="unitline">${cheapestLine(tiesAtMin(ranked, 'price'), best.s.name)} · ${fdate(best.date)}</div>
+          <div class="refline">${weekMode ? html`${weekMedOk ? html`${t('weekMedian')}: <b class="num">${money(mine.weekMed)}</b> · ` : nothing}${t('storesThisWeek', { n: ranked.length })}${recentRef && refText(mine) ? html` · ${refText(mine)}` : nothing}` : refText(mine) || nothing}</div>`
           : html`<div class="note">${t('noRecentPrice')}${summary.last ? html` ${t('lastData', { date: fdate(summary.last) })}` : nothing}</div>`}
-        ${ranked.length > 1 ? html`<div class="stripwrap">${priceStrip({ rows: ranked.map((r) => ({ ...r, value: r.price, name: r.s.name })), ref: okChip ? ref : null, refLabel: weekMode ? `${t('recentWord')} ` : '', ownPrice: latestOwn ? latestOwn.price : null, onPick: c.onOpenStore, selected: c.selectedStore })}</div>` : nothing}
+        ${ranked.length > 1 ? html`<div class="stripwrap">${priceStrip({ rows: ranked.map((r) => ({ ...r, value: r.price, name: r.s.name })), ref: okChip ? ref : null, refLabel: weekMode && recentRef ? `${t('recentWord')} ` : '', ownPrice: latestOwn ? latestOwn.price : null, onPick: c.onOpenStore, selected: c.selectedStore })}</div>` : nothing}
         <div class="actions">
           <button class="btn ${inBasket ? 'on' : ''}" @click=${c.onToggleBasket}>${inBasket ? I.check() : I.plus()}${inBasket ? t('inBasket') : t('addToBasket')}</button>
           ${copyBtn(c)}
         </div>
       </section>
       <section>
-        <h3>${t('ranking')}${weekMode && okChip ? html` · ${t('vsRecentShort')}` : nothing}</h3>
+        <h3>${t('ranking')}${weekMode && okChip && recentRef ? html` · ${t('vsRecentShort')}` : nothing}</h3>
         ${!mine ? html`<div class="muted">${t('loadingCard')}</div>` : ranked.length === 0 ? html`<div class="note">${weekMode ? t('noVisitWeek') : t('noRecentPrice')}</div>` : html`
           <ul class="rank">${ranked.slice(0, limit).map((r) => rowLink(`#t/${r.sid}`, () => c.onOpenStore(r.sid), `${r.s.name}, ${money(r.price)}, ${fdate(r.date)}`, html`
             <span class="sw" style="background:${r.color}"></span>
-            <div class="nm"><div class="n">${r.s.name}</div><div class="s">${r.s.chain}${r.s.municipio ? ' · ' + r.s.municipio : ''} · ${fdate(r.date, true)}${ownByStore.has(r.sid) ? html` · <span class="own">${t('ownMark')} ${money(ownByStore.get(r.sid).price)}</span>` : nothing}</div></div>
-            <div class="pr"><div class="p num">${money(r.price)}</div><div class="u">${unitInline(r.price, summary.size, unit)}${unitInline(r.price, summary.size, unit) && okChip ? ' · ' : ''}${chipOrFlag(r.dev, okChip, farOf(r.price))}</div></div>`, c.selectedStore === r.sid))}</ul>
+            <div class="nm"><div class="n">${r.s.name}</div><div class="s">${r.s.chain}${r.s.municipio ? ' · ' + r.s.municipio : ''}${ownByStore.has(r.sid) ? html` · <span class="own">${t('ownMark')} ${money(ownByStore.get(r.sid).price)}</span>` : nothing}</div></div>
+            <div class="pr"><div class="p num">${money(r.price)}</div><div class="u">${fdate(r.date, true)}${unitInline(r.price, summary.size, unit) ? ` · ${unitInline(r.price, summary.size, unit)}` : ''}${okChip ? html` · ${chipOrFlag(r.dev, okChip, r.far, mine.farKind)}` : nothing}</div></div>`, c.selectedStore === r.sid))}</ul>
           ${ranked.length > limit ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: ranked.length - limit })}</button>` : nothing}`}
       </section>
       <section>
@@ -255,7 +263,7 @@ export function productCard(c) {
         <div class="note">${t('ownHint')}</div>
         ${keyed(summary.id, html`<form class="ownform" @submit=${(e) => { e.preventDefault(); const f = e.target; c.onAddOwn({ price: f.price.value, storeId: f.store.value }); f.price.value = ''; }}>
           <input id="own-price" class="money num" name="price" type="number" inputmode="decimal" enterkeyhint="done" min="0.01" step="0.01" placeholder="$" required aria-label=${t('ownAdd')} />
-          <select id="own-store" name="store" aria-label=${t('store')} .value=${c.defaultStore || ''}>${(c.storeOptions || []).map((s) => html`<option value=${s.id}>${s.name} · ${s.chain}</option>`)}</select>
+          <select id="own-store" name="store" aria-label=${t('store')}>${(c.storeOptions || []).map((s) => html`<option value=${s.id} ?selected=${s.id === c.defaultStore}>${s.name} · ${s.chain}</option>`)}</select>
           <button class="btn" type="submit">${I.check()}${t('ownSave')}</button>
         </form>`)}
         ${ownHere.length ? ownList(ownHere.map((o) => { const v = mine && mine.values.get(o.storeId); return { ...o, vs: v && v.value != null ? t('ownVs', { diff: pct(deviation(o.price, v.value)), date: fdate(v.date, true) }) : null }; }), { ...c, byProduct: null }, { showProduct: false }) : nothing}
@@ -278,7 +286,7 @@ export function groupCard(c) {
   const otherUnit = members.filter((p) => p.size && p.size.unit !== dim);
   const unsized = members.filter((p) => !p.size);
   const ranked = [];
-  if (mine) for (const [sid, v] of mine.values) if (v.value != null) { const s = byStore.get(sid); if (s) ranked.push({ sid, s, ...v, kind: KIND(s), color: v.neutral ? 'var(--mid)' : swColor(v.dev) }); }
+  if (mine) for (const [sid, v] of mine.values) if (v.value != null) { const s = byStore.get(sid); if (s) ranked.push({ sid, s, ...v, far: !!v.far, kind: KIND(s), color: v.neutral ? 'var(--mid)' : swColor(v.dev) }); }
   ranked.sort((a, b) => a.value - b.value);
   const limit = showAll ? ranked.length : 10;
   const pLimit = showAll ? sized.length : 12;
@@ -294,9 +302,10 @@ export function groupCard(c) {
     <div class="body">
       ${unit && best ? html`<section>
         <h3>${t('cheapestPerUnit')} · ${weekMode ? t('week', { date: fdate(mine.week) }) : t('recentSpan', { span: fspan(win.from, win.to) })}</h3>
-        <div class="hero"><span class="big num">${money(best.value)}</span><span class="unit">/ ${unitName(unit)} · ${best.s.name}</span></div>
-        <div class="muted">${bestP ? `${bestP.brand || bestP.name} ${bestP.presentation || ''} · ${money(best.price)} · ` : ''}${fdate(best.date)}</div>
-        <div class="refline">${weekMode && mine.weekRef != null ? html`${t('weekRefGroup', { ref: `${money(mine.weekRef)}/${uShort}`, n: mine.weekN })} · ` : nothing}${refText(mine)}</div>
+        <div class="hero"><span class="big num">${money(best.value)}<small>/${uShort}</small></span></div>
+        <div class="unitline">${cheapestLine(tiesAtMin(ranked, 'value'), best.s.name)} · ${fdate(best.date)}</div>
+        ${bestP ? html`<div class="muted">${bestP.brand || bestP.name} ${bestP.presentation || ''} · ${money(best.price)}</div>` : nothing}
+        <div class="refline">${weekMode && mine.weekRef != null && mine.weekN >= MIN_N ? html`${t('weekRefGroup', { ref: `${money(mine.weekRef)}/${uShort}`, n: mine.weekN })} · ` : nothing}${refText(mine)}</div>
         ${ranked.length > 1 ? html`<div class="stripwrap">${priceStrip({ rows: ranked.map((r) => ({ ...r, value: r.value, name: r.s.name })), ref: okChip ? mine.ref : null, refLabel: weekMode ? `${t('recentWord')} ` : '', onPick: c.onOpenStore, selected: c.selectedStore, unitSuffix: `/${uShort}` })}</div>` : nothing}
         <div class="actions">${copyBtn(c)}</div>
       </section>` : nothing}
@@ -311,8 +320,8 @@ export function groupCard(c) {
         <h3>${t('ranking')} · ${t('perUnit', { unit: unitName(unit) })}${weekMode && okChip ? html` · ${t('vsRecentShort')}` : nothing}</h3>
         ${!mine ? html`<div class="muted">${t('loadingCard')}</div>` : ranked.length === 0 ? html`<div class="note">${t('noRecentPrice')}</div>` : html`<ul class="rank">${ranked.slice(0, limit).map((r) => { const p = byProduct.get(r.pid); return rowLink(`#t/${r.sid}`, () => c.onOpenStore(r.sid), `${r.s.name}, ${money(r.value)} / ${unitName(unit)}`, html`
           <span class="sw" style="background:${r.color}"></span>
-          <div class="nm"><div class="n">${r.s.name}</div><div class="s">${p ? `${p.brand || p.name} · ${p.presentation || ''}` : ''} · ${fdate(r.date, true)}</div></div>
-          <div class="pr"><div class="p num">${money(r.value)}<small class="pu">/${uShort}</small></div><div class="u">${money(r.price)}${okChip ? html` · ${chipOrFlag(r.dev, true, weekMode && mine.weekRef && mine.weekN >= MIN_N ? Math.abs(r.value / mine.weekRef - 1) > FLAG : null)}` : nothing}</div></div>`, c.selectedStore === r.sid); })}</ul>
+          <div class="nm"><div class="n">${r.s.name}</div><div class="s">${p ? `${p.brand || p.name} · ${p.presentation || ''} · ${money(r.price)}` : ''}</div></div>
+          <div class="pr"><div class="p num">${money(r.value)}<small class="pu">/${uShort}</small></div><div class="u">${fdate(r.date, true)}${okChip ? html` · ${chipOrFlag(r.dev, true, r.far, mine.farKind)}` : nothing}</div></div>`, c.selectedStore === r.sid); })}</ul>
         ${ranked.length > limit ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: ranked.length - limit })}</button>` : nothing}`}
         ${sourceLine(c.retrieved, '')}
       </section>` : nothing}
@@ -355,7 +364,9 @@ export function basketCard(c) {
     chains.set(s.chain, e);
   }
   const chainList = [...chains.values()].sort((a, b) => a.lo - b.lo).slice(0, 8);
-  const when = stage && stage.weekIdx != null ? t('week', { date: fdate(stage.week) }) : t('recentSpan', { span: fspan(win.from, win.to) });
+  const weekMode = !!(stage && stage.weekIdx != null);
+  const when = weekMode ? t('week', { date: fdate(stage.week) }) : t('recentSpan', { span: fspan(win.from, win.to) });
+  const completeRows = ranking ? ranking.list.filter((r) => r.complete) : [];
   const units = items.reduce((n, b) => n + b.qty, 0);
   return html`<div class="card ${c.side} ${c.entering ? 'enter' : ''}" role="dialog" aria-labelledby="card-title">
     ${head({ id: 'card-title', kicker: t('basket'), title: items.length ? `${t('products_n', { n: items.length })}${units !== items.length ? ` · ${t('units_n', { n: units })}` : ''}` : t('basketEmptyTitle'), sub: ranking && ranking.completeCount ? t('completeStores', { n: ranking.completeCount }) : '', onClose: c.onClose })}
@@ -369,22 +380,23 @@ export function basketCard(c) {
       ${c.pacicGroups && c.pacicGroups.length ? html`<section><h3>${t('canasta')} · PACIC</h3><div class="note" style="margin-bottom:8px">${t('pacicHint', { n: c.pacicGroups.length })}</div><div class="chips">${c.pacicGroups.map((g) => html`<button class="chip" @click=${() => c.onOpenGroup(g.id)}>${g.name}</button>`)}</div></section>` : nothing}` : html`
       <section>
         <ul class="bitems">${repeat(items, (it) => it.id, (it) => { const p = byProduct.get(it.id); const name = p ? p.name + (p.brand ? ' · ' + p.brand : '') : it.id; return html`<li>
-          <div><a class="n linkish" href=${`#p/${it.id}`} @click=${(e) => { e.preventDefault(); c.onOpenProduct(it.id); }}>${name}</a><div class="s">${p ? (p.presentation || '') : ''}${p && p.median != null ? ` · ${money(p.median)} · ${t('storesRecentShort', { n: p.stores })}` : p ? ` · ${t('noRecentShort')}` : ''}</div></div>
+          <div><a class="n linkish" href=${`#p/${it.id}`} @click=${(e) => { e.preventDefault(); c.onOpenProduct(it.id); }}>${name}</a><div class="s">${p && p.median != null ? html`<b class="num nowrap">${money(p.median)}</b> · ` : nothing}${p ? (p.presentation || '') : ''}${p && p.median != null ? ` · ${t('storesRecentShort', { n: p.stores })}` : p ? ` · ${t('noRecentShort')}` : ''}</div></div>
           <div class="qty"><button @click=${() => c.onQty(it.id, it.qty - 1)} aria-label=${`${t('less')}: ${name}`}>−</button><span class="num" aria-label=${t('qty')}>${it.qty}</span><button @click=${() => c.onQty(it.id, it.qty + 1)} ?disabled=${it.qty >= 99} aria-label=${`${t('more1')}: ${name}`}>+</button></div>
           <button class="rm" @click=${() => c.onQty(it.id, 0)} title=${t('removeFromBasket')} aria-label=${`${t('removeFromBasket')}: ${name}`}>${I.x()}</button>
         </li>`; })}</ul>
         <div class="actions">${copyBtn(c)}<button class="btn ghost" @click=${c.onClear}>${I.trash()}${t('clear')}</button></div>
       </section>
       <section>
-        <h3>${t('rankingBasket')} · ${when}</h3>
-        ${best ? html`<div class="hero"><span class="big num">${money(best.total)}</span><span class="unit">${t('cheapestHere')} · ${byStore.get(best.storeId) ? byStore.get(best.storeId).name : ''}</span></div>
-          ${ranking.base != null && ranking.completeCount >= MIN_N && ranking.base > best.total ? html`<div class="refline">${t('savingsMedian', { amount: money(ranking.base - best.total), n: ranking.completeCount, median: money(ranking.base) })}</div>` : nothing}` : html`<div class="note">${t('noCompleteStore')}</div>`}
+        <h3>${t('rankingBasket')} · ${when}${weekMode && okChip ? html` · ${t('vsRecentShort')}` : nothing}</h3>
+        ${best ? html`<div class="hero"><span class="big num">${money(best.total)}</span></div>
+          <div class="unitline">${cheapestLine(tiesAtMin(completeRows, 'total'), byStore.get(best.storeId) ? byStore.get(best.storeId).name : '')}${best.dateMin && best.date ? ` · ${best.dateMin === best.date ? fdate(best.date) : fspan(best.dateMin, best.date)}` : ''}</div>
+          ${ranking.base != null && ranking.completeCount >= MIN_N && ranking.base > best.total ? html`<div class="refline">${t(weekMode ? 'savingsMedianWeek' : 'savingsMedian', { amount: money(ranking.base - best.total), n: ranking.completeCount, median: money(ranking.base) })}</div>` : nothing}` : html`<div class="note">${onlyComplete ? t('noCompleteStore') : t('noCompleteStoreAll')}</div>`}
         ${chainRace(chainList)}
         <div class="chips" style="margin:10px 0 8px"><button class="chip ${!onlyComplete ? 'on' : ''}" aria-pressed=${!onlyComplete ? 'true' : 'false'} @click=${() => c.onOnlyComplete(false)}>${t('allStores')}</button><button class="chip ${onlyComplete ? 'on' : ''}" aria-pressed=${onlyComplete ? 'true' : 'false'} @click=${() => c.onOnlyComplete(true)}>${t('onlyComplete')}</button></div>
         ${!ranking ? html`<div class="muted">${t('loadingCard')}</div>` : list.length === 0 ? html`<div class="note">${t('noCompleteStore')}</div>` : html`<ul class="rank">${list.slice(0, limit).map((r) => { const s = byStore.get(r.storeId); return rowLink(`#t/${r.storeId}`, () => c.onOpenStore(r.storeId), `${s ? s.name : r.storeId}, ${money(r.total)}`, html`
           <span class="sw ${r.complete ? '' : 'hatch'}" style="background:${r.complete ? (okChip ? swColor(r.dev) : 'var(--mid)') : ''}"></span>
           <div class="nm"><div class="n">${s ? s.name : r.storeId}</div><div class="s">${s ? s.chain + (s.municipio ? ' · ' + s.municipio : '') : ''}${r.dateMin && r.date ? ` · ${r.dateMin === r.date ? fdate(r.date, true) : fspan(r.dateMin, r.date, true)}` : ''}</div></div>
-          <div class="pr"><div class="p num">${money(r.total)}</div><div class="u">${r.complete ? (okChip ? devChip(r.dev) : nothing) : html`<span class="miss">${r.missing.length === 1 ? t('missingOne') : t('missing', { n: r.missing.length })}</span>`}</div></div>`, c.selectedStore === r.storeId); })}</ul>
+          <div class="pr"><div class="p num">${money(r.total)}</div><div class="u">${r.complete ? (okChip ? devChip(r.dev) : nothing) : html`<span class="miss">${r.missing.length === 1 ? t('missingOne') : t('missing', { n: r.missing.length })}</span>`}</div></div>`, c.selectedStore === r.storeId, r.complete ? '' : 'partial'); })}</ul>
         ${list.length > limit ? html`<button class="more" @click=${c.onShowAll}>${t('showMore', { n: list.length - limit })}</button>` : nothing}`}
         ${sourceLine(c.retrieved, '')}
       </section>`}
@@ -394,6 +406,7 @@ export function basketCard(c) {
 
 // ---------------------------------------------------------------- settings
 export function settingsCard(c) {
+  // (the phone's map band is too small for tags: the switch is hidden there)
   const { prefs, own, meta, canInstall, retrieved } = c;
   const lang = getLang();
   const seg = (key, labelId, on, off) => html`<div class="seg" role="group" aria-labelledby=${labelId}><button class=${prefs[key] !== false ? 'on' : ''} aria-pressed=${prefs[key] !== false ? 'true' : 'false'} @click=${() => c.onPref(key, true)}>${on}</button><button class=${prefs[key] === false ? 'on' : ''} aria-pressed=${prefs[key] === false ? 'true' : 'false'} @click=${() => c.onPref(key, false)}>${off}</button></div>`;
@@ -404,7 +417,7 @@ export function settingsCard(c) {
         <div class="row"><div class="l" id="set-lang">${t('language')}</div><div class="seg" role="group" aria-labelledby="set-lang"><button class=${lang === 'es' ? 'on' : ''} aria-pressed=${lang === 'es' ? 'true' : 'false'} @click=${() => c.onPref('lang', 'es')}>Español</button><button class=${lang === 'en' ? 'on' : ''} aria-pressed=${lang === 'en' ? 'true' : 'false'} @click=${() => c.onPref('lang', 'en')}>English</button></div></div>
         <div class="row"><div class="l" id="set-motion">${t('motion')}</div>${seg('motion', 'set-motion', t('on'), t('off'))}</div>
         <div class="row"><div class="l" id="set-labels">${t('labels')}</div>${seg('labels', 'set-labels', t('on'), t('off'))}</div>
-        <div class="row"><div class="l" id="set-tags">${t('tags')}</div>${seg('tags', 'set-tags', t('on'), t('off'))}</div>
+        ${c.phone ? nothing : html`<div class="row"><div class="l" id="set-tags">${t('tags')}</div>${seg('tags', 'set-tags', t('on'), t('off'))}</div>`}
         ${canInstall ? html`<div class="row"><div class="l">${t('appRow')}</div><button class="btn ghost" @click=${c.onInstall}>${I.download()}${t('install')}</button></div>` : nothing}
       </section>
       <section>

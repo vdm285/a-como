@@ -185,7 +185,7 @@ try {
     await sleep(1500);
     const label = await page.$eval('.timeline .tl-label', (e) => e.textContent).catch(() => '');
     check('a week link shows that week', /20 abr 2026/.test(label), label);
-    const hero = await page.$eval('.card .hero .unit', (e) => e.textContent).catch(() => '');
+    const hero = await page.$eval('.card .unitline', (e) => e.textContent).catch(() => '');
     check('the card headline is that week\'s cheapest store', /la más barata/.test(hero), hero);
     const refl = await page.$eval('.card .refline', (e) => e.textContent).catch(() => '');
     check('the card names that week\'s city median', /esa semana/.test(refl), refl);
@@ -198,6 +198,44 @@ try {
     await page.keyboard.press('Escape'); await sleep(800); // week → recent
     const label2 = await page.$eval('.timeline .tl-label', (e) => e.textContent).catch(() => '');
     check('Escape returns to the recent prices', /Precios del/.test(label2), label2);
+    await ctx.close();
+  }
+  // 7b. round 3: one flag rule, ties, caps from links, stores without a dot, the own-price form
+  {
+    const { ctx, page } = await fresh();
+    await open(page, 't/bodega-aurrera-76280c');
+    await page.evaluate(() => { location.hash = '#p/jitomate-3532af?w=2026-04-20'; });
+    await sleep(2500);
+    await page.evaluate(() => { location.hash = '#t/bodega-aurrera-76280c?w=2026-04-20'; });
+    await sleep(2000);
+    const flag = await page.$eval('.card .stagebox', (e) => e.textContent).catch(() => '');
+    check('a price cheap for its week is not flagged on its store card', !/revísalo/.test(flag) && /\$/.test(flag), flag.replace(/\s+/g, ' ').slice(0, 80));
+    await page.goto(`${BASE}#p/leche-ultrapasteurizada-a3d941`, { waitUntil: 'networkidle2' });
+    await sleep(2000);
+    const tie = await page.$eval('.card .unitline', (e) => e.textContent).catch(() => '');
+    check('a tie for the lowest price is named as a tie', /empatada en \d+ tiendas/.test(tie), tie);
+    const sel = await page.$eval('#own-store', (e) => ({ v: e.value, first: e.options[0] && e.options[0].value })).catch(() => ({}));
+    check('the own-price form preselects the first listed store', !!sel.v && sel.v === sel.first, sel);
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await fresh();
+    await open(page, 'g/leche-ultrapasteurizada');
+    await sleep(2500);
+    const ticks = await page.$eval('.legend .ticks', (e) => e.textContent).catch(() => '');
+    check('a generic product opened from a link gets its real colour cap', /50/.test(ticks), ticks.replace(/\s+/g, ' '));
+    await page.goto(`${BASE}#t/mega-soriana-4b3699`, { waitUntil: 'networkidle2' });
+    await sleep(1500);
+    const note = await page.$eval('.card', (e) => e.textContent).catch(() => '');
+    check('a store without a dot says why', /no está en el mapa/.test(note));
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await fresh({ width: 1024, height: 768 });
+    await open(page, 'p/jitomate-3532af');
+    await sleep(2500);
+    const under = await page.evaluate(() => { const tl = document.querySelector('.timeline').getBoundingClientRect(); return [...document.querySelectorAll('#stage .dot:not(.empty)')].filter((d) => { const r = d.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2; return x > tl.left && x < tl.right && y > tl.top && y < tl.bottom; }).length; });
+    check('1024: no coloured dot under the timeline', under === 0, under);
     await ctx.close();
   }
   // 8. phone: the sheet leaves map visible, no horizontal overflow
@@ -213,6 +251,8 @@ try {
     });
     check('phone: map band between timeline and legend', m.band >= 140, m);
     check('phone: no horizontal overflow', m.overflow <= 0, m.overflow);
+    const chip = await page.$('.timeline.collapsed .tl-chip');
+    check('phone: with a card open the timeline folds into its chip', !!chip);
     await ctx.close();
   }
 } finally {
