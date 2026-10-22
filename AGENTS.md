@@ -23,7 +23,7 @@ Working name "A cómo" (what a Mexican asks at the shelf); the repository keeps 
 - Do not use a red/green semaphore. One diverging scale (blue cheaper, grey median, red dearer, `src/logic/color.js`), a legend always present. Blue means cheaper and nothing else: the UI accent is a warm neutral.
 - Do not use `innerHTML` with data. Everything from the files goes through lit templates or `textContent`.
 - Do not write downloads, caches or scratch anywhere but under `data/cache/` (D:). Never on C:.
-- Do not edit pipeline outputs by hand; curate through `data/overrides/qqp.json` (`excludeStores`, `excludeProducts`, `excludeCategories`, `fixCoords`, `fixSizes`, `renameChains`) and rerun.
+- Do not edit pipeline outputs by hand; curate through `data/overrides/qqp.json` (`excludeStores`, `excludeProducts`, `excludeCategories`, `fixCoords`, `unplaceStores`, `fixSizes`, `renameChains`) and rerun.
 
 ## Where things live
 

@@ -2,6 +2,41 @@
 
 The state of the code, dated, newest first. `docs/VISION.md` is the direction; this file is what exists. Read `AGENTS.md` first.
 
+## 2026-10-22, small hours — third self-audit round landed
+
+### State in one paragraph
+
+Round 3 ran against the live site with five fresh reviewers (phone, language, honesty of the numbers, desktop polish, accessibility): 91 measured findings, about a dozen of them the same defect seen from two sides. Nearly all are fixed (commits `079c98e`, `abe4915` and the docs after them). The biggest: one "revísalo" rule decided per stage and symmetric (2.5 times or 0.4 times the median of the stage's own comparison set), ties said as ties, a week's own figure only from 3 stores, a peak only where the line moves, five stores whose PROFECO point is another store's no longer drawn (their prices kept), the 1024 px and phone layouts measured in the right order, and the map, rows and slider reachable and audible by keyboard. Bundle: 181 kB JS / 65 kB gzip.
+
+### What the round found and what changed
+
+| Found (measured) | Fixed by |
+|---|---|
+| The store card flagged 93 April jitomate prices that the product card showed as normal for that week; a −79 % price was crowned the cheapest; the tooltip and tags never showed the flag | `v.far` decided once in `stage.js` against the stage's comparison set; symmetric ratio rule in `logic/stats.js` (`isFar`, unit-tested) read by every surface |
+| 48 % of products have a tie for the lowest price; the hero named one store by file order | "la más barata, empatada en N tiendas" |
+| A "mediana de la ciudad" printed large from one store; "1 tiendas" | Week figures need 3 stores; singular strings |
+| "pico $14.90" on a flat line; a peak from one store or a light week | Peak only from solid weeks, only when the line moves; scale from the median line |
+| A generic product opened from a link kept the 0.2 cap of its empty boot pass (59 % of stores saturated) | Caps memoised only from a real sample |
+| Five stores drawn on another store's point (another municipio) | `unplaceStores` override; `npm run coords` lists the eight others outside their municipio (two within 200 m of the border, six 1–8.5 km off; left as published) |
+| 1024 px: 146 dots under the stacked timeline; the chip under a left card; the numeral over the city | Padding measured in order with a second pass; stacked layout with a compact timeline and one-line numeral |
+| Phone: 92 px of map at 360x640 with a card; numeral over half the stores; dates cut from rows; no way to recentre | Timeline folded while a card is open; draggable sheet (peek, full); numeral in the padding; two-line rows with the date beside the price; reset button kept |
+| Row link names dropped "falta 1" and "revísalo"; the slider never said the week's price; undo unreachable by keyboard in 6.5 s; focus fell to the body | Names from visible content; week value in the slider and announced; undo takes focus and waits; focus fallbacks |
+| "en la mediana que la mediana", "menos de 30 productos en la visita" beside "57 productos", "últimos 28 días" two months after the data, "puestos" for supermarkets, English "milk" found no milk | Wording fixed in both languages; English synonyms for the basics in search |
+| The own-price select preselected a store that does not sell the product | Options say whether they are selected (a property set before the options existed) |
+
+Not done this round: the min–max band could become an interquartile band (needs the pipeline's series to carry quartiles); `lang="es"` spans for Spanish data names in English mode; a camera move to frame a product sold in only a handful of stores (they are tagged instead).
+
+### Verified, and how
+
+- `npm test` 110/110; `npm run check` exit 0 on the rebuilt data (5 unplaced, 0 warnings); `node tools/smoke.mjs` 50/50 against a fresh dev server (7 new checks pin this round).
+- Screenshots read by eye: desktop 1600, 1366 and 1024 (product week, store card on the left, basket with no common store), phones 375x812, English week view.
+
+### Liberties added in this round
+
+- **The flag rule** changed from "±150 %" to "2.5 times or 0.4 times" (symmetric); EDITORIAL says so.
+- **Stores without a dot** when PROFECO's point is provably another store's; their card says why.
+- **Price tags**: two when the free map is under 700 px wide; all of them when five or fewer stores have a price.
+
 ## 2026-10-21, late night — second self-audit round landed
 
 ### State in one paragraph
