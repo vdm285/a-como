@@ -13,6 +13,9 @@ const SHELL = `acomo-shell-${VERSION}`;
 const BOOT = 'acomo-boot';
 const DATA = 'acomo-data';
 const DATA_MAX = 300;
+// this worker's own path (/a-como/): BOOT and DATA are shared by name with any other address the app
+// was served from (/compa-precio/ until 2026-10-22), so their entries are told apart by path
+const SCOPE = new URL('./', self.location.href).pathname;
 const TIMEOUT = 3000;
 
 // one failed file must not cost the others their copy, so each is added on its own
@@ -25,8 +28,18 @@ self.addEventListener('install', (e) => {
   self.skipWaiting();
 });
 
+// the names the first deploys of 2026-10-21 used, superseded by BOOT and DATA
+const RETIRED = ['acomo-v1', 'acomo-data-v1'];
+// only this app's own superseded caches: the origin vdm285.github.io is shared with the owner's other apps (Papelito), whose offline copies every deploy used to wipe
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => ![SHELL, BOOT, DATA].includes(k)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => (k.startsWith('acomo-shell-') && k !== SHELL) || RETIRED.includes(k)).map((k) => caches.delete(k))))
+    // and the entries another address left in the shared BOOT and DATA (the old address's boot data is 2.6 MB)
+    .then(() => Promise.all([BOOT, DATA].map(async (name) => {
+      if (!(await caches.has(name))) return;
+      const c = await caches.open(name);
+      for (const req of await c.keys()) if (!new URL(req.url).pathname.startsWith(SCOPE)) await c.delete(req);
+    })))
+    .then(() => self.clients.claim()));
 });
 
 function withTimeout(p, ms) {
