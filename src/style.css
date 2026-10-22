@@ -519,3 +519,5 @@ body.no-motion .rank li.tie-hl a.row { animation: none; background: rgba(255, 25
   .timeline .tl-label { flex: 0 1 auto; min-width: 0; white-space: normal; line-height: 1.2; }
   .timeline .tl-pill { display: none; }
 }
+/* the opening (Relieve) covers the app until the reader chooses the map */
+#opening { position: fixed; inset: 0; z-index: 50; background: var(--stage); }

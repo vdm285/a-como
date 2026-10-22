@@ -326,6 +326,10 @@ const STR = {
     noUnitRings: "sin tamaños comparables: no se compara por unidad",
     noKindHere: "Nada que se llame «{kind}» en {place}; en otros lugares:",
     droppedWords: "Sin «{words}»: no aparece en los datos",
+    openingPref: "Abrir con el relieve",
+    reliefRow: "El relieve de la ciudad",
+    seeRelief: "Ver el relieve",
+    kind_otro: "Otras tiendas",
   },
   en: {
     appName: 'A cómo',
@@ -648,6 +652,10 @@ const STR = {
     noUnitRings: "no comparable sizes: not compared per unit",
     noKindHere: "Nothing called “{kind}” in {place}; elsewhere:",
     droppedWords: "Without “{words}”: not in the data",
+    openingPref: "Open with the relief",
+    reliefRow: "The city in relief",
+    seeRelief: "See the relief",
+    kind_otro: "Other stores",
   },
 };
 

@@ -25,6 +25,7 @@ const STATES = [
   { name: 'store', hash: 't/chedraui-selecto-46b8a5' },
   { name: 'basket', hash: 'c?items=leche-ultrapasteurizada-a3d941:1,huevo-f2ba30:1' },
   { name: 'settings', hash: 's' },
+  { name: 'opening', hash: '' },
   { name: 'group-week', hash: 'g/jitomate?w=2026-04-20' },
   { name: 'store-split', hash: 't/la-comer-70cfd7' },
   { name: 'product-thin', hash: 'p/aceite-50f934' },
@@ -40,11 +41,15 @@ try {
       // a fresh incognito context per state: no basket, prefs or own prices leak between captures
       const ctx = await browser.createBrowserContext();
       const page = await ctx.newPage();
+      // the 2D states with the opening turned off; the 'opening' state keeps it
+      if (st.name !== 'opening') await page.evaluateOnNewDocument(() => { try { const p = JSON.parse(localStorage.getItem('acomo.prefs') || '{}'); if (p.opening === undefined) { p.opening = false; localStorage.setItem('acomo.prefs', JSON.stringify(p)); } } catch { /* private mode */ } });
       await page.setViewport(viewport);
       page.on('pageerror', (e) => errors.push(String(e)));
       page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-      await page.goto(`${BASE}#${st.hash}`, { waitUntil: 'networkidle2', timeout: 60000 });
-      await page.waitForSelector('#stage .dot', { timeout: 30000 });
+      // (the opening animates, so the network may never go idle: it waits for its own overlay)
+      await page.goto(`${BASE}#${st.hash}`, { waitUntil: st.name === 'opening' ? 'domcontentloaded' : 'networkidle2', timeout: 60000 });
+      await page.waitForSelector(st.name === 'opening' ? '#opening.relief' : '#stage .dot', { timeout: 30000 });
+      if (st.name === 'opening') await new Promise((r) => setTimeout(r, 4000));
       if (st.type) { await page.type('.search input', st.type); }
       await page.waitForFunction(() => !document.querySelector('.veil') || document.querySelector('.veil').classList.contains('off'));
       await new Promise((r) => setTimeout(r, st.type ? 800 : 1800));

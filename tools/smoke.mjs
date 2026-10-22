@@ -12,10 +12,13 @@ const check = (name, ok, detail) => { results.push({ name, ok, detail }); consol
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox', '--disable-gpu'] });
-async function fresh(viewport = { width: 1600, height: 900 }) {
+// The flows below test the 2D app: the opening (Relieve) is turned off by its setting, unless a
+// check asks for it ({ opening: true })
+async function fresh(viewport = { width: 1600, height: 900 }, { opening = false } = {}) {
   const ctx = await browser.createBrowserContext();
   const page = await ctx.newPage();
   await page.setViewport(viewport);
+  if (!opening) await page.evaluateOnNewDocument(() => { try { const p = JSON.parse(localStorage.getItem('acomo.prefs') || '{}'); if (p.opening === undefined) { p.opening = false; localStorage.setItem('acomo.prefs', JSON.stringify(p)); } } catch { /* private mode */ } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -347,6 +350,21 @@ try {
     await page.goto(`${BASE}#`); await sleep(1000);
     const f = await q('farmacia coyoacan');
     check('a kind of store with a place lists those stores there, never "no store"', !f.some((x) => /Ninguna tienda/.test(x)) && f.some((x) => /Farmacia/.test(x)), f.slice(0, 3));
+    await ctx.close();
+  }
+  // the opening (Relieve): the bare address opens on it, the 2D app inert beneath; Explorar hands off
+  {
+    const { ctx, page, errors } = await fresh({ width: 1600, height: 900 }, { opening: true });
+    await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 60000 }); // (the relief animates: the network may never idle)
+    const shown = await page.waitForSelector('#opening.relief', { timeout: 30000 }).then(() => true, () => false);
+    await sleep(2500);
+    const r = await page.evaluate(() => ({ inert: document.querySelector('#chrome').inert, gl: !!document.querySelector('#opening canvas') }));
+    check('the bare address opens on the relief, the map inert beneath', shown && r.inert, r);
+    await page.evaluate(() => { const b = [...document.querySelectorAll('#opening button')].find((x) => /Explorar|Explore/.test(x.textContent)); if (b) b.click(); });
+    await sleep(1500);
+    const r2 = await page.evaluate(() => ({ gone: !document.getElementById('opening'), inert: document.querySelector('#chrome').inert, dots: document.querySelectorAll('#stage .dot:not(.empty)').length }));
+    check('"Explorar el mapa" hands off to the 2D map', r2.gone && !r2.inert && r2.dots > 100, r2);
+    check('the opening logs no console errors', errors.length === 0, errors.slice(0, 2));
     await ctx.close();
   }
   // round 7: a group whose files cannot be fetched says so instead of counting zero stores

@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "node --test tests/*.test.mjs",
     "qqp": "node tools/build-qqp.mjs",
+    "opening": "node tools/portfolio-data.mjs --json --out=public/data/qqp/opening.json",
     "geo": "node tools/build-geo.mjs",
     "check": "node tools/check-qqp.mjs",
     "geo:preview": "node tools/preview-geo.mjs",
@@ -21,7 +22,8 @@
   "dependencies": {
     "@fontsource-variable/manrope": "^5.2.5",
     "d3-geo": "^3.1.1",
-    "lit": "^3.3.1"
+    "lit": "^3.3.1",
+    "three": "0.160.0"
   },
   "devDependencies": {
     "puppeteer-core": "^24.43.1",

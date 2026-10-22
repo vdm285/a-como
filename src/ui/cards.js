@@ -115,6 +115,9 @@ export const KIND = (s) => {
   if (/farmacia/i.test(g)) return 'farmacia';
   if (/panader|pescader/i.test(g)) return 'tradicional';
   if (/conveniencia|oxxo|7-eleven/i.test(g)) return 'conveniencia';
+  // the non-grocery stores PROFECO also surveys (appliances, stationery, department stores, uniforms,
+  // shoes, toys), drawn since 2026-10-22
+  if (/electrodom|papeler|departamental|uniforme|zapater|jugueter/i.test(s.giro || '')) return 'otro';
   return 'super';
 };
 export function priceStrip({ rows, ref, refLabel, ownPrice, onPick, selected, unitSuffix = '' }) {
@@ -496,6 +499,8 @@ export function settingsCard(c) {
         <div class="row"><div class="l" id="set-motion">${t('motion')}</div>${seg('motion', 'set-motion', t('on'), t('off'))}</div>
         <div class="row"><div class="l" id="set-labels">${t('labels')}</div>${seg('labels', 'set-labels', t('on'), t('off'))}</div>
         ${c.phone ? nothing : html`<div class="row"><div class="l" id="set-tags">${t('tags')}</div>${seg('tags', 'set-tags', t('on'), t('off'))}</div>`}
+        <div class="row"><div class="l" id="set-opening">${t('openingPref')}</div>${seg('opening', 'set-opening', t('on'), t('off'))}</div>
+        <div class="row"><div class="l">${t('reliefRow')}</div><button class="btn ghost" @click=${c.onOpenRelief}>${t('seeRelief')}</button></div>
         ${canInstall ? html`<div class="row"><div class="l">${t('appRow')}</div><button class="btn ghost" @click=${c.onInstall}>${I.download()}${t('install')}</button></div>` : nothing}
       </section>
       <section>

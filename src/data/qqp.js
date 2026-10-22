@@ -56,6 +56,8 @@ export function loadVisits() {
   if (!visitsPromise) visitsPromise = getJson('qqp/visits.json', { optional: true }).catch(() => null).then((v) => { visitsValue = v; return v; });
   return visitsPromise;
 }
+// the opening's data (Relieve), written by `npm run opening`; optional, so an older build opens on the map
+export function loadOpening() { return getJson('qqp/opening.json', { optional: true }).catch(() => null); }
 // the visits if they already arrived (the index colours never wait for the timeline's curve)
 export function peekVisits() { return visitsValue; }
 

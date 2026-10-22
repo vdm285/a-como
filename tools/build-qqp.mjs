@@ -48,12 +48,11 @@ export const CITIES = {
     bbox: { latMin: 19.0, latMax: 19.95, lonMin: -99.45, lonMax: -98.75 },
     // GIRO values to keep; null keeps every GIRO (the app can filter). See the research doc.
     giros: null,
-    // Categories left out of the city build (accent-less lowercase). They are not groceries, have no
-    // comparable size, and without them products.json stays small (a 700 KB contract until 2026-10-21;
-    // the cap is now 1,400 KB raw, about 200 KB gzip). Curation can add more in
-    // data/overrides/qqp.json (excludeCategories); removing one here needs a size check.
-    excludeCategories: ['arts. de esparcimiento (juguetes)', 'aparatos electricos', 'aparatos electronicos', 'articulos deportivos',
-      'enseres menores', 'refrigeradores', 'accesorios domesticos', 'utensilios domesticos', 'material escolar'],
+    // Categories left out of the city build (accent-less lowercase). Until 2026-10-22 the nine
+    // non-grocery categories (toys, appliances, electronics, sports, housewares, school supplies) were
+    // left out; the owner chose to draw everything PROFECO surveys, so none is. Curation can still
+    // leave one out in data/overrides/qqp.json (excludeCategories).
+    excludeCategories: [],
     // products.json is "what it costs now": a product not seen in the city within this many weeks is left
     // out of the build (it comes back when PROFECO surveys it again). Halved when the file would not fit.
     recentWeeks: 26,
@@ -95,7 +94,9 @@ const SOURCE = {
 const LIMITS = {
   // products.json: the same cap as tools/check-qqp.mjs. The budget that matters is bytes on the wire
   // (Pages serves gzip; 1,400 KB raw is about 200 KB compressed). Was 700 KB until 2026-10-21.
-  productsJson: 1400 * 1024,
+  // (raw bytes; GitHub Pages serves gzip at about a seventh. Raised from 1,400 KB on 2026-10-22,
+  // when the non-grocery categories came in)
+  productsJson: 2200 * 1024,
   productFile: 30 * 1024,     // products/<id>.json
   weeksFile: 72 * 1024,       // products/<id>.weeks.json (a staple sold in ~280 stores needs ~48 kB for 26 weeks; a shorter window made basket weeks disagree)
   storeFile: 120 * 1024,      // stores/<id>.json

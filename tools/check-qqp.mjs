@@ -94,8 +94,9 @@ for (const p of products) {
   if (p.stores === 0 && inRecent(p.last)) fail(`products.json: ${p.id} stores 0 but last ${p.last} is inside the recent window`);
   if (p.pacic) pacic++;
 }
-// The cap is on the wire (GitHub Pages serves gzip): 1.4 MB raw is ~200 kB compressed.
-if (+kb('products.json') > 1400) fail(`products.json is ${kb('products.json')} kB (cap 1400 raw)`);
+// The cap is on the wire (GitHub Pages serves gzip): 2.2 MB raw is ~300 kB compressed (raised from
+// 1.4 MB when every PROFECO category came in, 2026-10-22).
+if (+kb('products.json') > 2200) fail(`products.json is ${kb('products.json')} kB (cap 2200 raw)`);
 
 const groups = read('groups.json');
 const groupIds = new Set(groups.map((g) => g.id));
@@ -205,10 +206,27 @@ else {
   visitsLine = `visits.json ${kb('visits.json')} kB (${ids.length} stores, ${cellsSum} store-week-product cells)`;
 }
 
+// opening.json (Relieve, written by `npm run opening`): the stores it draws are the placed ones, and
+// its two products carry the last 26 weeks
+let openingLine = 'opening.json missing (run npm run opening)';
+if (!existsSync(join(DIR, 'opening.json'))) fail('opening.json missing: run npm run opening after the pipeline');
+else {
+  const o = read('opening.json');
+  const placed = stores.filter((s) => s.lat != null && s.lon != null).length;
+  if (!Array.isArray(o.stores) || o.stores.length !== placed) fail(`opening.json: ${o.stores && o.stores.length} stores, ${placed} placed in stores.json`);
+  for (const k of ['jitomate', 'tortilla']) {
+    const p = o[k];
+    if (!p || !Array.isArray(p.weeks) || p.weeks.length !== Math.min(26, meta.weeks.length)) fail(`opening.json: ${k} weeks ${p && p.weeks && p.weeks.length}`);
+    else for (const [i, arr] of Object.entries(p.prices || {})) if (!(+i >= 0 && +i < o.stores.length) || arr.length !== p.weeks.length) { fail(`opening.json: ${k} prices row ${i}`); break; }
+  }
+  if (!o.stories || !o.stories.jitomate || !o.stories.tortillaKinds) fail('opening.json: stories missing');
+  openingLine = `opening.json ${kb('opening.json')} kB (${o.stores.length} stores)`;
+}
+
 const total = (() => { let n = 0, b = 0; const walk = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); const st = statSync(p); if (st.isDirectory()) walk(p); else { n++; b += st.size; } } }; walk(DIR); return [n, b]; })();
 
 console.log(`stores ${stores.length} (no index: ${noIndex}, outside box: ${noCoords}) · products ${products.length} (no size: ${noSize}, no recent median: ${noMedian}, pacic: ${pacic}) · groups ${groups.length} · weeks ${meta.weeks.length} (${meta.weeks[0]} → ${meta.weeks[meta.weeks.length - 1]}) · latest ${meta.latestDate}`);
-console.log(`recent ${recent && recent.from} → ${recent && recent.to} (${recent && recent.days} days) · partial weeks ${JSON.stringify(meta.partialWeeks)} · ${summaryChecked} product summaries recomputed from their latest files · ${visitsLine}`);
+console.log(`recent ${recent && recent.from} → ${recent && recent.to} (${recent && recent.days} days) · partial weeks ${JSON.stringify(meta.partialWeeks)} · ${summaryChecked} product summaries recomputed from their latest files · ${visitsLine} · ${openingLine}`);
 console.log(`sizes: stores.json ${kb('stores.json')} kB · products.json ${kb('products.json')} kB · index.json ${kb('index.json')} kB · max product ${maxP.toFixed(0)} kB · max weeks ${maxW.toFixed(0)} kB · max store ${maxS.toFixed(0)} kB · total ${total[0]} files, ${(total[1] / 1048576).toFixed(1)} MB · sampled ${checked} product files`);
 for (const w of warnings.slice(0, 40)) console.log('warn:', w);
 if (warnings.length > 40) console.log(`… ${warnings.length - 40} more warnings`);

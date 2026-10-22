@@ -6,7 +6,7 @@ Owner: Victor (github.com/vdm285). The app opens in Mexican Spanish; English is 
 
 ## What this is
 
-A static site on GitHub Pages that draws the food stores PROFECO surveys in Mexico City and its metro area (499 of the 571 the survey visits; the rest sell only toys, appliances, school supplies and the like, see HANDOFF) on a dark map, with the prices of "Quién es Quién en los Precios" (QQP). PROFECO surveys weekly and publishes monthly, five to nine weeks behind. Three questions, one stage: where is this product cheaper (the map recolours by that price), which store is cheapest for my basket (totals per store), how expensive is this store (its basket index against the city median). A fourth, inherited from the first version: is the price I am looking at good (the reader's own shelf prices, stored only in the browser). A timeline moves the whole map through the weeks against one reference, so prices visibly move.
+A static site on GitHub Pages that draws the stores PROFECO surveys in Mexico City and its metro area (558 of the 571 the survey visits: since 2026-10-22 every category, toys, appliances and school supplies included, by the owner's choice; 13 have no coordinates or no prices) on a dark map, with the prices of "Quién es Quién en los Precios" (QQP). The bare address opens on Relieve, the city's prices as 3D columns (`src/opening/`), until the reader chooses the 2D map. PROFECO surveys weekly and publishes monthly, five to nine weeks behind. Three questions, one stage: where is this product cheaper (the map recolours by that price), which store is cheapest for my basket (totals per store), how expensive is this store (its basket index against the city median). A fourth, inherited from the first version: is the price I am looking at good (the reader's own shelf prices, stored only in the browser). A timeline moves the whole map through the weeks against one reference, so prices visibly move.
 
 Working name "A cómo" (what a Mexican asks at the shelf); the repository keeps its old name `compa-precio` until the owner decides (see "Renaming" below). The first version (March 2026, one `index.html` with Tailwind from a CDN and mock data) is in git history up to commit `b81c22a`; its README's philosophy survives in `docs/VISION.md`.
 
@@ -34,10 +34,17 @@ Working name "A cómo" (what a Mexican asks at the shelf); the repository keeps 
 - `src/logic/`: pure functions with tests in `tests/`.
 - `src/local/prices.js`: the reader's own prices (IndexedDB, local dates, export/import without duplicates).
 - `src/data/qqp.js`: loaders for `public/data/` (content-type checked; an LRU for per-product files).
+- `src/opening/`: Relieve, the opening (three.js, loaded in its own chunk only when it shows): `relief.js` (`mountRelief(host, { demo, geo, lang, motion, onExplore })`), `relief.css` (scoped under `.relief`), `strings.js` (es/en). Its data is `public/data/qqp/opening.json`, written by `npm run opening` (`tools/portfolio-data.mjs --json`) after the pipeline. `showOpening` / `closeOpening` in `src/main.js`; the setting "Abrir con el relieve".
 - `tools/build-qqp.mjs` (+ `tools/lib/presentation.mjs`): the PROFECO pipeline → `public/data/qqp/` (gitignored, rebuilt on every deploy). `tools/mirror-qqp.mjs`: refreshes the byte-for-byte mirror of PROFECO's archives on the `qqp-mirror` release (run from a network in Mexico). `tools/check-qqp.mjs`: the data contract. `tools/build-geo.mjs` → `public/data/geo/cdmx.json` (committed); `tools/preview-geo.mjs` renders it. `tools/shots.mjs`: scripted screenshots; `tools/smoke.mjs`: scripted flows. `tools/build-icons.mjs`: the PWA icons.
 - `public/sw.js` (stamped per build by `vite.config.js`), `public/manifest.webmanifest`: the PWA.
 
 ## Checks before a commit
+
+After the pipeline (`npm run qqp`), write the opening's data once:
+
+```bash
+npm run opening
+```
 
 ```bash
 npm test
@@ -73,7 +80,8 @@ and read the captures in `data/cache/shots/` by eye: the city, a product, a past
 - **d3-geo's `geoContains` is spherical and slow**: never call it per frame or per zoom level. The alcaldía labels use a raster of each shape built once in world space (`maskOf` in `src/map/map.js`).
 - **The phone sheet animates its height for 280 ms**: anything that leaves `sheet-full` goes through `leaveFullSheet` / `settleSheet` in `src/main.js`, which measure after the transition.
 - **The browser pane's screenshots time out when the window is behind**: use `npm run shots` (puppeteer-core with the installed Chrome) for exact viewports; with an emulated viewport, click coordinates are in the screenshot's frame.
-- **Size caps are bytes on the wire** (Pages serves gzip): products.json is ~770 kB raw, ~97 kB gzip; the checker fails above 1,400 kB raw.
+- **Size caps are bytes on the wire** (Pages serves gzip): products.json is ~1,250 kB raw, ~160 kB gzip with every category; the checker fails above 2,200 kB raw.
+- **The opening covers the bare address**: scripted checks of the 2D app turn it off first (`acomo.prefs.opening = false` via `evaluateOnNewDocument`, as `tools/smoke.mjs` and `tools/shots.mjs` do), or they wait on an overlay that never goes.
 - **Chrome profiles under `data/` crash Vite's watcher**, so the config ignores `data/**`. A dev server another agent started can keep serving stale modules after its watcher dies (a "does not provide an export" error for an export that exists): start your own on another port (`npx vite --port 5176 --strictPort`) rather than killing theirs.
 - **Puppeteer's offline mode does not reach the service worker**: the worker keeps fetching from the live server. Test offline by stopping the server after a warm visit, with a persistent profile under `data/cache/`.
 - **Pointer capture retargets the release**: after `setPointerCapture`, `pointerup` targets the capturing element, so record what was pressed at `pointerdown` (the map's price tags).
@@ -82,7 +90,7 @@ and read the captures in `data/cache/shots/` by eye: the city, a product, a past
 
 ## Renaming (when the owner picks a name)
 
-Change: the app name in `src/app/i18n.js` (`appName`), `index.html` `<title>`, `public/manifest.webmanifest`, the veil in `src/main.js`, README and docs titles, `package.json` `name`. If the repository is renamed: `VITE_BASE` in `.github/workflows/pages.yml`, the Live URL in README, the code link in `src/ui/cards.js`, both User-Agents (`tools/build-qqp.mjs`, `tools/build-geo.mjs`), `SOURCE.mirror` and `tools/mirror-qqp.mjs` (the release moves with the repo; check its URL), and the local folder. Do not change: the localStorage keys (`acomo.*`) and the IndexedDB name (`acomo`): readers' own prices live there; and the store and product id formats (own prices are keyed by them).
+Change: the app name in `src/app/i18n.js` (`appName`) and `src/opening/strings.js` (`brand`), `index.html` `<title>`, `public/manifest.webmanifest`, the veil in `src/main.js`, README and docs titles, `package.json` `name`. If the repository is renamed: `VITE_BASE` in `.github/workflows/pages.yml`, the Live URL in README, the code link in `src/ui/cards.js`, both User-Agents (`tools/build-qqp.mjs`, `tools/build-geo.mjs`), `SOURCE.mirror` and `tools/mirror-qqp.mjs` (the release moves with the repo; check its URL), and the local folder. Do not change: the localStorage keys (`acomo.*`) and the IndexedDB name (`acomo`): readers' own prices live there; and the store and product id formats (own prices are keyed by them).
 
 ## Conventions
 

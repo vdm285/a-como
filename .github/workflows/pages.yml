@@ -48,6 +48,8 @@ jobs:
       - run: npm run qqp
         env:
           NODE_OPTIONS: --max-old-space-size=6144
+      # the opening's data (Relieve), computed from the pipeline's outputs
+      - run: npm run opening
       - run: npm run check
       - run: npm run build
         env:

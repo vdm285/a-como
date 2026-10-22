@@ -6,7 +6,7 @@ import './style.css';
 import { html, render, nothing } from 'lit';
 import { state, subscribe, notify, setPref, setView, setWeek, basketAdd, basketSet, basketReplace, inBasket } from './app/state.js';
 import { t, setLang, getLang, money, setDataYear, unitName, fdate, fspan } from './app/i18n.js';
-import { loadStage, loadCatalog, loadVisits } from './data/qqp.js';
+import { loadStage, loadCatalog, loadVisits, loadOpening } from './data/qqp.js';
 import { createMap } from './map/map.js';
 import { computeStage, recentWindow, groupUnit, partialWeeks, MIN_N } from './app/stage.js';
 import { median, clampDev } from './logic/stats.js';
@@ -47,6 +47,34 @@ const BASE = import.meta.env.BASE_URL;
 const reducedOS = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const motionOn = () => (state.prefs.motion === undefined || state.prefs.motion === null ? !reducedOS() : state.prefs.motion !== false);
 
+// ---------------------------------------------------------------- the opening (Relieve)
+// three.js and the relief load only here, in their own chunk; the 2D app runs underneath, inert
+// while the relief covers it. Without its data or its chunk (offline, an older build) the app
+// simply opens on the map.
+let opening = null;
+async function showOpening() {
+  if (opening) return;
+  const host = document.createElement('div');
+  host.id = 'opening';
+  app.appendChild(host);
+  opening = { host, handle: null };
+  stageHost.inert = true; chrome.inert = true;
+  try {
+    const [mod, demo] = await Promise.all([import('./opening/relief.js'), loadOpening()]);
+    if (!opening || opening.host !== host) return;
+    if (!demo) throw new Error('no opening data');
+    opening.handle = await mod.mountRelief(host, { demo, geo: state.data.geo, lang: getLang(), motion: motionOn(), onExplore: closeOpening });
+  } catch (e) { console.warn('the opening could not start:', e.message); closeOpening(); }
+}
+function closeOpening() {
+  if (!opening) return;
+  const { host, handle } = opening; opening = null;
+  try { if (handle) handle.destroy(); } catch (e) { console.warn(e); }
+  host.remove();
+  stageHost.inert = false; chrome.inert = false;
+  map.resize(); applyPadding(false);
+  requestAnimationFrame(() => { const inp = chrome.querySelector('.search input'); if (inp && ui.keyboard) inp.focus(); });
+}
 function hideToast() { ui.toast = ''; ui.toastAction = null; ui.basketRemoved = null; renderChrome(); }
 function restoreRemoved(list) {
   const cur = state.basket.slice();
@@ -614,6 +642,7 @@ function cardView() {
   if (v.kind === 'settings') {
     return settingsCard({ ...common, phone: ui.phone.matches, prefs: state.prefs, own: state.own, meta: state.data.meta, canInstall: !!ui.installPrompt,
       onPref: (k, val) => setPref(k, val),
+      onOpenRelief: () => { closeCard(); showOpening(); },
       onInstall: async () => { const p = ui.installPrompt; if (!p) return; p.prompt(); const r = await p.userChoice; if (r && r.outcome === 'accepted') { ui.installPrompt = null; showToast(t('installed')); } renderChrome(); },
       onExport: (kind) => { const rows = state.own; const lookup = { product: (id) => state.byProduct.get(id), store: (id) => state.byStore.get(id) }; if (kind === 'csv') download('acomo-mis-precios.csv', ownToCsv(rows, lookup), 'text/csv'); else download('acomo-mis-precios.json', ownToJson(rows)); },
       onImport: async (f) => { if (!f) return; try { const j = JSON.parse(await f.text()); const r = await importOwn(j.prices || j); await refreshOwn(); showToast(t('imported', { n: r.added, skipped: r.skipped })); } catch (e) { showToast(t('importError')); } } });
@@ -791,6 +820,10 @@ async function boot() {
   stageHost.addEventListener('dblclick', () => { ui.readerMoved = true; });
   stageHost.addEventListener('wheel', () => { ui.readerMoved = true; }, { passive: true });
   stageHost.addEventListener('keydown', (e) => { if (['+', '-', '=', '_'].includes(e.key)) ui.readerMoved = true; });
+  // The opening (the owner's choice, 2026-10-22): the bare address opens on Relieve, the city's
+  // price columns in 3D, until the reader chooses the map; a link to a card, a shared basket or the
+  // setting turned off goes straight to the map
+  { const hp = location.hash.replace(/^#/, ''); if (!hp.split('?')[0] && !/[?&](items|w)=/.test(hp) && state.prefs.opening !== false) showOpening(); }
   veil.classList.add('off');
   setTimeout(() => veil.remove(), 600);
   if (!navigator.onLine) showToast(t('offlineStart'), 4000);

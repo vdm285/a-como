@@ -4,7 +4,7 @@ Written 2026-10-21 at the start of the rebuild, revised the same day after the f
 
 ## The one-sentence pitch
 
-The city as a price map: every food store PROFECO surveys in Mexico City and its metro area, drawn where it stands, coloured by what you are looking for; a basket that tells you which store is cheapest for the whole list; a timeline that shows a price moving across the city; and your own shelf prices beside the official ones, kept only in your browser.
+The city as a price map: every store PROFECO surveys in Mexico City and its metro area (every category since 2026-10-22, by the owner's choice), drawn where it stands, coloured by what you are looking for. It opens on Relieve, the same city as 3D columns of one product's price moving through the weeks, before the map; a basket that tells you which store is cheapest for the whole list; a timeline that shows a price moving across the city; and your own shelf prices beside the official ones, kept only in your browser.
 
 ## Why this instead of Googling it
 

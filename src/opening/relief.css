@@ -1,0 +1,263 @@
+/* The opening (Relieve): the city as a price landscape. Ported from docs/portfolio/relieve.html.
+   Everything is scoped under .relief (the host the app gives the module) and every class carries
+   the rv- prefix, so neither side's rules reach the other. The colour tokens are the app's own
+   (src/style.css :root); the ones only the opening uses are defined here. */
+
+.relief {
+  --bg: var(--stage, #0c1118);
+  --scrim: rgba(12, 17, 24, 0.94);
+  --scrim-mid: rgba(12, 17, 24, 0.62);
+  --scrim-0: rgba(12, 17, 24, 0);
+  --map-alc: rgba(255, 255, 255, 0.17);
+  --map-zm: rgba(255, 255, 255, 0.075);
+  --map-road: rgba(255, 255, 255, 0.07);
+  --dot: #8a919c;
+  --rv-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  --rv-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --gut: 16px;
+  --low: 150px;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font, 'Manrope Variable', system-ui, sans-serif);
+  font-size: 15px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+.relief *, .relief *::before, .relief *::after { box-sizing: border-box; }
+.relief button, .relief input { font: inherit; color: inherit; }
+.relief button { cursor: pointer; background: none; border: 0; padding: 0; }
+.relief :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.relief .rv-num { font-variant-numeric: tabular-nums; }
+.relief [hidden] { display: none !important; }
+.relief .rv-root { position: absolute; inset: 0; }
+
+.relief .rv-stage { position: absolute; inset: 0; touch-action: none; cursor: grab; }
+.relief .rv-stage.rv-drag { cursor: grabbing; }
+.relief .rv-stage.rv-over { cursor: pointer; }
+.relief .rv-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.relief .rv-scrim { position: absolute; pointer-events: none; z-index: 1; }
+.relief .rv-scrim.rv-l { left: 0; top: 0; bottom: 0; width: 640px; background: linear-gradient(90deg, var(--scrim) 0%, var(--scrim-mid) 52%, var(--scrim-0) 100%); }
+.relief .rv-scrim.rv-b { left: 0; right: 0; bottom: 0; height: 190px; background: linear-gradient(0deg, var(--scrim) 0%, var(--scrim-0) 100%); }
+.relief .rv-scrim.rv-t { display: none; }
+
+/* ---------- hero (top left) ---------- */
+.relief .rv-hero { position: absolute; z-index: 3; top: 34px; left: 40px; width: 420px; pointer-events: none; }
+.relief .rv-head { display: flex; flex-direction: column; gap: 18px; }
+.relief .rv-brand { font-weight: 800; font-size: 15px; letter-spacing: 0.01em; color: var(--accent); }
+.relief .rv-brand::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--accent); opacity: 0.5; vertical-align: 2px; }
+.relief .rv-h1 { margin: 0; font-size: 28px; line-height: 1.1; font-weight: 800; letter-spacing: -0.015em; }
+.relief .rv-pres { margin-top: 5px; font-size: 12.5px; color: var(--ink-3); max-width: 360px; }
+.relief .rv-bignum { margin-top: 26px; opacity: 0; transition: opacity 600ms var(--rv-ease); }
+.relief .rv-bignum.rv-on { opacity: 1; }
+.relief .rv-big { display: block; font-size: 92px; font-weight: 800; letter-spacing: -0.04em; line-height: 0.92; }
+.relief .rv-bigcap { display: block; margin-top: 10px; color: var(--ink-2); font-size: 14px; }
+.relief .rv-wk { margin-top: 3px; font-size: 14px; font-weight: 700; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 22px; opacity: 0; transition: opacity 600ms var(--rv-ease); }
+.relief .rv-wk.rv-on { opacity: 1; }
+.relief .rv-wk .rv-n { color: var(--ink-2); font-weight: 600; }
+.relief .rv-chip { font-size: 10.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--ink-2); }
+.relief .rv-chip.rv-hot { border-color: rgba(230, 103, 103, 0.55); color: var(--ink); }
+
+.relief .rv-story { margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--line-2); opacity: 0; transform: translateY(10px); transition: opacity 900ms var(--rv-ease), transform 900ms var(--rv-ease); }
+.relief .rv-story.rv-on { opacity: 1; transform: none; }
+.relief .rv-st-kick { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); font-weight: 800; }
+.relief .rv-st-row { display: flex; align-items: baseline; gap: 14px; margin-top: 6px; flex-wrap: wrap; }
+.relief .rv-st-num { font-size: 54px; font-weight: 800; letter-spacing: -0.035em; line-height: 1; }
+.relief .rv-st-num.rv-cheap { color: var(--cheaper); }
+.relief .rv-st-p { margin: 10px 0 0; color: var(--ink-2); font-size: 14px; line-height: 1.5; max-width: 380px; }
+.relief .rv-st-p b { color: var(--ink); font-weight: 800; }
+.relief .rv-st-two { display: flex; gap: 28px; margin-top: 8px; }
+.relief .rv-st-two .rv-v { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.relief .rv-st-two .rv-l { color: var(--ink-2); font-size: 13px; margin-top: 6px; display: flex; align-items: center; gap: 7px; }
+.relief .rv-st-two .rv-sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+
+/* ---------- caption (the opening's one line) ---------- */
+.relief .rv-caption { position: absolute; z-index: 3; left: 50%; bottom: calc(var(--low) + 8px); transform: translate(-50%, 6px); width: min(640px, calc(100vw - 2 * var(--gut))); text-align: center; color: var(--ink); font-size: 17px; font-weight: 600; line-height: 1.45; opacity: 0; transition: opacity 700ms var(--rv-ease), transform 700ms var(--rv-ease); pointer-events: none; text-wrap: balance; text-shadow: 0 1px 12px rgba(12, 17, 24, 0.9); }
+.relief .rv-caption.rv-on { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- labels in the scene ---------- */
+.relief .rv-reflab { position: absolute; z-index: 2; left: 0; top: 0; pointer-events: none; display: flex; align-items: center; gap: 8px; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 800; color: var(--ink-2); white-space: nowrap; opacity: 0; transition: opacity 500ms; will-change: transform; text-shadow: 0 1px 8px rgba(12, 17, 24, 0.95); }
+.relief .rv-reflab i { width: 22px; height: 1px; background: var(--accent); opacity: 0.8; margin-right: -8px; }
+.relief .rv-reflab .rv-rl { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line-2); }
+.relief .rv-reflab b { color: var(--ink); font-weight: 800; letter-spacing: 0; text-transform: none; font-size: 13px; }
+
+/* ---------- top right ---------- */
+.relief .rv-topbar { position: absolute; z-index: 4; top: 22px; right: 24px; display: flex; gap: 8px; align-items: center; }
+.relief .rv-pill { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 15px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: var(--ink-2); font-size: 13.5px; font-weight: 600; white-space: nowrap; transition: color 150ms, border-color 150ms; }
+.relief .rv-pill:hover { color: var(--ink); border-color: var(--line-2); }
+.relief .rv-pill svg { width: 16px; height: 16px; flex: none; }
+/* the way out to the map: the one accent button, there from the first second */
+.relief .rv-explore { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px 0 18px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 14px; font-weight: 800; white-space: nowrap; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); transition: filter 150ms; }
+.relief .rv-explore:hover { filter: brightness(1.06); }
+.relief .rv-explore svg { width: 16px; height: 16px; flex: none; }
+.relief .rv-explore-bot { display: none; }
+.relief .rv-hint { position: absolute; z-index: 3; bottom: 26px; right: 28px; font-size: 12px; color: var(--ink-3); pointer-events: none; opacity: 0; transition: opacity 600ms; text-align: right; }
+.relief .rv-hint.rv-on { opacity: 1; }
+
+/* ---------- legend + credit (bottom left) ---------- */
+.relief .rv-side { position: absolute; z-index: 4; left: 24px; bottom: 18px; width: 316px; display: flex; flex-direction: column; gap: 10px; }
+.relief .rv-legend { padding: 12px 14px 12px; border-radius: 14px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); font-size: 12px; color: var(--ink-2); }
+.relief .rv-legend .rv-lt { color: var(--ink); font-weight: 700; font-size: 12.5px; margin-bottom: 8px; }
+.relief .rv-legend .rv-bar { height: 8px; border-radius: 4px; }
+.relief .rv-legend .rv-ticks { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; margin-top: 5px; font-variant-numeric: tabular-nums; }
+.relief .rv-legend .rv-ticks span:nth-child(2) { text-align: center; color: var(--ink); font-weight: 700; }
+.relief .rv-legend .rv-ticks span:nth-child(3) { text-align: right; }
+.relief .rv-legend .rv-ticks small { display: block; color: var(--ink-3); font-size: 11px; }
+.relief .rv-legend .rv-li { display: flex; gap: 9px; align-items: flex-start; margin-top: 9px; line-height: 1.35; }
+.relief .rv-legend .rv-li svg { flex: none; width: 22px; height: 14px; margin-top: 1px; }
+.relief .rv-legend .rv-li.rv-ring { max-height: 48px; overflow: hidden; transition: max-height 500ms var(--rv-ease), opacity 500ms var(--rv-ease), margin-top 500ms var(--rv-ease); }
+.relief .rv-legend .rv-li.rv-ring.rv-off { max-height: 0; opacity: 0; margin-top: 0; }
+.relief .rv-legend-m .rv-lmr { transition: opacity 500ms var(--rv-ease); }
+.relief .rv-legend-m .rv-lmr.rv-off { opacity: 0; }
+.relief .rv-credit { font-size: 11px; line-height: 1.5; color: var(--ink-3); padding: 0 2px; }
+
+/* ---------- dock (timeline) ---------- */
+.relief .rv-dock { position: absolute; z-index: 4; bottom: 18px; left: max(364px, calc(50vw - 340px)); width: min(680px, calc(100vw - 364px - 24px)); padding: 10px 14px 6px; border-radius: 16px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35); }
+.relief .rv-dock .rv-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.relief .rv-play { width: 38px; height: 38px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.relief .rv-play:hover { filter: brightness(1.06); }
+.relief .rv-play svg { width: 15px; height: 15px; }
+.relief .rv-seg { display: inline-flex; padding: 3px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); flex: none; }
+.relief .rv-seg button { height: 30px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--ink-3); white-space: nowrap; transition: color 150ms, background 150ms; }
+.relief .rv-seg button:hover { color: var(--ink); }
+.relief .rv-seg button[aria-pressed='true'] { background: rgba(255, 255, 255, 0.1); color: var(--ink); }
+.relief .rv-wkctl { margin-left: auto; display: flex; align-items: center; gap: 2px; min-width: 0; }
+.relief .rv-wkd .rv-ws { display: none; }
+.relief .rv-wkd { font-size: 13px; font-weight: 700; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+.relief .rv-step { width: 28px; height: 28px; border-radius: 50%; color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.relief .rv-step:hover { background: var(--line); color: var(--ink); }
+.relief .rv-step:disabled { cursor: default; }
+.relief .rv-step svg { width: 14px; height: 14px; }
+.relief .rv-scrub { position: relative; height: 58px; margin-top: 6px; }
+.relief .rv-scrub svg { position: absolute; left: 0; top: 0; width: 100%; height: 42px; overflow: visible; pointer-events: none; }
+.relief .rv-scrub input { position: absolute; left: 0; top: 0; width: 100%; height: 42px; margin: 0; padding: 0; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
+.relief .rv-scrub input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.relief .rv-scrub input::-webkit-slider-runnable-track { height: 42px; background: transparent; border: 0; }
+.relief .rv-scrub input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 42px; background: transparent; border: 0; }
+.relief .rv-scrub input::-moz-range-track { height: 42px; background: transparent; border: 0; }
+.relief .rv-scrub input::-moz-range-thumb { width: 16px; height: 42px; background: transparent; border: 0; }
+.relief .rv-months { position: absolute; left: 0; right: 0; top: 43px; height: 14px; font-size: 10.5px; color: var(--ink-3); pointer-events: none; }
+.relief .rv-months span { position: absolute; transform: translateX(-2px); white-space: nowrap; }
+.relief .rv-sp-all { fill: none; stroke: var(--ink-3); stroke-opacity: 0.45; stroke-width: 1.5; stroke-linejoin: round; }
+.relief .rv-sp-done { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
+.relief .rv-sp-ref { stroke: var(--accent); stroke-opacity: 0.6; stroke-dasharray: 3 3; stroke-width: 1; }
+.relief .rv-sp-pt { fill: var(--ink-3); }
+.relief .rv-sp-pt.rv-part { fill: var(--bg); stroke: var(--ink-3); stroke-width: 1; }
+.relief .rv-sp-cur line { stroke: var(--accent); stroke-width: 1; stroke-opacity: 0.55; }
+.relief .rv-sp-cur circle { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
+.relief .rv-legend-m { display: none; }
+
+/* ---------- tooltip ---------- */
+.relief .rv-tip { position: absolute; z-index: 6; left: 0; top: 0; pointer-events: none; background: var(--glass-2); border: 1px solid var(--line-2); border-radius: 12px; padding: 10px 12px; font-size: 13px; box-shadow: var(--rv-shadow); width: max-content; max-width: min(300px, calc(100vw - 2 * var(--gut))); will-change: transform; }
+.relief .rv-tip .rv-tn { font-weight: 800; line-height: 1.25; }
+.relief .rv-tip .rv-tm { color: var(--ink-3); font-size: 12px; margin-top: 2px; }
+.relief .rv-tip .rv-tpr { margin-top: 7px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.relief .rv-tip .rv-tpr b { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.relief .rv-tip .rv-tdv { font-size: 12px; font-weight: 700; }
+.relief .rv-tip .rv-tlat { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 12px; }
+
+.relief .rv-nogl { position: absolute; z-index: 5; top: 22px; left: 50%; transform: translateX(-50%); width: max-content; max-width: min(560px, calc(100vw - 2 * var(--gut))); padding: 9px 14px; border-radius: 12px; background: var(--glass-2); border: 1px solid var(--line-2); font-size: 13px; color: var(--ink-2); text-align: center; }
+/* the phone's one-line form of the notice, above the button (at the top it covered the hero) */
+.relief .rv-nogl-m { display: none; padding: 6px 10px; border-radius: 10px; background: var(--glass-2); border: 1px solid var(--line-2); font-size: 11.5px; line-height: 1.35; color: var(--ink-2); text-align: center; }
+
+/* short desktop windows: the legend keeps only its scale, the hero tightens */
+@media (min-width: 760px) and (max-height: 820px) {
+  .relief .rv-legend .rv-li { display: none; }
+  .relief .rv-hero { top: 26px; }
+  .relief .rv-head { gap: 12px; }
+  .relief .rv-bignum { margin-top: 16px; }
+  .relief .rv-big { font-size: 70px; }
+  .relief .rv-story { margin-top: 18px; padding-top: 14px; }
+  .relief .rv-st-num { font-size: 44px; }
+}
+
+/* ---------- entrance (the map draws first, the chrome follows) ---------- */
+@keyframes rv-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.relief .rv-head { animation: rv-enter 900ms var(--rv-ease) 100ms both; }
+.relief .rv-pres { animation: rv-enter 900ms var(--rv-ease) 250ms both; }
+.relief .rv-side, .relief .rv-topbar .rv-pill { animation: rv-enter 900ms var(--rv-ease) 900ms both; }
+.relief .rv-explore { animation: rv-enter 900ms var(--rv-ease) 250ms both; }
+.relief .rv-dock { animation: rv-enter 900ms var(--rv-ease) 1100ms both; }
+/* (transition: none, not the demo's 1 ms duration: with the default transition-property `all`, a
+   1 ms duration made every property change a transition, so the phone layout measured the dock
+   where it had been, not where --dock-b had just put it) */
+.relief.rv-still *, .relief.rv-still *::before, .relief.rv-still *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .relief *, .relief *::before, .relief *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------- phone ---------- */
+@media (max-width: 759px) {
+  .relief { --low: 0px; }
+  .relief .rv-scrim.rv-l { display: none; }
+  .relief .rv-scrim.rv-t { display: block; left: 0; right: 0; top: 0; height: 210px; background: linear-gradient(180deg, var(--scrim) 0%, var(--scrim) 55%, var(--scrim-0) 100%); }
+  .relief .rv-scrim.rv-b { height: 360px; background: linear-gradient(0deg, var(--scrim) 0%, var(--scrim) 62%, var(--scrim-0) 100%); }
+  .relief .rv-hero { top: 14px; left: var(--gut); right: var(--gut); width: auto; }
+  .relief .rv-head { flex-direction: row; align-items: baseline; gap: 10px; }
+  .relief .rv-brand { font-size: 13px; }
+  .relief .rv-h1 { font-size: 19px; }
+  .relief .rv-pres { display: none; }
+  .relief .rv-bignum { margin-top: 6px; display: flex; align-items: baseline; gap: 10px; }
+  .relief .rv-big { display: inline; font-size: 46px; letter-spacing: -0.035em; }
+  .relief .rv-bigcap { display: inline; margin: 0; font-size: 12.5px; line-height: 1.25; }
+  .relief .rv-wk { font-size: 13px; margin-top: 4px; }
+  /* (fixed, not absolute: the story lives in the hero but sits on the band above the dock; the
+     host is inset 0, so the viewport and the host are the same box) */
+  .relief .rv-story { position: fixed; left: var(--gut); right: var(--gut); bottom: var(--story-b, 220px); margin: 0; padding-top: 0; border-top: 0; }
+  .relief .rv-st-kick { display: none; }
+  .relief .rv-st-row { margin-top: 0; gap: 10px; }
+  .relief .rv-st-num { font-size: 34px; }
+  .relief .rv-st-p { font-size: 12.5px; margin-top: 4px; line-height: 1.45; }
+  .relief .rv-st-two { gap: 22px; margin-top: 0; }
+  .relief .rv-st-two .rv-v { font-size: 30px; }
+  .relief .rv-st-two .rv-l { font-size: 12px; margin-top: 3px; }
+  .relief .rv-caption { bottom: var(--story-b, 220px); font-size: 14px; text-align: left; left: var(--gut); right: var(--gut); width: auto; transform: translateY(6px); }
+  .relief .rv-caption.rv-on { transform: none; }
+  .relief .rv-topbar { top: 12px; right: var(--gut); }
+  .relief .rv-pill { height: 34px; padding: 0 12px; font-size: 12.5px; }
+  .relief .rv-explore-top { display: none; }
+  .relief .rv-nogl { display: none; }
+  .relief .rv-nogl-m { display: block; }
+  .relief .rv-explore-bot { display: flex; width: 100%; height: 42px; font-size: 14px; }
+  .relief .rv-hint { display: none; }
+  .relief .rv-side { left: var(--gut); right: var(--gut); bottom: 10px; width: auto; gap: 8px; }
+  .relief .rv-legend { display: none; }
+  .relief .rv-credit { font-size: 9.5px; line-height: 1.4; }
+  .relief .rv-dock { left: var(--gut); right: var(--gut); width: auto; bottom: var(--dock-b, 64px); padding: 8px 10px 6px; }
+  .relief .rv-dock .rv-row { gap: 8px; }
+  .relief .rv-play { width: 34px; height: 34px; }
+  .relief .rv-seg button { height: 28px; padding: 0 9px; font-size: 12px; }
+  .relief .rv-wkd { font-size: 12.5px; }
+  .relief .rv-wkd .rv-wl { display: none; }
+  .relief .rv-wkd .rv-ws { display: inline; }
+  .relief .rv-step { width: 24px; height: 24px; }
+  .relief .rv-legend-m { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; font-size: 10.5px; color: var(--ink-3); margin: 0 0 2px; }
+  .relief .rv-legend-m .rv-bar { height: 5px; border-radius: 3px; }
+  .relief .rv-legend-m b { color: var(--ink-2); font-weight: 700; }
+  .relief .rv-legend-m .rv-lm2 { grid-column: 1 / -1; margin-top: -3px; }
+  .relief .rv-reflab { font-size: 10px; }
+  .relief .rv-reflab b { font-size: 11.5px; }
+  .relief .rv-tip { font-size: 12.5px; }
+  .relief.rv-tipopen .rv-story, .relief.rv-tipopen .rv-caption { opacity: 0 !important; }
+  .relief .rv-tip.rv-sheet { left: var(--gut); right: var(--gut); top: auto; bottom: var(--story-b, 220px); width: auto; max-width: none; transform: none; }
+}
+/* small phones: the seg buttons and the steps tighten so the week keeps its room ("Aug 24" was
+   cut to "Aug …" at 360 px) */
+@media (max-width: 379px) {
+  .relief .rv-seg button { padding: 0 7px; font-size: 11.5px; }
+  .relief .rv-dock .rv-row { gap: 5px; }
+  .relief .rv-step { width: 22px; height: 24px; }
+}
+/* the drag hint would slide under the dock */
+@media (min-width: 760px) and (max-width: 1319px) {
+  .relief .rv-hint { display: none; }
+}
+@media (min-width: 760px) and (max-width: 1099px) {
+  .relief .rv-hero { width: 330px; }
+  .relief .rv-big { font-size: 72px; }
+  .relief .rv-scrim.rv-l { width: 520px; }
+}

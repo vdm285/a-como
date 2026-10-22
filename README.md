@@ -1,8 +1,8 @@
 # A cómo
 
-**El mapa de precios del súper en la Ciudad de México.** Las tiendas de alimentos que vigila PROFECO, dibujadas donde están y coloreadas por lo que buscas; una canasta que dice en qué tienda sale más barata la lista completa; una línea de tiempo que muestra cómo se mueve un precio por la ciudad; y tus propios precios junto a los oficiales, guardados sólo en tu navegador.
+**El mapa de precios del súper en la Ciudad de México.** Abre con el relieve de la ciudad: cada tienda una columna tan alta como su precio, semana a semana. Luego, las tiendas que vigila PROFECO (del súper a las papelerías), dibujadas donde están y coloreadas por lo que buscas; una canasta que dice en qué tienda sale más barata la lista completa; una línea de tiempo que muestra cómo se mueve un precio por la ciudad; y tus propios precios junto a los oficiales, guardados sólo en tu navegador.
 
-*The supermarket price map of Mexico City: the food stores PROFECO surveys, drawn where they stand and coloured by what you search; a basket that says which store is cheapest for the whole list; a timeline that shows a price moving across the city; your own shelf prices beside the official ones, kept only in your browser. Spanish first; English is a setting.*
+*The supermarket price map of Mexico City. It opens on the city in relief: each store a column as tall as its price, week by week. Then the stores PROFECO surveys (from supermarkets to stationers), drawn where they stand and coloured by what you search; a basket that says which store is cheapest for the whole list; a timeline that shows a price moving across the city; your own shelf prices beside the official ones, kept only in your browser. Spanish first; English is a setting.*
 
 Live: https://vdm285.github.io/compa-precio/ (working name "A cómo"; the repository keeps its first name until the owner picks one).
 

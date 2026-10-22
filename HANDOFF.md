@@ -2,6 +2,28 @@
 
 The state of the code, dated, newest first. `docs/VISION.md` is the direction; this file is what exists. Read `AGENTS.md` first.
 
+## 2026-10-22, late night — the owner's answers: Relieve opens the app; every category
+
+### The answers (from the checkpoint's question cards)
+
+- **Name**: "A cómo" stays. The repository keeps `compa-precio` for now (the renaming checklist in AGENTS.md now also lists `src/opening/strings.js`).
+- **Opening**: Relieve, the 3D city of price columns from the portfolio, then a hand-off to the 2D map. Asked again how far: "a 3D opening, then the 2D map" (not a 3D mode for every view, not only the demo's two stories).
+- **Data refresh**: by hand, `npm run qqp:mirror` monthly from a network in Mexico (unchanged; no scheduled task).
+- **Scope**: everything PROFECO surveys, the non-grocery categories included.
+
+### What changed
+
+- **Every category**: the city leaves no category out (`excludeCategories: []` in `tools/build-qqp.mjs`). The build now has 558 stores (was 499; 13 of the 571 have no coordinates or no prices) and 3,776 products (was 2,366) in 763 generic products. `products.json` is 1,249 kB raw, 160 kB gzip; the cap is raised to 2,200 kB raw. The 57 non-grocery stores (appliances 17, stationers 14, department stores 13, uniforms 8, shoes 4, toys 1) are a new kind, "Otras tiendas" / "Other stores", in the strip and the opening. 287 stores have a price index.
+- **Relieve opens the app** (`src/opening/`, ported from `docs/portfolio/relieve.html` by a sub-agent and reviewed): the bare address shows the relief over the 2D app (which boots underneath, inert); "Explorar el mapa" or Escape hands off; a link to a card, a shared basket or a week goes straight to the map; Settings has "Abrir con el relieve" (on by default) and "Ver el relieve". three.js 0.160.0 is a dependency, loaded only with the opening in its own chunk (508 kB, 134 kB gzip; the main chunk is unchanged at 78 kB gzip), precached by the service worker with `opening.json`. Its data is `public/data/qqp/opening.json` from `npm run opening` (a new CI step); `npm run check` checks it. Without WebGL it draws the demo's 2D fallback and says so.
+- **The port's own fixes** (found by the sub-agent at 1600, 1024, 390 and 360, es and en, reduced motion, no WebGL): classes prefixed `rv-` under `.relief` (the app's `.pill`, `.legend`, `.tip` collided), lit for everything carrying data (no `innerHTML`), English strings and dates, the story kept on screen on phones, the no-WebGL notice placed clear of the controls, a full teardown in `destroy()` (renderer, geometries, listeners).
+- **Tests**: the flow checks and screenshots turn the opening off by its setting; three smoke checks cover the opening itself (shown on the bare address, the map inert beneath, Explorar hands off, no console errors). Smoke 72/72; round scripts 5/5, 15/15, 24/24 on the new data; `data/cache/opening/verify.mjs` 10/10 (both sizes, links, Settings, Escape, the setting).
+
+### Liberties in this step (each reversible)
+
+- **The opening shows on every visit to the bare address**, not only the first; the setting turns it off. Reverse: `state.prefs.opening !== false` in boot (`src/main.js`), or default the pref to false.
+- **Escape first closes a pinned store's tooltip, then hands off** (the sub-agent's choice: a reader dismissing a tooltip should not lose the relief).
+- **The opening tells the demo's two stories** (jitomate since its dearest week, the tortilla kilo by kind of store) on current data; other products stay in the 2D app.
+
 ## 2026-10-22, night — eighth round: what the verification of round 7 found (last round before the briefing)
 
 ### State in one paragraph
