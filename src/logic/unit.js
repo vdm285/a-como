@@ -1,7 +1,10 @@
 // Per-unit prices from a product's parsed size ({ value, unit: 'g'|'ml'|'pza', pack? }).
-// Which unit to show follows what a shopper says at the shelf: litres for drinks and
-// milk, kilos for bulk, 100 g / 100 ml for everything packaged small, pieces for eggs
-// and rolls. The rule is by the generic product's typical size, decided per group once.
+// Which unit to show follows what a shopper says at the shelf: litres for drinks and milk,
+// kilos for bulk, 100 g / 100 ml for everything packaged small, pieces for eggs and rolls.
+// A generic product decides its unit once for the whole group (groupUnit in src/app/stage.js).
+
+// the dimension each display unit measures
+export const DIM = { l: 'ml', '100ml': 'ml', kg: 'g', '100g': 'g', pza: 'pza' };
 
 export function unitFor(size) {
   if (!size || !(size.value > 0)) return null;
@@ -11,13 +14,13 @@ export function unitFor(size) {
   return null;
 }
 
-// Price per the display unit. The factor converts the whole package to that unit.
+// Price per the display unit. Returns null when the size is in another dimension: a bunch of
+// onions sold by the piece has no price per kilo (the first audit found $15,900/kg on screen).
 export function perUnit(price, size, unit = unitFor(size)) {
   if (price == null || !size || !(size.value > 0) || !unit) return null;
-  const base = size.unit === 'pza' ? size.value : size.value; // total g, ml or pieces
+  if (DIM[unit] !== size.unit) return null;
   const per = { l: 1000, kg: 1000, '100g': 100, '100ml': 100, pza: 1 }[unit];
-  if (!per) return null;
-  return (price / base) * per;
+  return (price / size.value) * per;
 }
 
 // A group compares its products per unit only when they share a dimension (all g, all ml,
@@ -38,10 +41,11 @@ export function groupUnit(products) {
   return null;
 }
 
-export function sizeLabel(size) {
+// "1.5 L", "900 g", "18 pza" (English: "18 pcs")
+export function sizeLabel(size, lang = 'es') {
   if (!size || !(size.value > 0)) return '';
   const u = size.unit;
-  if (u === 'pza') return `${size.value} pza`;
+  if (u === 'pza') return `${trim(size.value)} ${lang === 'en' ? (size.value === 1 ? 'pc' : 'pcs') : 'pza'}`;
   if (u === 'ml') return size.value >= 1000 ? `${trim(size.value / 1000)} L` : `${trim(size.value)} ml`;
   if (u === 'g') return size.value >= 1000 ? `${trim(size.value / 1000)} kg` : `${trim(size.value)} g`;
   return `${size.value} ${u}`;

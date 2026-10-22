@@ -95,10 +95,25 @@ test('basket totals, missing items and ranking', () => {
     ['a', { weeks: ['w1', 'w2'], stores: { s1: [10, 11], s2: [null, 12] } }],
     ['b', { weeks: ['w1', 'w2'], stores: { s1: [5, null], s2: [4, 4] } }],
   ]);
-  const t0 = basketAtWeek(items, weeks, ['s1', 's2'], 0);
+  const t0 = basketAtWeek(items, weeks, ['s1', 's2'], 'w1');
   assert.equal(t0.get('s1').total, 25);
   assert.equal(t0.get('s2').complete, false);
-  const t1 = basketAtWeek(items, weeks, ['s1', 's2'], 1);
+  const t1 = basketAtWeek(items, weeks, ['s1', 's2'], 'w2');
   assert.equal(t1.get('s2').total, 28);
   assert.equal(t1.get('s1').complete, false);
+  // a file covering fewer weeks is read by date, never by position
+  const shorter = new Map([['a', { weeks: ['w1', 'w2'], stores: { s1: [10, 11] } }], ['b', { weeks: ['w2'], stores: { s1: [7] } }]]);
+  const t2 = basketAtWeek(items, shorter, ['s1'], 'w2');
+  assert.equal(t2.get('s1').total, 29);
+  const t3 = basketAtWeek(items, shorter, ['s1'], 'w1');
+  assert.equal(t3.get('s1').complete, false);
+  assert.deepEqual(t3.get('s1').missing, ['b']);
+});
+
+test('per-unit refuses another dimension', () => {
+  assert.equal(perUnit(15.9, { value: 1, unit: 'pza' }, 'kg'), null);
+  assert.equal(perUnit(38, { value: 426, unit: 'ml' }, '100g'), null);
+  assert.equal(perUnit(35, { value: 1000, unit: 'g' }, 'pza'), null);
+  assert.equal(perUnit(35, { value: 1000, unit: 'g' }, 'kg'), 35);
+  assert.equal(sizeLabel({ value: 18, unit: 'pza' }, 'en'), '18 pcs');
 });

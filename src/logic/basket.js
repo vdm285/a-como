@@ -31,16 +31,19 @@ export function basketLatest(items, latestById, storeIds) {
   return out;
 }
 
-// Same at a given week index. weeksById: Map productId -> { weeks: [...], stores: { storeId: [price|null...] } }
-export function basketAtWeek(items, weeksById, storeIds, weekIdx) {
+// Same for one week, found by DATE in each item's own weeks file. Aligning by array index added
+// prices from different months when one file covered fewer weeks (second audit).
+// weeksById: Map productId -> { weeks: [...], stores: { storeId: [price|null...] } }
+export function basketAtWeek(items, weeksById, storeIds, week) {
   const out = new Map();
-  for (const sid of storeIds) out.set(sid, { total: 0, n: 0, missing: [], complete: true });
+  for (const sid of storeIds) out.set(sid, { total: 0, n: 0, missing: [], complete: true, date: week, dateMin: week });
   for (const { id, qty } of items) {
     const w = weeksById.get(id);
+    const col = w && w.weeks ? w.weeks.indexOf(week) : -1;
     for (const sid of storeIds) {
       const row = out.get(sid);
-      const series = w && w.stores ? w.stores[sid] : null;
-      const price = series ? series[weekIdx] : null;
+      const series = col >= 0 && w.stores ? w.stores[sid] : null;
+      const price = series ? series[col] : null;
       if (price != null) { row.total += price * qty; row.n += 1; }
       else { row.missing.push(id); row.complete = false; }
     }
