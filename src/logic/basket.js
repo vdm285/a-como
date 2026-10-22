@@ -8,7 +8,7 @@ import { median, deviation } from './stats.js';
 // Returns Map storeId -> { total, n, missing: [productId], complete, date }
 export function basketLatest(items, latestById, storeIds) {
   const out = new Map();
-  for (const sid of storeIds) out.set(sid, { total: 0, n: 0, missing: [], complete: true, date: null });
+  for (const sid of storeIds) out.set(sid, { total: 0, n: 0, missing: [], complete: true, date: null, dateMin: null });
   for (const { id, qty } of items) {
     const p = latestById.get(id);
     const latest = p && p.latest ? p.latest : {};
@@ -18,7 +18,9 @@ export function basketLatest(items, latestById, storeIds) {
       if (obs && obs[0] != null) {
         row.total += obs[0] * qty;
         row.n += 1;
+        // the total spans dates: keep both ends so the card can say "del 4 al 27 ago"
         if (!row.date || obs[1] > row.date) row.date = obs[1];
+        if (!row.dateMin || obs[1] < row.dateMin) row.dateMin = obs[1];
       } else {
         row.missing.push(id);
         row.complete = false;
@@ -52,7 +54,10 @@ export function rankBasket(totals, { onlyComplete = false } = {}) {
   const rows = [...totals.entries()].map(([storeId, r]) => ({ storeId, ...r }));
   const complete = rows.filter((r) => r.complete);
   const base = median(complete.map((r) => r.total));
+  // dev goes on the totals rows themselves too: the stage colours the map from `totals`
+  // (the ranking rows are copies; writing only to them left every complete store uncoloured)
   for (const r of rows) r.dev = r.complete ? deviation(r.total, base) : null;
+  for (const [, r] of totals) r.dev = r.complete ? deviation(r.total, base) : null;
   const list = (onlyComplete ? complete : rows).sort((a, b) => {
     if (a.complete !== b.complete) return a.complete ? -1 : 1;
     if (a.complete) return a.total - b.total;

@@ -29,7 +29,7 @@ export async function loadStage() {
 const noBrand = (b) => (b && !/^s\/m$/i.test(b.trim()) ? b : null);
 export function expandProduct(p) {
   if (p.id) { p.brand = noBrand(p.brand); return p; }
-  return { id: p.i, group: p.g, name: p.n, brand: noBrand(p.b), presentation: p.p, category: p.c, catalog: p.k, size: p.z || null, stores: p.s, min: p.lo, median: p.md, max: p.hi, pacic: p.pacic ? 1 : 0 };
+  return { id: p.i, group: p.g, name: p.n, brand: noBrand(p.b), presentation: p.p, category: p.c, catalog: p.k, size: p.z || null, stores: p.s, storesAll: p.sa ?? p.s, min: p.lo, median: p.md, max: p.hi, asOf: p.as || null, last: p.la || null, pacic: p.pacic ? 1 : 0 };
 }
 
 export async function loadCatalog() {
@@ -41,6 +41,14 @@ let indexPromise = null;
 export function loadIndex() {
   if (!indexPromise) indexPromise = getJson('qqp/index.json').catch((e) => { indexPromise = null; throw e; });
   return indexPromise;
+}
+
+// visits.json: products recorded per store per week (the survey's rhythm). Optional: an older
+// build without it simply has no rhythm curve.
+let visitsPromise = null;
+export function loadVisits() {
+  if (!visitsPromise) visitsPromise = getJson('qqp/visits.json', { optional: true }).catch(() => null);
+  return visitsPromise;
 }
 
 const products = new Map();

@@ -20,6 +20,8 @@ const STATES = [
   { name: 'search', hash: '', type: 'leche' },
   { name: 'group', hash: 'g/leche-ultrapasteurizada' },
   { name: 'product', hash: 'p/leche-ultrapasteurizada-a3d941' },
+  { name: 'product-week', hash: 'p/jitomate-3532af?w=2026-04-20' },
+  { name: 'jitomate', hash: 'p/jitomate-3532af' },
   { name: 'store', hash: 't/chedraui-selecto-46b8a5' },
   { name: 'basket', hash: 'c?items=leche-ultrapasteurizada-a3d941:1,huevo-f2ba30:1' },
   { name: 'settings', hash: 's' },
@@ -29,15 +31,15 @@ const VIEWPORTS = { desktop: { width: 1600, height: 900, deviceScaleFactor: 1 },
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars'] });
 try {
   for (const [vp, viewport] of Object.entries(VIEWPORTS)) {
-    const page = await browser.newPage();
-    await page.setViewport(viewport);
     const errors = [];
-    page.on('pageerror', (e) => errors.push(String(e)));
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     for (const st of STATES) {
-      if (vp === 'phone' && ['city-week', 'settings'].includes(st.name)) continue;
-      // a fresh document per state, so a typed search or an open card never leaks into the next
-      await page.goto('about:blank');
+      if (vp === 'phone' && ['city-week', 'settings', 'product-week'].includes(st.name)) continue;
+      // a fresh incognito context per state: no basket, prefs or own prices leak between captures
+      const ctx = await browser.createBrowserContext();
+      const page = await ctx.newPage();
+      await page.setViewport(viewport);
+      page.on('pageerror', (e) => errors.push(String(e)));
+      page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
       await page.goto(`${BASE}#${st.hash}`, { waitUntil: 'networkidle2', timeout: 60000 });
       await page.waitForSelector('#stage .dot', { timeout: 30000 });
       if (st.type) { await page.type('.search input', st.type); }
@@ -46,9 +48,9 @@ try {
       const file = resolve(OUT, `${vp}-${st.name}.png`);
       await page.screenshot({ path: file });
       console.log(file);
+      await ctx.close();
     }
     if (errors.length) console.log(`${vp}: ${errors.length} console errors:\n  ${[...new Set(errors)].slice(0, 10).join('\n  ')}`);
-    await page.close();
   }
 } finally {
   await browser.close();

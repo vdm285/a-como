@@ -86,6 +86,10 @@ test('basket totals, missing items and ranking', () => {
   assert.equal(r.list[r.list.length - 1].storeId, 's3'); // incomplete last
   assert.equal(r.base, 26.5);
   assert.equal(r.dearest, 28);
+  // the map reads dev from the totals rows: complete stores must carry it, incomplete ones null
+  assert.ok(Math.abs(totals.get('s1').dev - (25 / 26.5 - 1)) < 1e-12);
+  assert.ok(totals.get('s2').dev > 0);
+  assert.equal(totals.get('s3').dev, null);
   assert.equal(rankBasket(totals, { onlyComplete: true }).list.length, 2);
   const weeks = new Map([
     ['a', { weeks: ['w1', 'w2'], stores: { s1: [10, 11], s2: [null, 12] } }],

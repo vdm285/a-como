@@ -47,8 +47,14 @@ export async function listOwn() {
   return (rows || []).sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id || 0) - (a.id || 0));
 }
 
-export async function addOwn({ productId, storeId, price, date, note }) {
-  const rec = { productId, storeId, price: Number(price), date: date || new Date().toISOString().slice(0, 10), note: note || '', created: new Date().toISOString() };
+// The reader's calendar day, not UTC: a price seen at 7 p.m. in Mexico City is today's price
+// (toISOString() dated it tomorrow).
+export function localDay(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export async function addOwn({ productId, storeId, price, date, note, created }) {
+  const rec = { productId, storeId, price: Number(price), date: date || localDay(), note: note || '', created: created || new Date().toISOString() };
   if (!(rec.price > 0) || !productId || !storeId) throw new Error('invalid own price');
   const d = await db();
   if (d) { rec.id = await tx(d, 'readwrite', (os) => os.add(rec)); return rec; }
@@ -64,14 +70,19 @@ export async function deleteOwn(id) {
   lsWrite(lsRead().filter((r) => r.id !== id));
 }
 
+// Importing a file twice (or the file just exported) must not duplicate rows: a row is the same
+// when product, store, price, date and creation instant all match.
 export async function importOwn(rows) {
-  let n = 0;
+  const have = new Set((await listOwn()).map((r) => `${r.productId}|${r.storeId}|${r.price}|${r.date}|${r.created || ''}`));
+  let added = 0, skipped = 0;
   for (const r of rows || []) {
-    if (!r || !r.productId || !r.storeId || !(Number(r.price) > 0)) continue;
-    await addOwn({ productId: r.productId, storeId: r.storeId, price: Number(r.price), date: r.date, note: r.note });
-    n++;
+    if (!r || !r.productId || !r.storeId || !(Number(r.price) > 0)) { skipped++; continue; }
+    const key = `${r.productId}|${r.storeId}|${Number(r.price)}|${r.date}|${r.created || ''}`;
+    if (have.has(key)) { skipped++; continue; }
+    await addOwn({ productId: r.productId, storeId: r.storeId, price: Number(r.price), date: r.date, note: r.note, created: r.created });
+    have.add(key); added++;
   }
-  return n;
+  return { added, skipped };
 }
 
 export async function persistStorage() {

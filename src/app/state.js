@@ -29,11 +29,14 @@ export const state = {
 
 const subs = new Set();
 export function subscribe(fn) { subs.add(fn); return () => subs.delete(fn); }
-let scheduled = false;
+// Notifications coalesce per microtask but none is lost: subscribers receive the Set of every
+// kind raised in that tick ('view', 'week', 'basket', 'stage', 'prefs', ...). The first version
+// kept only the first kind, so a link carrying ?lang= swallowed the 'view' that followed it.
+let pending = null;
 export function notify(what = 'state') {
-  if (scheduled) return;
-  scheduled = true;
-  queueMicrotask(() => { scheduled = false; for (const fn of subs) fn(what); });
+  if (pending) { pending.add(what); return; }
+  pending = new Set([what]);
+  queueMicrotask(() => { const kinds = pending; pending = null; for (const fn of subs) fn(kinds); });
 }
 
 export function setPref(key, value) {
