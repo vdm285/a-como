@@ -51,14 +51,18 @@ export function loadVisits() {
   return visitsPromise;
 }
 
+// Per-product files are cached in memory with a small LRU (a long session of hopping used to grow
+// the heap without bound); a hit moves the entry to the end.
+const LRU_MAX = 120;
 const products = new Map();
 const weeks = new Map();
-export function loadProduct(id) {
-  if (!products.has(id)) products.set(id, getJson(`qqp/products/${id}.json`).catch((e) => { products.delete(id); throw e; }));
-  return products.get(id);
+function cached(map, key, load) {
+  if (map.has(key)) { const v = map.get(key); map.delete(key); map.set(key, v); return v; }
+  const p = load().catch((e) => { map.delete(key); throw e; });
+  map.set(key, p);
+  while (map.size > LRU_MAX) map.delete(map.keys().next().value);
+  return p;
 }
-export function loadProductWeeks(id) {
-  if (!weeks.has(id)) weeks.set(id, getJson(`qqp/products/${id}.weeks.json`).catch((e) => { weeks.delete(id); throw e; }));
-  return weeks.get(id);
-}
+export function loadProduct(id) { return cached(products, id, () => getJson(`qqp/products/${id}.json`)); }
+export function loadProductWeeks(id) { return cached(weeks, id, () => getJson(`qqp/products/${id}.weeks.json`)); }
 export function peekProduct(id) { return products.get(id); }

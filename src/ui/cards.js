@@ -158,7 +158,7 @@ export function storeCard(c) {
       ${ownHere.length ? html`<section><h3>${t('ownPrices')}</h3>${ownList(ownHere, c, { showStore: false })}</section>` : nothing}
       <section>
         <h3>${t('storeList')}</h3>
-        ${items == null ? html`<div class="muted">${t('loadingCard')}</div>` : recentRows.length + olderRows.length === 0 ? html`<div class="note">${t('emptyStore')}</div>` : html`
+        ${items == null ? html`<div class="muted">${t('loadingCard')}</div>` : storeFile.error ? html`<div class="note">${t('loadFailedCard')}</div>` : recentRows.length + olderRows.length === 0 ? html`<div class="note">${t('emptyStore')}</div>` : html`
           <div class="ownform" style="margin:0 0 8px"><input type="search" enterkeyhint="search" aria-label=${t('searchInStore')} placeholder=${t('searchInStore')} .value=${filter || ''} @input=${(e) => c.onFilter(e.target.value)} @keydown=${(e) => { if (e.key === 'Escape' && e.target.value) { e.stopPropagation(); c.onFilter(''); } }} style="flex:1" /></div>
           <div class="subh">${t('lastDays', { n: win.days })} · ${listed.length}</div>
           <ul class="rank">${listed.slice(0, limit).map(row)}</ul>

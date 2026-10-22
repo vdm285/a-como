@@ -1,25 +1,55 @@
-// Service worker: the app shell and the geometry are cached on install (offline start);
-// price data is network-first with the last copy as fallback, capped so the cache never
-// grows without bound. Versioned by the build: Vite replaces nothing here, so bump CACHE
-// when the caching rules change; hashed asset names change by themselves.
-const CACHE = 'acomo-v1';
-const DATA = 'acomo-data-v1';
-const DATA_MAX = 400; // product files kept at most
+// Service worker. The build stamps VERSION (vite.config.js), so every deploy installs a new worker
+// and a returning reader gets the new app instead of the first shell forever (audit 2026-10-21).
+// - Pages (navigations): network first with a 3 s timeout, the cached shell when offline.
+// - Hashed assets: cache first (their names change when they change).
+// - Boot data (geometry, meta, stores, catalogue, index, visits): network first with a timeout,
+//   in a cache that is never trimmed, so an offline start always works.
+// - Per-product and per-store files: network first with a timeout, in a small LRU cache.
+const VERSION = '__BUILD__';
+const SHELL = `acomo-shell-${VERSION}`;
+const BOOT = 'acomo-boot';
+const DATA = 'acomo-data';
+const DATA_MAX = 300;
+const TIMEOUT = 3000;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './manifest.webmanifest', './favicon.svg']).catch(() => {})));
+  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['./', './manifest.webmanifest', './favicon.svg']).catch(() => {})));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => ![CACHE, DATA].includes(k)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => ![SHELL, BOOT, DATA].includes(k)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
-async function trim(cacheName, max) {
+function withTimeout(p, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (err) => { clearTimeout(t); reject(err); });
+  });
+}
+
+// one trim at a time, oldest first; a hit re-puts the entry so it counts as recent
+let trimming = Promise.resolve();
+function trim() {
+  trimming = trimming.then(async () => {
+    const c = await caches.open(DATA);
+    const keys = await c.keys();
+    for (const k of keys.slice(0, Math.max(0, keys.length - DATA_MAX))) await c.delete(k);
+  }).catch(() => {});
+  return trimming;
+}
+
+async function networkFirst(req, cacheName, { lru = false } = {}) {
   const c = await caches.open(cacheName);
-  const keys = await c.keys();
-  if (keys.length <= max) return;
-  for (const k of keys.slice(0, keys.length - max)) await c.delete(k);
+  try {
+    const res = await withTimeout(fetch(req), TIMEOUT);
+    if (res.ok) { await c.put(req, res.clone()); if (lru) trim(); }
+    return res;
+  } catch {
+    const hit = await c.match(req);
+    if (hit) { if (lru) { await c.delete(req); await c.put(req, hit.clone()); } return hit; }
+    return new Response('{}', { status: 503, headers: { 'Content-Type': 'application/json' } });
+  }
 }
 
 self.addEventListener('fetch', (e) => {
@@ -27,33 +57,30 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
-  const isData = url.pathname.includes('/data/qqp/');
-  if (isData) {
+  const p = url.pathname;
+  if (req.mode === 'navigate') {
     e.respondWith((async () => {
-      const c = await caches.open(DATA);
+      const c = await caches.open(SHELL);
       try {
-        const res = await fetch(req);
-        if (res.ok) { c.put(req, res.clone()); trim(DATA, DATA_MAX); }
+        const res = await withTimeout(fetch(req), TIMEOUT);
+        if (res.ok) c.put('./', res.clone());
         return res;
       } catch {
-        const hit = await c.match(req);
-        return hit || new Response('{}', { status: 503, headers: { 'Content-Type': 'application/json' } });
+        return (await c.match('./')) || Response.error();
       }
     })());
     return;
   }
-  // app shell, assets, geometry: cache first, then network (and keep it)
-  e.respondWith((async () => {
-    const c = await caches.open(CACHE);
-    const hit = await c.match(req, { ignoreSearch: req.mode === 'navigate' });
-    if (hit) return hit;
-    try {
+  if (p.includes('/data/qqp/products/') || p.includes('/data/qqp/stores/')) { e.respondWith(networkFirst(req, DATA, { lru: true })); return; }
+  if (p.includes('/data/')) { e.respondWith(networkFirst(req, BOOT)); return; }
+  if (p.includes('/assets/')) {
+    e.respondWith((async () => {
+      const c = await caches.open(SHELL);
+      const hit = await c.match(req);
+      if (hit) return hit;
       const res = await fetch(req);
-      if (res.ok && (url.pathname.includes('/assets/') || url.pathname.includes('/data/geo/') || req.mode === 'navigate')) c.put(req, res.clone());
+      if (res.ok) c.put(req, res.clone());
       return res;
-    } catch {
-      if (req.mode === 'navigate') { const shell = await c.match('./'); if (shell) return shell; }
-      throw new Error('offline');
-    }
-  })());
+    })());
+  }
 });

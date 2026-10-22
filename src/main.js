@@ -19,6 +19,10 @@ import { listOwn, addOwn, deleteOwn, importOwn, persistStorage, ownToJson, ownTo
 const app = document.getElementById('app');
 const stageHost = document.createElement('div'); stageHost.id = 'stage'; app.appendChild(stageHost);
 const chrome = document.createElement('div'); chrome.id = 'chrome'; app.appendChild(chrome);
+const tipHost = document.createElement('div'); tipHost.id = 'tiphost'; app.appendChild(tipHost);
+// one polite region announces what changed (a card opened, the week while playing); the rest of the app is not a live region
+const announcer = document.createElement('div'); announcer.className = 'sr'; announcer.setAttribute('aria-live', 'polite'); app.appendChild(announcer);
+const announce = (text) => { announcer.textContent = ''; setTimeout(() => { announcer.textContent = text; }, 30); };
 const veil = document.createElement('div'); veil.className = 'veil'; veil.innerHTML = '<div class="logo">A cómo</div><div class="msg"></div>'; app.appendChild(veil);
 
 const ui = {
@@ -66,7 +70,9 @@ function parseHash() {
   if (lang) { if (lang !== getLang() && (lang === 'es' || lang === 'en')) { setLang(lang); setPref('lang', lang); document.title = t('appName'); } strip = true; }
   const items = q.get('items');
   if (items) {
-    const offer = items.split(',').map((s) => { const [pid, qty] = s.split(':'); return { id: pid, qty: Math.max(1, Number(qty) || 1) }; }).filter((b) => b.id);
+    const merged = new Map();
+    for (const s of items.split(',')) { const [pid, qty] = s.split(':'); const n = Math.floor(Number(qty) || 1); if (pid && n > 0) merged.set(pid, Math.min(99, (merged.get(pid) || 0) + n)); }
+    const offer = [...merged].map(([id, qty]) => ({ id, qty }));
     if (offer.length) { if (!state.basket.length) { basketReplace(offer); showToast(t('sharedLoaded', { n: offer.length })); } else ui.offer = offer; }
     strip = true;
   }
@@ -287,6 +293,7 @@ async function play() {
   while (i < weeks.length) {
     const t0 = performance.now();
     setWeek(weeks[i]);
+    if (i % 4 === 0) announce(t('week', { date: weeks[i] }));
     await new Promise((r) => queueMicrotask(r));
     await ui.stageReady;
     if (tok !== ui.playToken) return;
@@ -325,7 +332,7 @@ function cardView() {
     let file = ui.storeFiles.get(v.id);
     if (file === undefined) {
       ui.storeFiles.set(v.id, null);
-      fetch(`${BASE}data/qqp/stores/${v.id}.json`).then((r) => (r.ok && /json/.test(r.headers.get('content-type') || '') ? r.json() : null)).then((j) => { ui.storeFiles.set(v.id, j || { items: [] }); renderChrome(); }).catch(() => { ui.storeFiles.set(v.id, { items: [] }); renderChrome(); });
+      fetch(`${BASE}data/qqp/stores/${v.id}.json`).then((r) => (r.ok && /json/.test(r.headers.get('content-type') || '') ? r.json() : null)).then((j) => { ui.storeFiles.set(v.id, j || { items: [], error: true }); renderChrome(); }).catch(() => { ui.storeFiles.set(v.id, { items: [], error: true }); renderChrome(); });
       file = null;
     }
     const loc = state.byLoc.get(locOf(v.id));
@@ -386,8 +393,17 @@ function pickResult(e) {
   else { openStore(e.id); requestAnimationFrame(() => map.zoomTo(locOf(e.id), 3)); }
 }
 
+// the tooltip: re-rendered only when the hovered dot changes; a move over the same dot only moves it
+function renderTip(sameDot = false) {
+  if (!state.data) return;
+  const tip = tipHost.querySelector('.tip');
+  if (sameDot && tip && ui.hover) { const left = Math.max(ui.free.left + 150, Math.min(ui.free.right - 150, ui.hx)); tip.style.left = left + 'px'; tip.style.top = ui.hy + 'px'; return; }
+  render(tooltip({ loc: ui.hover ? state.byLoc.get(ui.hover) : null, val: ui.hover && ui.locValues ? ui.locValues.get(ui.hover) : null, stage: ui.stage, byStore: state.byStore, byProduct: state.byProduct, x: ui.hx, y: ui.hy, free: ui.free }), tipHost);
+}
+
 function renderChrome() {
   if (!state.data) return;
+  renderTip();
   const open = state.view.kind !== 'city';
   document.body.classList.toggle('no-card', !open);
   document.body.classList.toggle('card-right', open && ui.side === 'right');
@@ -396,7 +412,7 @@ function renderChrome() {
   const flat = ui.results ? [...ui.results.groups, ...ui.results.products, ...ui.results.stores] : [];
   const tpl = html`
     ${searchView({ query: ui.query, results: ui.results, active: ui.active,
-      onInput: (q) => { ui.query = q; ui.active = -1; ui.results = ui.searchIndex && q ? search(ui.searchIndex, q) : null; renderChrome(); },
+      onInput: (q) => { ui.query = q; ui.active = -1; ui.results = ui.searchIndex && q ? search(ui.searchIndex, q) : q ? { groups: [], products: [], stores: [], total: -1 } : null; renderChrome(); },
       onClear: () => { ui.query = ''; ui.results = null; ui.active = -1; renderChrome(); requestAnimationFrame(() => { const inp = chrome.querySelector('.search input'); if (inp) inp.focus(); }); },
       onPick: pickResult,
       onKey: ({ key, event, hover }) => {
@@ -413,7 +429,6 @@ function renderChrome() {
     <div class="float bottomleft">${legend({ stage: ui.stage, title: stageTitle(), hasOwn: state.own.length > 0, onResetStage: resetStage, onTitle: state.stage.kind !== 'index' && !['product', 'group', 'basket'].includes(state.view.kind) ? openStageCard : null })}${credit({ retrieved: retrievedDate() })}</div>
     ${timeline({ stage: ui.stage, playing: ui.playing, onWeek: (w) => { stopPlay(); setWeek(w); }, onLive: () => { stopPlay(); setWeek(null); }, onPlay: togglePlay, onStep: stepWeek })}
     ${open ? cardView() : nothing}
-    ${tooltip({ loc: ui.hover ? state.byLoc.get(ui.hover) : null, val: ui.hover && ui.locValues ? ui.locValues.get(ui.hover) : null, stage: ui.stage, byStore: state.byStore, byProduct: state.byProduct, x: ui.hx, y: ui.hy, free: ui.free })}
     ${toast({ text: ui.toast })}
   `;
   render(tpl, chrome);
@@ -427,6 +442,7 @@ async function boot() {
   // Spanish first, always; English is a setting (or ?lang=en), never a guess from the browser.
   setLang(state.prefs.lang || 'es');
   if (state.prefs.tags === undefined) state.prefs.tags = true;
+  try { if (!localStorage.getItem('acomo.prefs') && matchMedia('(prefers-reduced-motion: reduce)').matches) state.prefs.motion = false; } catch { /* storage blocked */ }
   document.title = t('appName');
   const msg = veil.querySelector('.msg');
   msg.textContent = t('loading');
@@ -445,7 +461,7 @@ async function boot() {
 
   map = createMap(stageHost, geo, state.locations, { motion: () => state.prefs.motion });
   map.setLabels(state.prefs.labels !== false);
-  map.onHover((id, x, y) => { ui.hover = id; ui.hx = x; ui.hy = y; renderChrome(); });
+  map.onHover((id, x, y) => { const same = id === ui.hover; ui.hover = id; ui.hx = x; ui.hy = y; renderTip(same); });
   map.onClick((id) => {
     const loc = state.byLoc.get(id); if (!loc) return;
     const best = ui.locValues && ui.locValues.get(id);
@@ -465,6 +481,7 @@ async function boot() {
     state.byGroup = new Map(groups.map((g) => [g.id, g]));
     ui.searchIndex = buildSearchIndex({ products, groups, stores });
     ui.catalogReady = true;
+    if (ui.query) { ui.results = search(ui.searchIndex, ui.query); ui.active = -1; }
     const keep = state.basket.filter((b) => state.byProduct.has(b.id));
     if (keep.length !== state.basket.length) basketReplace(keep);
     if (ui.offer) ui.offer = ui.offer.filter((b) => state.byProduct.has(b.id));
@@ -482,6 +499,8 @@ async function boot() {
       if (ui.stage) map.setTags(stageTags(ui.stage, ui.locValues || new Map()));
     }
     if (kinds.has('view')) {
+      const wasOpen = !!chrome.querySelector('.card');
+      if (!wasOpen && state.view.kind !== 'city') ui.opener = document.activeElement;
       ui.side = cardSide(); ui.showAll = false; ui.storeFilter = '';
       ui.entering = true; renderChrome();
       requestAnimationFrame(() => requestAnimationFrame(() => { ui.entering = false; renderChrome(); }));
@@ -493,7 +512,12 @@ async function boot() {
       updateStage();
       requestAnimationFrame(() => applyPadding(true));
       // the card scrolls to its top on every switch
-      requestAnimationFrame(() => { const b = chrome.querySelector('.card .body'); if (b) b.scrollTop = 0; });
+      requestAnimationFrame(() => {
+        const b = chrome.querySelector('.card .body'); if (b) b.scrollTop = 0;
+        const h = chrome.querySelector('.card h2');
+        if (h) { announce(h.textContent); if (ui.keyboard) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); } }
+        else if (state.view.kind === 'city' && ui.opener && ui.keyboard && document.contains(ui.opener)) { ui.opener.focus({ preventScroll: true }); ui.opener = null; }
+      });
     } else if (kinds.has('week')) { writeHash(false); updateStage(); }
     else if (kinds.has('basket')) {
       if (state.stage.kind === 'basket' || state.view.kind === 'basket') state.stage = state.basket.length ? { kind: 'basket' } : { kind: 'index' };
@@ -511,7 +535,10 @@ async function boot() {
   window.addEventListener('resize', () => { map.resize(); renderChrome(); requestAnimationFrame(() => applyPadding(false)); });
   // Keyboard: Escape steps back one level (search → card → playback → chosen week → stage);
   // Space plays or pauses; "/" focuses the search; ↑↓ walk a card's list, Enter opens.
+  // focus moves only for keyboard readers; a mouse or a finger keeps its place
+  window.addEventListener('pointerdown', () => { ui.keyboard = false; }, true);
   window.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' || e.key === 'Enter' || e.key === 'Escape') ui.keyboard = true;
     if (e.defaultPrevented) return;
     const ae = document.activeElement;
     const inInput = ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName);

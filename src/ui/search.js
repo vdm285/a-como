@@ -59,7 +59,7 @@ export function searchView({ query, results, active, onInput, onPick, onClear, o
       ${query ? html`<button class="clear" title=${t('clear')} aria-label=${t('clear')} @mousedown=${(ev) => ev.preventDefault()} @click=${onClear}>${I.x()}</button>` : nothing}
     </div>
     ${open ? html`<div class="list" role="listbox" id="search-list">
-      ${results.total === 0 ? html`<div class="empty">${t('noResults')}</div>` : nothing}
+      ${results.total === -1 ? html`<div class="empty">${t('loadingCatalog')}</div>` : results.total === 0 ? html`<div class="empty">${t('noResults')}</div>` : nothing}
       ${results.groups.length ? html`<div class="h">${t('groups')}</div>${results.groups.map((e) => item(e, ++i))}` : nothing}
       ${results.products.length ? html`<div class="h">${t('products')}</div>${results.products.map((e) => item(e, ++i))}` : nothing}
       ${results.stores.length ? html`<div class="h">${t('stores')}</div>${results.stores.map((e) => item(e, ++i))}` : nothing}

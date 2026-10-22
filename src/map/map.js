@@ -117,6 +117,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       if (!p) continue;
       s._x = p[0]; s._y = p[1];
       const c = el('circle', { cx: p[0], cy: p[1], r: DOT_R, class: 'dot empty', 'data-id': s.id }, layers.dots);
+      c._st = 'e'; c._rk = null;
       dotEls.set(s.id, c);
     }
   }
@@ -135,18 +136,30 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     applyView();
   }
   function applyColors(colors) {
+    let changed = 0;
     for (const [id, c] of dotEls) {
       const v = colors && colors.get(id);
-      c._t = 0;
-      if (!v || v.empty) { c.setAttribute('class', `dot empty${id === selected ? ' sel' : ''}${id === hovered ? ' hover' : ''}`); c.style.fill = ''; }
-      else if (v.hatched) { c.setAttribute('class', `dot hatch${id === selected ? ' sel' : ''}${id === hovered ? ' hover' : ''}`); c.style.fill = ''; }
-      else { c.setAttribute('class', `dot${id === selected ? ' sel' : ''}${id === hovered ? ' hover' : ''}`); c.style.fill = v.fill; c._t = Math.min(1, Math.abs(v.t || 0)); }
+      const st = !v || v.empty ? 'e' : v.hatched ? 'h' : v.fill;
+      if (c._st === st) continue;
+      changed++;
+      const was = c._st;
+      c._st = st;
+      if (st === 'e' || st === 'h') {
+        c.classList.toggle('empty', st === 'e'); c.classList.toggle('hatch', st === 'h');
+        c.style.fill = ''; c._t = 0;
+      } else {
+        c.classList.remove('empty', 'hatch');
+        c.style.fill = st; c._t = Math.min(1, Math.abs(v.t || 0));
+      }
+      if (was === undefined || (was === 'e') !== (st === 'e') || st !== 'e') c._rk = null; // radius depends on state and strength
     }
+    if (!changed) return false;
     // draw the strongest signals last so they sit on top
     const rank = (c) => (c.classList.contains('empty') ? -1 : c.classList.contains('hatch') ? -0.5 : c._t);
     const order = [...dotEls.values()].sort((a, b) => rank(a) - rank(b));
     for (const c of order) layers.dots.appendChild(c);
     if (selected && dotEls.get(selected)) layers.dots.appendChild(dotEls.get(selected));
+    return true;
   }
   function applyOwn(ids) {
     layers.rings.innerHTML = '';
@@ -169,9 +182,13 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   }
   // on-screen radius: grows gently with zoom (k^0.15) so stacked neighbours separate
   const screenR = (t = 0) => DOT_R * (0.8 + 0.5 * t) * Math.pow(Math.max(view.k, 0.3), 0.15);
+  let frame = 0;
+  function scheduleView() { if (!frame) frame = requestAnimationFrame(() => { frame = 0; applyView(); }); }
   function applyView() {
     world.setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`);
     for (const c of dotEls.values()) {
+      if (c._rk === view.k) continue; // a pan does not change any radius
+      c._rk = view.k;
       const empty = c.classList.contains('empty');
       c.setAttribute('r', (empty ? DOT_R * 0.45 * Math.pow(Math.max(view.k, 0.3), 0.15) : screenR(c._t || 0)) / view.k);
     }
@@ -301,13 +318,13 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       const ncx = (a.x + b.x) / 2 - rect.left, ncy = (a.y + b.y) / 2 - rect.top;
       view = clampView({ k, x: ncx - (cx - pinch.vx) * (k / pinch.k), y: ncy - (cy - pinch.vy) * (k / pinch.k) });
       atFit = false;
-      applyView();
+      scheduleView();
       return;
     }
     if (drag) {
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (!drag.moved && Math.hypot(dx, dy) > 5) { drag.moved = true; setHover(null); }
-      if (drag.moved) { view = clampView({ k: view.k, x: drag.vx + dx, y: drag.vy + dy }); atFit = false; applyView(); }
+      if (drag.moved) { view = clampView({ k: view.k, x: drag.vx + dx, y: drag.vy + dy }); atFit = false; scheduleView(); }
       return;
     }
     if (e.pointerType !== 'mouse') return; // no hover on touch
@@ -402,7 +419,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       return x > pad.left + 16 && x < W - pad.right - 16 && y > pad.top + 16 && y < H - pad.bottom - 16;
     },
     // colors: Map id -> { fill, t, empty, hatched }; t (0..1) is the strength of the signal
-    setColors(colors) { lastColors = colors; applyColors(colors); applyView(); },
+    setColors(colors) { lastColors = colors; if (applyColors(colors)) applyView(); },
     setSelected(id) { selected = id; applySelected(id); applyView(); },
     setOwn(ids) { ownIds = new Set(ids || []); applyOwn(ownIds); applyView(); },
     // tags: [{ id, text, sub, color, kind }] in priority order
