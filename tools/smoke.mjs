@@ -127,12 +127,15 @@ try {
     const { ctx, page } = await fresh();
     await open(page, 'p/leche-ultrapasteurizada-a3d941');
     await sleep(1200);
+    const len0 = await page.evaluate(() => history.length);
     await page.click('.settings-btn');
     await sleep(600);
     const inSettings = /#s/.test(page.url());
     await page.click('.card .x');
     await sleep(800);
     check('Settings closes back to the card beneath', inSettings && /#p\//.test(page.url()), page.url().split('#')[1]);
+    const grew = (await page.evaluate(() => history.length)) - len0;
+    check('closing Settings goes Back instead of adding history', grew <= 1, grew);
     await ctx.close();
   }
   // 5c. the map by keyboard, and a price tag is a button

@@ -310,7 +310,12 @@ function openStageCard() {
 // closing: Settings returns to the card under it; a store opened from a ranking returns to the
 // ranking; otherwise the city, going Back when the city is the entry before
 function closeCard() {
-  if (state.view.kind === 'settings' && ui.beneath) { const b = ui.beneath; ui.beneath = null; setView(b.kind, b.id); return; }
+  if (state.view.kind === 'settings' && ui.beneath) {
+    const b = ui.beneath; ui.beneath = null;
+    // going Back to the card keeps history linear (a push would make Back reopen Settings)
+    if (history.state && history.state.prev === hashFor(b, state.week)) { history.back(); return; }
+    setView(b.kind, b.id); return;
+  }
   if (state.view.kind === 'store' && state.stage.kind !== 'index') { openStageCard(); return; }
   if (history.state && history.state.prev === hashFor({ kind: 'city' }, state.week)) { history.back(); return; }
   ui.replaceNext = true;
