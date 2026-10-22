@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RAW = path.join(ROOT, 'data', 'cache', 'qqp', 'raw');
-const REPO = 'vdm285/compa-precio';
+const REPO = 'vdm285/a-como';
 const TAG = 'qqp-mirror';
 const args = process.argv.slice(2);
 const dry = args.includes('--dry-run');

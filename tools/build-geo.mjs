@@ -25,7 +25,7 @@ const REFRESH = ARGS.has('--refresh');
 const OFFLINE = ARGS.has('--offline');
 
 // Identify ourselves to the servers (Overpass asks for a unique User-Agent).
-const UA = 'CompaPrecio-geo-build/0.1 (+https://github.com/vdm285/compa-precio; one-off base-map build)';
+const UA = 'a-como-geo-build/0.1 (+https://github.com/vdm285/a-como; one-off base-map build)';
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
 const OVERPASS_PAUSE_MS = 6000; // pause between live Overpass queries (be nice to the shared server)
 // INEGI "Servicio Web del Catálogo Único de Claves Geoestadísticas" (keyless, GeoJSON).

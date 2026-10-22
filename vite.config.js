@@ -19,7 +19,7 @@ const swVersion = () => ({
   },
 });
 
-// VITE_BASE is set by the Pages workflow (/compa-precio/ while the repo keeps that name).
+// VITE_BASE is set by the Pages workflow from the repository's name (/a-como/ since 2026-10-22).
 export default defineConfig({
   base: process.env.VITE_BASE || '/',
   build: { target: 'es2022', chunkSizeWarningLimit: 700 },

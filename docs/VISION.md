@@ -1,6 +1,6 @@
 # A cómo — vision and roadmap
 
-Written 2026-10-21 at the start of the rebuild, revised the same day after the first self-audit. This file says where the product is going and why; it governs direction. `HANDOFF.md` says what the code does today, and `docs/EDITORIAL.md` settles how numbers and words are shown. When this file and the code disagree on a specific (a colour, a field), read EDITORIAL and the code first; when they disagree on direction, this file wins and the code is behind. The working name "A cómo" is the session's pick (the shortlist is in `HANDOFF.md`); the repository keeps its old name `compa-precio` until the owner decides.
+Written 2026-10-21 at the start of the rebuild, revised the same day after the first self-audit. This file says where the product is going and why; it governs direction. `HANDOFF.md` says what the code does today, and `docs/EDITORIAL.md` settles how numbers and words are shown. When this file and the code disagree on a specific (a colour, a field), read EDITORIAL and the code first; when they disagree on direction, this file wins and the code is behind. The name "A cómo" was the session's pick (the shortlist is in `HANDOFF.md`) and the owner kept it; on 2026-10-22 the repository was renamed from `compa-precio` to `a-como` to match.
 
 ## The one-sentence pitch
 

@@ -521,7 +521,7 @@ export function settingsCard(c) {
         <p>${t('sourcePrices', { retrieved })} <a href="https://datos.profeco.gob.mx/datos_abiertos/qqp.php" target="_blank" rel="noopener">datos.profeco.gob.mx</a> · <a href=${`https://creativecommons.org/licenses/by/4.0/deed.${lang === 'en' ? 'en' : 'es'}`} target="_blank" rel="noopener">CC BY 4.0</a></p>
         <p>${t('derived')}</p>
         <p>${t('sourceMap')} <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">openstreetmap.org/copyright</a></p>
-        <p><a href="https://github.com/vdm285/compa-precio" target="_blank" rel="noopener">${t('code')}</a>${meta && meta.built ? html` · ${t('builtOn', { date: fdate(mxDay(meta.built)) })}` : nothing}</p>
+        <p><a href="https://github.com/vdm285/a-como" target="_blank" rel="noopener">${t('code')}</a>${meta && meta.built ? html` · ${t('builtOn', { date: fdate(mxDay(meta.built)) })}` : nothing}</p>
         <p class="kbd">${t('kbdHint')}</p>
       </section>
     </div>

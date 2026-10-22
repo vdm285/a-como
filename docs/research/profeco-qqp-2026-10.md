@@ -789,7 +789,7 @@ The first Pages deploy failed in 19 s: from a GitHub-hosted runner every URL und
 | `qqp.profeco.gob.mx` (the consumer site) | 200 |
 | `web.archive.org` | 200 |
 
-The same archive URLs answer normally from a home connection in Mexico City. So the yearly archives are mirrored byte for byte as assets of the release [`qqp-mirror`](https://github.com/vdm285/compa-precio/releases/tag/qqp-mirror) on this repository, with `mirror.json` listing each file's bytes, sha256, the date PROFECO was accessed and its source URL. `tools/mirror-qqp.mjs` refreshes it from a network that reaches PROFECO (it runs `tools/build-qqp.mjs --download-only` and uploads only the archives whose sha256 changed). The build tries PROFECO first, then the mirror, and verifies the checksum; the credit's access date stays the date PROFECO was accessed. The licence permits it: Libre Uso MX (a) "Hacer y distribuir copias del conjunto de datos y su contenido", and CC BY 4.0 on datos.gob.mx; the release notes carry the credit and the non-endorsement line.
+The same archive URLs answer normally from a home connection in Mexico City. So the yearly archives are mirrored byte for byte as assets of the release [`qqp-mirror`](https://github.com/vdm285/a-como/releases/tag/qqp-mirror) on this repository (link updated 2026-10-22, when the repository was renamed from `compa-precio`; the release moved with it), with `mirror.json` listing each file's bytes, sha256, the date PROFECO was accessed and its source URL. `tools/mirror-qqp.mjs` refreshes it from a network that reaches PROFECO (it runs `tools/build-qqp.mjs --download-only` and uploads only the archives whose sha256 changed). The build tries PROFECO first, then the mirror, and verifies the checksum; the credit's access date stays the date PROFECO was accessed. The licence permits it: Libre Uso MX (a) "Hacer y distribuir copias del conjunto de datos y su contenido", and CC BY 4.0 on datos.gob.mx; the release notes carry the credit and the non-endorsement line.
 
 Consequence: PROFECO publishes monthly, and the site's data is as fresh as the last mirror refresh. Someone (or a scheduled task on a machine in Mexico) has to run `npm run qqp:mirror` about once a month; when nobody does, the site keeps working and shows the date of its latest week.
 
@@ -929,7 +929,7 @@ Also changed: `meta.source.license.url` is the CC BY 4.0 deed (https://creativec
 and `meta.source.dataset` names the datos.gob.mx record that states it, for the newest archive in the
 build (`programa_quien_es_quien_precios_<year>`; today
 https://www.datos.gob.mx/dataset/programa_quien_es_quien_precios_2026); `tools/build-geo.mjs`'s
-User-Agent now points at https://github.com/vdm285/compa-precio (the CamelCase URL was a 404).
+User-Agent now points at https://github.com/vdm285/compa-precio (the CamelCase URL was a 404; since 2026-10-22, github.com/vdm285/a-como).
 
 ### Verification
 

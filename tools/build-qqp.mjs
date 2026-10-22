@@ -76,16 +76,17 @@ const SOURCE = {
   // the licence's own deed
   datasetUrl: (year) => `https://www.datos.gob.mx/dataset/programa_quien_es_quien_precios_${year}`,
   license: { name: 'CC BY 4.0 (Datos Abiertos, Gobierno de México)', url: 'https://creativecommons.org/licenses/by/4.0/' },
-  userAgent: 'compa-precio build (github.com/vdm285/compa-precio)',
+  userAgent: 'a-como build (github.com/vdm285/a-como)',
   // datos.profeco.gob.mx answers 404 to every URL from GitHub's runners (US IPs; measured
   // 2026-10-21, docs/research/profeco-qqp-2026-10.md §19). The yearly archives are therefore
   // mirrored byte-for-byte as assets of a release on this repository, refreshed from a Mexican
   // network with tools/mirror-qqp.mjs; the licence permits copies with credit. The build tries
-  // PROFECO first and falls back to the mirror, verifying each file's sha256.
+  // PROFECO first and falls back to the mirror, verifying each file's sha256. The release moved
+  // with the repository when it was renamed from compa-precio on 2026-10-22.
   mirror: {
-    repo: 'vdm285/compa-precio',
+    repo: 'vdm285/a-como',
     tag: 'qqp-mirror',
-    base: 'https://github.com/vdm285/compa-precio/releases/download/qqp-mirror/',
+    base: 'https://github.com/vdm285/a-como/releases/download/qqp-mirror/',
   },
   // The current year's archive is re-fetched when the cached copy is older than this.
   staleDays: 6,

@@ -2,13 +2,13 @@
 
 Read this before changing the app. `docs/VISION.md` says where the product is going and why. `HANDOFF.md` is the state of the code, dated, newest first. `docs/PIPELINES.md` is how data gets in and how to curate it. `docs/EDITORIAL.md` is the rule for words and numbers on a screen. `docs/research/` holds the dated source research (data, geometry, licences, landscape). The owner's general method lives outside the repo in `D:\_GitHub\revamp-playbook.md`; the lessons specific to this repo are under "Gotchas" below.
 
-Owner: Victor (github.com/vdm285). The app opens in Mexican Spanish; English is a setting (`?lang=en` in a link, or Settings), never a second site. Audience: the owner and his friends in Mexico City first; anyone in Mexico later. `CLAUDE.md` imports this file.
+Owner: Victor (github.com/vdm285). The app opens in Mexican Spanish; English is a setting (`?lang=en` in a link, or Settings), never a second site. Audience: the owner and the owner's friends in Mexico City first; anyone in Mexico later. `CLAUDE.md` imports this file.
 
 ## What this is
 
 A static site on GitHub Pages that draws the stores PROFECO surveys in Mexico City and its metro area (558 of the 571 the survey visits: since 2026-10-22 every category, toys, appliances and school supplies included, by the owner's choice; 13 have no coordinates or no prices) on a dark map, with the prices of "Quién es Quién en los Precios" (QQP). The bare address opens on Relieve, the city's prices as 3D columns (`src/opening/`), until the reader chooses the 2D map. PROFECO surveys weekly and publishes monthly, five to nine weeks behind. Three questions, one stage: where is this product cheaper (the map recolours by that price), which store is cheapest for my basket (totals per store), how expensive is this store (its basket index against the city median). A fourth, inherited from the first version: is the price I am looking at good (the reader's own shelf prices, stored only in the browser). A timeline moves the whole map through the weeks against one reference, so prices visibly move.
 
-Working name "A cómo" (what a Mexican asks at the shelf); the repository keeps its old name `compa-precio` until the owner decides (see "Renaming" below). The first version (March 2026, one `index.html` with Tailwind from a CDN and mock data) is in git history up to commit `b81c22a`; its README's philosophy survives in `docs/VISION.md`.
+Name "A cómo" (what a Mexican asks at the shelf; the owner kept it). The repository is `a-como` since 2026-10-22 (it was `compa-precio`): the app lives at https://vdm285.github.io/a-como/, and the old address forwards there from a stub repository named `compa-precio` (see "Renaming" below). The first version (March 2026, one `index.html` with Tailwind from a CDN and mock data) is in git history up to commit `b81c22a`; its README's philosophy survives in `docs/VISION.md`.
 
 ## Do not
 
@@ -73,7 +73,7 @@ and read the captures in `data/cache/shots/` by eye: the city, a product, a past
 ## Gotchas (each one cost time)
 
 - **PROFECO blocks GitHub's runners**: `datos.profeco.gob.mx` answers 404 to them. CI downloads the mirror (`qqp-mirror` release) and verifies sha256; refresh it monthly from Mexico with `npm run qqp:mirror`.
-- **Git Bash rewrites a leading slash**: `VITE_BASE=/compa-precio/` becomes `/Program Files/Git/compa-precio/`. Use `MSYS_NO_PATHCONV=1` for a local base-path build and grep `dist/index.html`.
+- **Git Bash rewrites a leading slash**: `VITE_BASE=/a-como/` becomes `/Program Files/Git/a-como/`. Use `MSYS_NO_PATHCONV=1` for a local base-path build and grep `dist/index.html`.
 - **The Vite dev server answers a missing JSON with `index.html` and 200**: loaders check the content type.
 - **Building while the pipeline writes `public/data/`** fails with a copy error; wait for the run to finish.
 - **Heredocs with backticks break in this shell** (and a long quoted heredoc can fail too): write scripts with the file-writing tool to `data/cache/patches/` and run them by path; for code edits, write old/new blocks to a text file and run `node tools/apply-patch.cjs <file>` (no escaping; each old text must match once; nothing is written unless every block applies).
@@ -86,11 +86,16 @@ and read the captures in `data/cache/shots/` by eye: the city, a product, a past
 - **Puppeteer's offline mode does not reach the service worker**: the worker keeps fetching from the live server. Test offline by stopping the server after a warm visit, with a persistent profile under `data/cache/`.
 - **Pointer capture retargets the release**: after `setPointerCapture`, `pointerup` targets the capturing element, so record what was pressed at `pointerdown` (the map's price tags).
 - **`page.focus()` refuses SVG elements** in puppeteer; focus from page script.
+- **The origin `vdm285.github.io` is shared** with the owner's other Pages apps (Papelito at `/papelito/`, others), and caches belong to the origin, not to a path: the service worker deletes only its own superseded caches (`acomo-shell-*` other than the current one, and two retired names), never "everything that is not mine". Until 2026-10-22 it did, and every deploy wiped the other apps' offline copies. Entries in the shared-by-name `acomo-boot` and `acomo-data` are told apart by path (`SCOPE`). Giramundo's and Tabla Viva's workers still delete every cache that is not theirs (2026-10-22): an offline start can fail after one of their deploys until they are fixed.
 - **lit**: never remove DOM that lit rendered; key forms by subject (`keyed`) so a typed value never carries to the next product.
 
-## Renaming (when the owner picks a name)
+## Renaming
 
-Change: the app name in `src/app/i18n.js` (`appName`) and `src/opening/strings.js` (`brand`), `index.html` `<title>`, `public/manifest.webmanifest`, the veil in `src/main.js`, README and docs titles, `package.json` `name`. If the repository is renamed: `VITE_BASE` in `.github/workflows/pages.yml`, the Live URL in README, the code link in `src/ui/cards.js`, both User-Agents (`tools/build-qqp.mjs`, `tools/build-geo.mjs`), `SOURCE.mirror` and `tools/mirror-qqp.mjs` (the release moves with the repo; check its URL), and the local folder. Do not change: the localStorage keys (`acomo.*`) and the IndexedDB name (`acomo`): readers' own prices live there; and the store and product id formats (own prices are keyed by them).
+The app name changes in: `src/app/i18n.js` (`appName`) and `src/opening/strings.js` (`brand`), `index.html` `<title>`, `public/manifest.webmanifest`, the veil in `src/main.js`, README and docs titles, `package.json` `name`.
+
+The repository was renamed `compa-precio` → `a-como` on 2026-10-22, and the address moved from https://vdm285.github.io/compa-precio/ to https://vdm285.github.io/a-como/ (GitHub does not forward Pages addresses). What changed: `VITE_BASE` in `.github/workflows/pages.yml` now comes from the repository's name (`GITHUB_REPOSITORY`), and the step fails when `dist/index.html` does not load its assets from that base; the Live URL and the mirror link in README and `docs/PIPELINES.md`; the code link in `src/ui/cards.js`; both User-Agents (`tools/build-qqp.mjs`, `tools/build-geo.mjs`); `SOURCE.mirror` and `tools/mirror-qqp.mjs` (the `qqp-mirror` release moved with the repository: `github.com/vdm285/a-como/releases/download/qqp-mirror/`); the portfolio's "Explorar el mapa" link. The old address is served by a separate stub repository named `compa-precio` (a forwarding `index.html` and `404.html`, a `sw.js` that retires the old worker, see `HANDOFF.md`); creating it ends GitHub's own redirects for `github.com/vdm285/compa-precio/...` (release downloads included), so nothing may depend on those URLs. Dated records (`docs/research/`, `docs/history/`, HANDOFF's older sections) keep the old name. The local folder `D:\_GitHub\CompaPrecio` keeps its name: sessions and memory are tied to the path.
+
+A future rename of the repository: the workflow needs no edit; change the URLs above (grep for the old name), add a stub at the old address the same way, and check the mirror's URL. Do not change: the localStorage keys (`acomo.*`) and the IndexedDB name (`acomo`): readers' own prices live there; the store and product id formats (own prices are keyed by them); the cache names in `public/sw.js` (`acomo-shell-<version>`, `acomo-boot`, `acomo-data`).
 
 ## Conventions
 

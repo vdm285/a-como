@@ -51,9 +51,15 @@ jobs:
       # the opening's data (Relieve), computed from the pipeline's outputs
       - run: npm run opening
       - run: npm run check
-      - run: npm run build
-        env:
-          VITE_BASE: /compa-precio/
+      # The base path is the repository's name, so a rename needs no edit here (compa-precio until
+      # 2026-10-22, then a-como). GITHUB_REPOSITORY ("owner/name") is set on every trigger, while
+      # github.event.repository is absent from a scheduled run's payload. The grep fails the job
+      # when the built page does not load its assets from that base.
+      - run: |
+          export VITE_BASE="/${GITHUB_REPOSITORY#*/}/"
+          echo "base path: $VITE_BASE"
+          npm run build
+          grep -q "src=\"${VITE_BASE}assets/" dist/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

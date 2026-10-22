@@ -56,7 +56,7 @@ Read first by the pipeline; every key is optional and keyed by the ids the pipel
 
 ## The mirror (why CI does not download from PROFECO)
 
-`datos.profeco.gob.mx` answers 404 to GitHub's runners (US addresses; measured 2026-10-21, research doc §19) while it serves the same files to a home connection in Mexico. The yearly archives are therefore mirrored byte for byte as assets of the release [`qqp-mirror`](https://github.com/vdm285/compa-precio/releases/tag/qqp-mirror), with `mirror.json` (bytes, sha256, the date PROFECO was accessed, the source URL). The pipeline tries PROFECO first and falls back to the mirror, verifying the checksum; an error page never replaces a cached archive (every download must start with the RAR signature), and the current year's archive is re-fetched when the cached copy is older than six days.
+`datos.profeco.gob.mx` answers 404 to GitHub's runners (US addresses; measured 2026-10-21, research doc §19) while it serves the same files to a home connection in Mexico. The yearly archives are therefore mirrored byte for byte as assets of the release [`qqp-mirror`](https://github.com/vdm285/a-como/releases/tag/qqp-mirror), with `mirror.json` (bytes, sha256, the date PROFECO was accessed, the source URL). The pipeline tries PROFECO first and falls back to the mirror, verifying the checksum; an error page never replaces a cached archive (every download must start with the RAR signature), and the current year's archive is re-fetched when the cached copy is older than six days.
 
 To refresh the data, from any network in Mexico, about once a month (PROFECO publishes monthly):
 

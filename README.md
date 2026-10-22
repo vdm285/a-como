@@ -4,7 +4,7 @@
 
 *The supermarket price map of Mexico City. It opens on the city in relief: each store a column as tall as its price, week by week. Then the stores PROFECO surveys (from supermarkets to stationers), drawn where they stand and coloured by what you search; a basket that says which store is cheapest for the whole list; a timeline that shows a price moving across the city; your own shelf prices beside the official ones, kept only in your browser. Spanish first; English is a setting.*
 
-Live: https://vdm285.github.io/compa-precio/ (working name "A cómo"; the repository keeps its first name until the owner picks one).
+Live: https://vdm285.github.io/a-como/ (until 2026-10-22 the repository was `compa-precio`; its old address forwards here).
 
 ## What it does
 
@@ -18,7 +18,7 @@ PROFECO surveys weekly and publishes monthly, five to nine weeks behind; the app
 
 ## Data and credits
 
-- **Prices**: "Programa Quién es Quién en los Precios", PROFECO (Procuraduría Federal del Consumidor), https://datos.profeco.gob.mx/datos_abiertos/qqp.php. Mexican government open data under Creative Commons Attribution 4.0, as the datos.gob.mx record states (historically "Términos de Libre Uso MX"). Reference prices surveyed by PROFECO in a sample of stores; this app is not made or endorsed by PROFECO. The app shows the access date. Rebuilt on every deploy, never committed. PROFECO's site does not answer GitHub's build servers, so its yearly archives are mirrored byte for byte, with checksums and the access date, on the [`qqp-mirror` release](https://github.com/vdm285/compa-precio/releases/tag/qqp-mirror). Details: `docs/PIPELINES.md`, `docs/research/profeco-qqp-2026-10.md`.
+- **Prices**: "Programa Quién es Quién en los Precios", PROFECO (Procuraduría Federal del Consumidor), https://datos.profeco.gob.mx/datos_abiertos/qqp.php. Mexican government open data under Creative Commons Attribution 4.0, as the datos.gob.mx record states (historically "Términos de Libre Uso MX"). Reference prices surveyed by PROFECO in a sample of stores; this app is not made or endorsed by PROFECO. The app shows the access date. Rebuilt on every deploy, never committed. PROFECO's site does not answer GitHub's build servers, so its yearly archives are mirrored byte for byte, with checksums and the access date, on the [`qqp-mirror` release](https://github.com/vdm285/a-como/releases/tag/qqp-mirror). Details: `docs/PIPELINES.md`, `docs/research/profeco-qqp-2026-10.md`.
 - **Map**: alcaldías and metro municipalities from INEGI, Marco Geoestadístico, diciembre de 2025 (free use with credit); arteries, parks, water and airports © OpenStreetMap contributors (ODbL; the derived geometry file is ODbL too). Details: `docs/research/geo-cdmx-2026-10.md`.
 - **The code** in this repository is public domain (The Unlicense). The data files are not: they keep the licences above, with their credits, if you reuse them. Quotes and reasoning: `docs/research/licenses-2026-10.md`.
 
