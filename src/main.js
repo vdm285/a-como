@@ -297,11 +297,14 @@ async function updateStage() {
     if (tok !== ui.stageToken) return;
     if (e.offline) {
       // offline is not a fact about the data: keep the link and say why. The last subject's
-      // colours, tags and legend go: they were drawn under the new title
-      ui.stageFailed = `${state.stage.kind}:${state.stage.id || ''}`;
+      // colours, tags and legend go: they were drawn under the new title. (The card says it too;
+      // the toast never replaces an undo that is still up, and is said once per subject)
+      const failedKey = `${state.stage.kind}:${state.stage.id || ''}`;
+      const again = ui.stageFailed === failedKey;
+      ui.stageFailed = failedKey;
       ui.stage = null; ui.locValues = new Map();
       map.setColors(new Map()); map.setTags([]); map.setOwn(new Set());
-      showToast(t('offlineNotLoaded'), 4000);
+      if (!again && !(ui.toastAction && ui.toastAction.kind === 'basket-remove')) showToast(t('offlineNotLoaded'), 4000);
       renderChrome();
     } else if (state.stage.kind !== 'index') {
       state.stage = { kind: 'index' }; state.week = null;
@@ -825,7 +828,9 @@ async function boot() {
       const wasOpen = !!chrome.querySelector('.card');
       const ae0 = document.activeElement;
       if (!wasOpen && state.view.kind !== 'city') ui.opener = ui.opener || (ae0 && ae0 !== document.body ? ae0 : null);
-      // the phone sheet opens at its normal height for every new card (peek on short phones)
+      // the phone sheet opens at its normal height for every new card (peek on short phones); the
+      // view saved before the full sheet belongs to the card that was there, not to this one
+      ui.sheetView = null;
       leaveFullSheet(ui.phone.matches && innerHeight < 700);
       if (state.view.kind !== 'store' || locOf(state.view.id) !== ui.focusZoom) ui.focusZoom = null;
       ui.side = cardSide(); ui.showAll = false; ui.storeFilter = '';

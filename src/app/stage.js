@@ -242,7 +242,10 @@ export async function computeStage(stage, week) {
     const emptyReason = (sid) => (otherRecent.has(sid) ? { reason: 'otherUnit', other: otherRecent.get(sid) } : lastSeen.has(sid) ? { reason: 'stale', lastDate: lastSeen.get(sid) } : { reason: 'none' });
     // a week is judged by its own stores: a member counts in a week when 3 stores priced it that
     // week (a grade with 8 recent stores but 1 that week must not be that week's cheapest)
-    const weekFiles = bySize.length ? await Promise.all(bySize.map((p) => loadProductWeeks(p.id).catch(() => null))) : [];
+    // (a weeks file that could not be fetched offline is not a week without prices: the subject
+    // says it is not downloaded, as for its main files)
+    const weekFiles = bySize.length ? await Promise.all(bySize.map((p) => loadProductWeeks(p.id).catch((e) => { if (e && e.offline) offline = e; return null; }))) : [];
+    if (offline) throw offline;
     const countMemo = new Map();
     const countsAt = (w) => {
       if (countMemo.has(w)) return countMemo.get(w);
@@ -275,7 +278,8 @@ export async function computeStage(stage, week) {
       // members in another unit or with no size are listed too, each in its own unit
       const counts = countsAt(pw.week), ok = usableAt(pw.week);
       const rest = members.filter((p) => !bySize.includes(p));
-      const restFiles = await Promise.all(rest.map((p) => loadProductWeeks(p.id).catch(() => null)));
+      const restFiles = await Promise.all(rest.map((p) => loadProductWeeks(p.id).catch((e) => { if (e && e.offline) offline = e; return null; })));
+      if (offline) throw offline;
       const own = (p) => (!p.size ? null : p.size.unit === dim ? unit : p.size.unit === 'pza' ? 'pza' : p.size.unit === 'ml' ? 'l' : 'kg');
       const entry = (p, wf, n) => {
         const col = wf ? wf.weeks.indexOf(pw.week) : -1;
@@ -325,7 +329,8 @@ export async function computeStage(stage, week) {
     let refN = recentRanking.completeCount, refKind = 'recent';
     let cap = capFor(`c:${sig}`, [...recentTotals.values()].filter((r) => r.complete).map((r) => deviation(r.total, ref)));
     const weeksById = new Map();
-    await Promise.all(items.map(async (it) => { try { weeksById.set(it.id, await loadProductWeeks(it.id)); } catch { /* counted as missing */ } }));
+    await Promise.all(items.map(async (it) => { try { weeksById.set(it.id, await loadProductWeeks(it.id)); } catch (e) { if (e && e.offline) offline = e; } }));
+    if (offline) throw offline;
     // the axis is fixed to the last 26 weeks of the data; every item is read by date
     const weeks = recentWeeks;
     const curveRows = weeks.map((w) => {

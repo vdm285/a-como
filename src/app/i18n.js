@@ -324,6 +324,8 @@ const STR = {
     trendPointNear: "{price} ({n} semanas a menos de 1 % de él, la última el {date})",
     onlyFlaggedHere: "solo precios marcados «revísalo»; el menor",
     noUnitRings: "sin tamaños comparables: no se compara por unidad",
+    noKindHere: "Nada que se llame «{kind}» en {place}; en otros lugares:",
+    droppedWords: "Sin «{words}»: no aparece en los datos",
   },
   en: {
     appName: 'A cómo',
@@ -644,6 +646,8 @@ const STR = {
     trendPointNear: "{price} ({n} weeks within 1 % of it, the latest {date})",
     onlyFlaggedHere: "only prices flagged “check it”; the lowest",
     noUnitRings: "no comparable sizes: not compared per unit",
+    noKindHere: "Nothing called “{kind}” in {place}; elsewhere:",
+    droppedWords: "Without “{words}”: not in the data",
   },
 };
 

@@ -35,6 +35,7 @@ export function buildSearchIndex(data) {
 
 // PROFECO's product names are Spanish; in English a basic word also matches its Spanish name.
 const EN_ES = { milk: 'leche', egg: 'huevo', eggs: 'huevo', tomato: 'jitomate', tomatoes: 'jitomate', rice: 'arroz', bean: 'frijol', beans: 'frijol', oil: 'aceite', sugar: 'azucar', bread: 'pan', chicken: 'pollo', onion: 'cebolla', onions: 'cebolla', potato: 'papa', potatoes: 'papa', coffee: 'cafe', tuna: 'atun', lemon: 'limon', lime: 'limon', apple: 'manzana', apples: 'manzana', banana: 'platano', bananas: 'platano', cheese: 'queso', butter: 'mantequilla', soap: 'jabon', salt: 'sal', flour: 'harina', water: 'agua', beef: 'res', pork: 'cerdo', ham: 'jamon', yogurt: 'yoghurt', chili: 'chile', avocado: 'aguacate', carrot: 'zanahoria', carrots: 'zanahoria', garlic: 'ajo', orange: 'naranja', oranges: 'naranja', lettuce: 'lechuga', paper: 'papel', detergent: 'detergente', diapers: 'pañal', cream: 'crema', chocolate: 'chocolate', beer: 'cerveza', soda: 'refresco', juice: 'jugo', cookies: 'galletas', meat: 'carne', fish: 'pescado', shrimp: 'camaron', corn: 'maiz', lentils: 'lenteja', oats: 'avena', pasta: 'pasta', soup: 'sopa', toothpaste: 'crema dental', whole: 'entera', skim: 'descremada', skimmed: 'descremada', powdered: 'polvo', evaporated: 'evaporada', condensed: 'condensada', chilies: 'chile', chillies: 'chile', chilli: 'chile', pineapple: 'piña', mango: 'mango', papaya: 'papaya', watermelon: 'sandia', melon: 'melon', grape: 'uva', strawberry: 'fresa', strawberries: 'fresa', pear: 'pera', peach: 'durazno', peaches: 'durazno', cucumber: 'pepino', zucchini: 'calabaza', spinach: 'espinaca', cabbage: 'col', broccoli: 'brocoli', sausage: 'salchicha', turkey: 'pavo', bleach: 'blanqueador', toilet: 'higienico', napkins: 'servilletas', deodorant: 'desodorante', sardine: 'sardina', sardines: 'sardina', peanut: 'cacahuate', walnut: 'nuez', nut: 'nuez', almond: 'almendra', honey: 'miel', jam: 'mermelada', mayonnaise: 'mayonesa', vinegar: 'vinagre', pepper: 'pimienta', cinnamon: 'canela', wine: 'vino', tortillas: 'tortilla', cereal: 'cereal', noodles: 'sopa', lard: 'manteca', margarine: 'margarina', green: 'verde', white: 'blanco', black: 'negro', brown: 'morena', red: 'rojo', yellow: 'amarillo', olive: 'oliva', ground: 'molida', breast: 'pechuga', sliced: 'rebanado', instant: 'soluble', sparkling: 'con gas', still: 'sin gas', dish: 'trastes', laundry: 'ropa', fresh: 'fresco', frozen: 'congelado', dried: 'seco', dry: 'seco', powder: 'polvo', sweet: 'dulce', liquid: 'liquido', bar: 'barra', canned: 'lata', decaf: 'descafeinado', baby: 'bebe' };
+const EN_PHRASES = [['dish soap', 'trastes'], ['dishwashing liquid', 'trastes'], ['peanut butter', 'crema de cacahuate'], ['baking soda', 'bicarbonato'], ['hot sauce', 'salsa picante'], ['sour cream', 'crema'], ['tomato puree', 'pure de tomate'], ['tomato sauce', 'pure de tomate']];
 // Every word must appear somewhere; a whole word in the name (head) counts most ("pan" is Pan
 // before Queso Panela), then a word start, then a hit inside a word; a hit only in the
 // presentation or address counts least. Ties break by how many stores carry it.
@@ -100,14 +101,36 @@ const forms = (w) => {
   }
   return out;
 };
-export function search(index, query, limits = { groups: 6, products: 8, stores: 5 }) {
+// English: when every word together finds nothing, the first words are left out one by one
+// (modifiers come first: "baby diapers" is diapers, "cooking oil" is oil), and the list says which
+export function search(index, query, limits) {
+  const r = searchOnce(index, query, limits);
+  if (r.total !== 0 || getLang() !== 'en') return r;
+  const ws = fold(query).split(' ').filter(Boolean);
+  for (let i = 1; i < ws.length; i++) {
+    const r2 = searchOnce(index, ws.slice(i).join(' '), limits);
+    if (r2.total > 0) return { ...r2, dropped: [...ws.slice(0, i), ...(r2.dropped || [])] };
+  }
+  return r;
+}
+function searchOnce(index, query, limits = { groups: 6, products: 8, stores: 5 }) {
   const en = getLang() === 'en';
   let q = fold(query);
+  // English phrases whose Spanish name is not word for word
+  if (en) for (const [ph, es] of EN_PHRASES) if (` ${q} `.includes(` ${ph} `)) q = ` ${q} `.replace(` ${ph} `, ` ${es} `).trim();
   // a municipio named in the query is a place: stores there, products by the other words
   let place = null;
   for (const [alias, m] of index.places || []) { if (` ${q} `.includes(` ${alias} `)) { place = m; q = ` ${q} `.replace(` ${alias} `, ' ').trim(); break; } }
   // English: the word or any of its singular forms may have a Spanish name
   const words = q.split(' ').filter(Boolean).map((w) => { const fs2 = forms(w); const es = fs2.map((x) => EN_ES[x]).find(Boolean); return en && es ? fs2.concat([`=${fold(es)}`]) : fs2; });
+  // English: a word that matches nothing anywhere is left out rather than emptying the list
+  // ("baby diapers": "baby" is only in a brand), and the list says which (the reader sees the rest)
+  let dropped = [];
+  if (en && words.length > 1) {
+    const hits = (alts) => [index.groups, index.products, index.stores].some((l) => l.some((e) => alts.some((w) => scoreWord(e, w) >= 0)));
+    const keep = words.filter(hits);
+    if (keep.length && keep.length < words.length) { dropped = q.split(' ').filter(Boolean).filter((_, i) => !keep.includes(words[i])); words.splice(0, words.length, ...keep); }
+  }
   if (!words.length && !place) return { groups: [], products: [], stores: [], total: 0 };
   // every list is scored first; a hit inside a word is kept only when no list has a better one
   const scored = (list) => (words.length ? list.map((e) => [...scoreFull(e, words), e]).filter(([sc]) => sc >= 0).sort((a, b) => b[0] - a[0]) : []);
@@ -123,8 +146,8 @@ export function search(index, query, limits = { groups: 6, products: 8, stores: 
   // (a word also matches its plural in the chain: "farmacia" is in "Farmacias Similares")
   const inChain = (e, w) => { const c = ` ${e.chainKey} `; return c.includes(` ${w} `) || c.includes(` ${w}s `) || c.includes(` ${w}es `); };
   const chainWords = (e) => words.every((alts) => alts.some((w) => inChain(e, w))) && words.some((alts) => alts.some((w) => w.length >= 4 && inChain(e, w)));
-  // words that name a kind of store, not one chain: with a place they never say a chain is absent
-  const GENERIC = new Set(['farmacia', 'farmacias', 'tienda', 'tiendas', 'mercado', 'mercados', 'central', 'abasto', 'market', 'super', 'supermercado', 'hiper', 'mega', 'express', 'tortilleria', 'tortillerias', 'panaderia', 'panaderias', 'sucursal', 'bodega', 'publico']);
+  // words that mean "a store" in general: with a place they list the place's stores
+  const STORE_WORDS = new Set(['tienda', 'tiendas', 'super', 'supermercado', 'supermercados', 'market', 'sucursal', 'sucursales', 'hiper', 'mega', 'express', 'bodega']);
   let stores, storesFirst = false, placeName = null, storesTotal = 0;
   if (place) {
     // in a place, the words pick stores by their chain or name only (never by street address)
@@ -136,11 +159,18 @@ export function search(index, query, limits = { groups: 6, products: 8, stores: 
     // "huevo iztapalapa" is a product in a place: the products, then the stores there whose name
     // has the words, else the place's biggest stores
     const byName = words.length ? here.map((e) => [score({ ...e, key: e.head }, words), e]).filter(([sc]) => sc >= 6 * words.length).sort((a, b) => b[0] - a[0]).map(([, e]) => e) : [];
-    // "oxxo tlalpan", one chain with no store in that place: say so, and list that chain elsewhere
-    // (it listed other chains' stores, or the chain's own-label products, and Enter opened one).
-    // Never for a kind of store ("farmacia coyoacan" has three pharmacies of other chains)
-    const chainAll = words.length && !byName.length && words.some((alts) => alts.some((w) => w.length >= 4 && !GENERIC.has(w))) ? index.stores.filter(chainWords) : [];
-    if (chainAll.length && new Set(chainAll.map((e) => e.ref.chain)).size === 1) { stores = [...chainAll].sort((a, b) => b.n - a.n).slice(0, 5); return { groups: [], products: [], stores, total: stores.length, place, placeName, storesFirst: true, storesTotal: chainAll.length, note: { chain: chainAll[0].ref.chain, place: placeName } }; }
+    // Nothing in the place has that chain or kind in its name: say so, and list those stores
+    // elsewhere (the place's supermarkets were listed instead, and Enter opened one). One chain is
+    // named ("Ninguna tienda Oxxo en Tlalpan"); a kind matching several chains is said as the
+    // words typed ("Nada que se llame «farmacia» en Tlalpan": a pharmacy named otherwise may be
+    // there). Words that only mean "a store" list the place's stores.
+    const onlyStoreWords = words.every((alts) => alts.some((w) => STORE_WORDS.has(w)));
+    const chainAll = words.length && !byName.length && !onlyStoreWords ? index.stores.filter(chainWords) : [];
+    if (chainAll.length) {
+      const one = new Set(chainAll.map((e) => e.ref.chain)).size === 1;
+      stores = [...chainAll].sort((a, b) => b.n - a.n).slice(0, 5);
+      return { groups: [], products: [], stores, total: stores.length, place, placeName, storesFirst: true, storesTotal: chainAll.length, note: one ? { key: 'noChainHere', chain: chainAll[0].ref.chain, place: placeName } : { key: 'noKindHere', kind: q, place: placeName } };
+    }
     const pool = byName.length ? byName : here;
     stores = (byName.length ? byName : [...here].sort((a, b) => b.n - a.n)).slice(0, words.length ? 5 : 8);
     storesTotal = pool.length;
@@ -149,7 +179,7 @@ export function search(index, query, limits = { groups: 6, products: 8, stores: 
     storesTotal = all.stores.filter(([, inside]) => !clean || !inside).length;
     storesFirst = stores.length > 0 && words.length > 0 && index.stores.some(chainWords);
   }
-  return { groups, products, stores, total: groups.length + products.length + stores.length, place, placeName, storesFirst, storesTotal };
+  return { groups, products, stores, total: groups.length + products.length + stores.length, place, placeName, storesFirst, storesTotal, dropped };
 }
 // the order the list shows and Enter follows
 export const flatResults = (r) => (!r ? [] : r.storesFirst ? [...r.stores, ...r.groups, ...r.products] : [...r.groups, ...r.products, ...r.stores]);
@@ -173,8 +203,9 @@ export function searchView({ query, results, active, placeholder, onInput, onPic
       ${query ? html`<button class="clear" title=${t('clear')} aria-label=${t('clear')} @mousedown=${(ev) => ev.preventDefault()} @click=${onClear}>${I.x()}</button>` : nothing}
     </div>
     ${open ? html`<div class="list" role="listbox" id="search-list">
+      ${results.dropped && results.dropped.length && results.total > 0 ? html`<div class="empty">${t('droppedWords', { words: results.dropped.join(', ') })}</div>` : nothing}
       ${results.total === -1 ? html`<div class="empty">${t('loadingCatalog')}</div>` : results.total === 0 ? html`<div class="empty">${t('noResults')}</div>` : nothing}
-      ${(results.storesFirst ? ['stores', 'groups', 'products'] : ['groups', 'products', 'stores']).map((k) => (results[k] && results[k].length ? html`<div role="group" aria-labelledby=${`sr-h-${k[0]}`}><div class="h" id=${`sr-h-${k[0]}`}>${k === 'stores' && results.placeName && !results.note ? t('storesIn', { place: results.placeName }) : t(k)}${k === 'stores' && results.storesTotal > results.stores.length ? ` · ${t('nOfTotal', { n: results.stores.length, total: results.storesTotal })}` : ''}</div>${k === 'stores' && results.note ? html`<div class="empty">${t('noChainHere', results.note)}</div>` : nothing}${results[k].map((e) => item(e, ++i))}</div>` : nothing))}
+      ${(results.storesFirst ? ['stores', 'groups', 'products'] : ['groups', 'products', 'stores']).map((k) => (results[k] && results[k].length ? html`<div role="group" aria-labelledby=${`sr-h-${k[0]}`}><div class="h" id=${`sr-h-${k[0]}`}>${k === 'stores' && results.placeName && !results.note ? t('storesIn', { place: results.placeName }) : t(k)}${k === 'stores' && results.storesTotal > results.stores.length ? ` · ${t('nOfTotal', { n: results.stores.length, total: results.storesTotal })}` : ''}</div>${k === 'stores' && results.note ? html`<div class="empty">${t(results.note.key || 'noChainHere', results.note)}</div>` : nothing}${results[k].map((e) => item(e, ++i))}</div>` : nothing))}
     </div>` : nothing}
   </div>`;
 }

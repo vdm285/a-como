@@ -452,7 +452,8 @@ body.tl-stack .numeral .nwhat, body.tl-stack .numeral .nref { display: none; }
   body.card-left .bottomleft, body.card-right .bottomleft { left: calc(10px + var(--sal)); right: auto; }
   body.card-left .bottomright, body.card-right .bottomright { right: calc(10px + var(--sar)); left: auto; }
   body.sheet-full .bottomleft, body.sheet-full .numeral, body.sheet-full .bottomright { display: none; }
-  body.sheet-full .toast { top: auto; bottom: calc(16px + var(--sab)); }
+  /* the full sheet's toast sits over the map strip, never over the list (its undo appeared under the × just tapped) */
+  body.sheet-full .toast { top: calc(48px + var(--sat)); bottom: auto; }
   .toast-btn { min-height: 34px; padding: 6px 12px; }
   .legend { width: min(300px, calc(100vw - 76px)); padding: 8px 12px; }
   .legend .lx { width: 40px; height: 40px; margin: -8px -8px -8px 0; }
@@ -505,10 +506,16 @@ body.no-motion .rank li.tie-hl a.row { animation: none; background: rgba(255, 25
    timeline beside it) never depends on whether the map was moved */
 @media (min-width: 721px) { .bottomright { flex-direction: column; align-items: flex-end; } }
 @media (max-width: 720px) {
-  /* the numeral keeps one line: a wrapped light-week note moved the city on every step */
-  .numeral .nsub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  /* the strip's label gives way so its fold button stays on the strip */
-  .timeline .tl-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   /* the undo toast may take two lines on a phone: it is the only place that names what went */
   .toast.has-action .toast-text { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+}
+@media (max-width: 720px) {
+  /* the numeral's height is reserved for two lines, so a light week's note (which wraps) never
+     moves the city, and the note is never cut */
+  .numeral { min-height: 42px; }
+  .numeral .nsub { line-height: 1.3; }
+  /* the strip's label wraps rather than pushing the fold button off the strip or losing its
+     date; the light-week pill gives way (the numeral says it) */
+  .timeline .tl-label { flex: 0 1 auto; min-width: 0; white-space: normal; line-height: 1.2; }
+  .timeline .tl-pill { display: none; }
 }

@@ -54,7 +54,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   let pad = { left: 24, right: 24, top: 80, bottom: 90 };
   let view = { k: 1, x: 0, y: 0 };
   let atFit = true; // false once the reader zooms or pans by hand
-  let selected = null, hovered = null, userMoves = 0, savedView = null, restoreView = null, userZoomed = false;
+  let selected = null, hovered = null, userMoves = 0, savedView = null, restoreView = null, userZoomed = false, zoomBase = 1;
   // a view saved under one padding, moved by the change of the free area's centre since
   const shiftFor = (v, p0) => {
     const c0 = { x: p0.left + (W - p0.left - p0.right) / 2, y: p0.top + (H - p0.top - p0.bottom) / 2 };
@@ -461,6 +461,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
       const cx = pinch.cx - rect.left, cy = pinch.cy - rect.top;
       const ncx = (a.x + b.x) / 2 - rect.left, ncy = (a.y + b.y) / 2 - rect.top;
       view = clampView({ k, x: ncx - (cx - pinch.vx) * (k / pinch.k), y: ncy - (cy - pinch.vy) * (k / pinch.k) });
+      if (!userZoomed) zoomBase = fitView().k;
       atFit = false; userMoves++; userZoomed = true;
       scheduleView();
       return;
@@ -516,6 +517,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     const px = clientX - rect.left, py = clientY - rect.top;
     const k = Math.max(kMin(), Math.min(K_MAX, view.k * factor));
     const f = k / view.k;
+    if (!userZoomed) zoomBase = fitView().k;
     atFit = false; userMoves++; userZoomed = true;
     animateTo(clampView({ k, x: px - (px - view.x) * f, y: py - (py - view.y) * f }), ms);
   }
@@ -572,7 +574,7 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     else if (k === 'Enter' && active) { e.preventDefault(); for (const h of handlers.click) h(active); }
     else if (k === '+' || k === '=') { e.preventDefault(); const [x, y] = active ? screenOf(active) : [W / 2, H / 2]; const r = host.getBoundingClientRect(); zoomAt(x + r.left, y + r.top, 1.6); }
     else if (k === '-' || k === '_') { e.preventDefault(); const [x, y] = active ? screenOf(active) : [W / 2, H / 2]; const r = host.getBoundingClientRect(); zoomAt(x + r.left, y + r.top, 1 / 1.6); }
-    else if (k === '0') { e.preventDefault(); atFit = true; animateTo(fitView()); }
+    else if (k === '0') { e.preventDefault(); atFit = true; userZoomed = false; restoreView = null; animateTo(fitView()); }
   });
   // a tap or a click focuses the svg too: that must not start the keyboard walk (a second ring, an
   // announcement, a pan); a keyboard focus resumes the walk where it was
@@ -631,7 +633,8 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     },
     fitK() { return fitView().k; },
     // a zoom the reader made (wheel, pinch, double tap, + and −), as opposed to one the app made
-    userZoomed() { return userZoomed && !atFit; },
+    // (deliberate only well past the fit the zoom started from: one wheel notch is not a neighbourhood)
+    userZoomed() { return userZoomed && !atFit && view.k > zoomBase * 1.3; },
     // the view now, to come back to after a passing layout (the phone's full sheet)
     snapshot() { return { view: { ...(anim && anim.target ? anim.target : view) }, pad: { ...pad }, moves: userMoves }; },
     restoreSnapshot(s) { if (!s || s.moves !== userMoves || atFit) return false; animateTo(clampView(shiftFor(s.view, s.pad))); return true; },

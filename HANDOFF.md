@@ -2,6 +2,33 @@
 
 The state of the code, dated, newest first. `docs/VISION.md` is the direction; this file is what exists. Read `AGENTS.md` first.
 
+## 2026-10-22, night — eighth round: what the verification of round 7 found (last round before the briefing)
+
+### State in one paragraph
+
+Three fresh agents verified round 7 on the live site (`data/cache/verify7/result.json`, gitignored): 19 fixed, 7 partial, nothing regressed, and 26 new reports. The two serious ones were the same gap: offline, a weeks file never downloaded was read as a week without prices ("0 esa semana", "ninguna semana tuvo 3 tiendas", "Ninguna tienda tuvo todo"). This round closes it and the medium reports. Unit tests 110/110; smoke 69/69; `data/cache/r8/verify.mjs` 5/5; round scripts 7 and 6 at 15/15 and 24/24. Bundle: 214 kB JS / 77 kB gzip.
+
+### What the round found and what changed
+
+| Found (measured) | Fixed by |
+|---|---|
+| Offline, a weeks file never downloaded read as zero prices in a group's past week, its strip and a basket's weeks | Such a failure makes the subject "todavía no se ha descargado", as its main files already did |
+| Offline, the "not downloaded" toast replaced a removal's undo 250 ms after it appeared | The toast is said once per subject and never over an undo; the card carries the message |
+| Full sheet: the undo toast appeared under the × just tapped, so the next tap undid the removal | The full sheet's toast sits over the map strip, above the sheet |
+| The view saved before the full sheet outlived a card change: closing from the full sheet ended on the store-open view after heading the other way; a store opened from the full sheet's list, or picked by search, was left under the sheet | The saved view is dropped whenever the card changes |
+| A kind of store absent from the place ("panadería tlalpan") listed the place's supermarkets and Enter opened one | "Ninguna tienda Panadería en Tlalpan" (one chain) or "Nada que se llame «farmacia» en Tlalpan" (several), with those stores elsewhere; words that only mean "a store" ("tienda tlalpan") list the place's stores |
+| English phrases with a word outside the dictionary found nothing ("baby diapers", "cooking oil") | Leading words are left out one by one until something is found, and the list says which ("Without “baby”: not in the data"); a few phrases map whole ("dish soap" → trastes, "peanut butter") |
+| Phone strip: the label shrank to "S…" at 320 px and to "Week of Au…" in English | The label wraps instead; the light-week pill gives way (the numeral says it), and the numeral reserves two lines so its note is whole and the city does not move |
+| One wheel notch plus a drag counted as a deliberate zoom; the 0 key left the flag set | Deliberate means 1.3 times past the fit the zoom started from; 0 clears it |
+| An offline basket kept "Cargando…" above the offline note | The note only |
+
+### Not done (and why)
+
+- A pharmacy whose chain lacks the word ("Sanborns", "Farmatodo") is not found by "farmacia": search matches names, and the line now says "Nada que se llame «farmacia»", which is true.
+- Undo order when an item leaves the basket without a toast between two removals (one-position slip, nothing lost).
+- 721–760 px with a card: the reset button can touch the legend's corner.
+- The labels' blink-outs and one-step pushes, Play at 4× CPU, the dropped "mínimo" note near the reference line (all listed in rounds 6 and 7).
+
 ## 2026-10-22, evening — seventh round: what the verification of round 6 found (the owner still asleep)
 
 ### State in one paragraph
