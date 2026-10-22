@@ -519,7 +519,9 @@ parsed, or seasonal products outside the window):
   the five dearest three 7-Elevens and two mercados públicos.
 - **products.json** `min / median / max` are the label prices across stores in the product's most
   recent week with observations (not necessarily the global latest week); `stores` is the number of
-  stores that ever reported it in the build window.
+  stores that ever reported it in the build window. **Superseded the same day by §20**: that week was
+  usually the one-day last week, so the summary now covers each store's latest observation within
+  the last 28 days of data, and `stores` counts those stores.
 
 ## 12. The pipeline and its outputs
 
@@ -576,6 +578,8 @@ Measured on this machine (Windows 10, Node 24.19, SATA SSD) with the archives al
 
 (The streaming time varies with disk cache state; the first survey pass with heavier bookkeeping took
 295 s and 2.1 GB.) Output on 2026-10-21, after the rules:
+
+(Sizes before §20, which adds fields and `visits.json` and moves the products.json cap to 1,400 KB raw.)
 
 | File | Count | Bytes | Limit | Max |
 |---|---:|---:|---:|---:|
@@ -788,3 +792,170 @@ The first Pages deploy failed in 19 s: from a GitHub-hosted runner every URL und
 The same archive URLs answer normally from a home connection in Mexico City. So the yearly archives are mirrored byte for byte as assets of the release [`qqp-mirror`](https://github.com/vdm285/compa-precio/releases/tag/qqp-mirror) on this repository, with `mirror.json` listing each file's bytes, sha256, the date PROFECO was accessed and its source URL. `tools/mirror-qqp.mjs` refreshes it from a network that reaches PROFECO (it runs `tools/build-qqp.mjs --download-only` and uploads only the archives whose sha256 changed). The build tries PROFECO first, then the mirror, and verifies the checksum; the credit's access date stays the date PROFECO was accessed. The licence permits it: Libre Uso MX (a) "Hacer y distribuir copias del conjunto de datos y su contenido", and CC BY 4.0 on datos.gob.mx; the release notes carry the credit and the non-endorsement line.
 
 Consequence: PROFECO publishes monthly, and the site's data is as fresh as the last mirror refresh. Someone (or a scheduled task on a machine in Mexico) has to run `npm run qqp:mirror` about once a month; when nobody does, the site keeps working and shows the date of its latest week.
+
+## 20. Recent window and partial weeks (added 2026-10-21, later still)
+
+An adversarial review of the published data measured three honesty defects. (1) The default view used
+each store's latest-ever observation, up to 20 months old, and `products.json` took `min / median /
+max` from the product's last week with any observation, which was usually the final one-day week:
+recomputed from the series, the old summary had a median n of **9 stores**, **352 medians came from a
+single store**, and 1,730 of the 2,366 summaries came from the week of 2026-08-31 (186 of those from
+one store). (2) That week, Monday 2026-08-31, holds one day of survey (PROFECO's file ends that day)
+and was treated as a full week. (3) Two size-parser errors put invented per-unit prices on screen.
+This round changes the contract (`docs/PIPELINES.md`, Prices) and `tools/check-qqp.mjs` enforces it.
+Runs 5 and 6 of the pipeline (`--skip-download`, cached archives; 6 adds `fixSizes`): 379 s and 486 s, peak RSS 1,385 and 949 MB, 0 warnings;
+the same 499 stores, 2,366 products, 677 groups, 88 weeks and 7,046,669 observations as before.
+
+### A. The recent window
+
+`meta.recent = { from: "2026-08-04", to: "2026-08-31", days: 28 }`: `to` is `latestDate`, `from` is
+27 days earlier. "Recent" means, per store and product, the store's latest observation whose date
+falls in [from, to] (since `to` is the last date in the data, that is the latest-ever observation when
+it is no older than `from`). `products/<id>.json` and `stores/<id>.json` are unchanged; the app
+filters their `latest` / `items` with `date >= recent.from`.
+
+- **products.json**: `min / median / max` over one price per store, its recent observation; `stores`
+  = that n; new `storesAll` (stores that ever had the product in the data range), `asOf` (newest
+  recent date) and `last` (newest observation anywhere; equal to `asOf` when there is one). The
+  26-week product filter is unchanged (436 stale products still left out). Result: **2,244 products
+  with a recent median, 122 without** (`stores: 0`, prices and `asOf` null; their `last` falls in
+  March for 29, April 8, May 17, June 13, July 54, 1–3 August 1). PACIC: 213 with, 21 without (for
+  example Aceite Imperial 875 ml, last 2026-06-11; Arroz `arroz-4d515a`, last 2026-07-29).
+  **Median n of a recent median: 66 stores** (p10 6, p90 129; median `storesAll` 109); 72 recent
+  medians rest on one store and 111 on two to four.
+- **Change against the old summary**, over the 2,244 products that have a median in both: 1,393
+  identical, **210 moved by more than 10 %** (117 up, 93 down), 66 by more than 25 %. The largest
+  are one-day stubs replaced by four weeks: Papel Higiénico Elite 4 rollos 10.10 → 23.90 (7 stores
+  on 2026-08-31 → 52), Levofloxacino 7 tabletas 54 → 109.90, Salchicha Fud 1 kg 70 → 128.50,
+  Jitomate bola 1 kg 59.90 → 19.90 (58 stores, 34 of them at 19.90), Tilapia filete 293 → 109,
+  Mango ataulfo 98.50 → 42.
+- **groups.json**: `stores` = stores with a recent observation of any member (7 groups have none:
+  cintilla, dip, granola, gurrubata, merluza, queso-crema, romeritos), new `storesAll`, and new `unit`,
+  decided once per group: the dimension most members share (g, ml, pza; ties in that order) and, within
+  it, the **median** member size: ml → `l` from 700 ml else `100ml`, g → `kg` from 700 g else `100g`,
+  pza → `pza`, null without sizes. Count: pza 308, kg 133, 100g 122, 100ml 91, l 20, null 3. Against
+  the old max-size rule 32 groups change, all to the smaller unit (atún, mayonesa, crema, lenteja,
+  queso fresco, shampoo, aceite de oliva, gel antibacterial… → per 100 g / 100 ml), which is the
+  point: six 1 kg tuna loins no longer make canned tuna a per-kilo ranking. `products` now counts the
+  members actually in products.json: it had counted members dropped by the 26-week filter in 81
+  groups (aceituna said 25, has 2).
+- **stores.json**: new `recentProducts` (products with an observation in the window), `lastVisitProducts`
+  (products recorded on `lastSeen`) and `index.latestWeek`. 58 stores have no recent product (36
+  Central de Abasto stalls, 14 tortillerías, 4 mercados, one Bodega Aurrera last seen 2026-03-25…);
+  the median store has 8 recent products (tortillerías have one). Every store has products on its
+  `lastSeen` date (no last visit is made only of excluded categories). Of the 244 stores with an
+  index, `latestWeek` is 2026-08-31 for 29, 2026-08-24 for 109, 2026-08-17 for 45 and older for 61.
+
+### B. Partial weeks
+
+`meta.weekInfo` has one entry per week of `meta.weeks`: `{ week, days, observations, stores, partial }`
+(distinct survey dates, rows after the city rules, stores), and `meta.partialWeeks` lists the flagged
+ones. `partial` = rows under 50 % of the median week's 83,862.5. Four weeks:
+
+| Week | Days | Rows | Stores | Why |
+|---|---:|---:|---:|---|
+| 2024-12-30 | 2 | 31,581 | 143 | the data starts on Thursday 2025-01-02 |
+| 2025-12-22 | 4 | 30,212 | 286 | Christmas |
+| 2025-12-29 | 4 | 35,064 | 257 | New Year |
+| 2026-08-31 | 1 | 18,301 | 53 | PROFECO's file ends on that Monday |
+
+The lightest week not flagged is 2025-11-17 (42,652 rows, 51 %). Weeks by survey days: 5 days 60,
+7 days 11, 4 days 10, 6 days 4, one each of 1, 2 and 3. Nothing is dropped; the app labels the week.
+Caveat for the owner: the basket index of a partial week is computed against city medians of that
+week only, so the 29 stores whose latest index is from 2026-08-31 are compared with the 53 stores
+surveyed that Monday.
+
+### C. Visits
+
+`visits.json = { weeks: [...meta.weeks], stores: { storeId: [products recorded that week, 0 when
+none] } }`, minified, for the 499 stores of stores.json; the counts are the store-week cells of the
+build (they sum to its 6,863,687 cells). **131,903 bytes raw, 34,272 gzip** (zlib level 9; 29,713
+brotli). A week with an index always has at least 30 products recorded (the checker verifies it).
+
+### D. The size parser
+
+Before choosing the rules, `data/cache/audit/pipeline/scan-parser.mjs` ran the old and new parser
+over the whole 2025–2026 vocabulary (`presentations.tsv` from §10: 5,268 distinct strings, 4,957 in the
+metro area) and over each candidate pattern. **Exactly four strings change, 7,271 metro rows**
+(19,145 national); no other parse moves.
+
+| Rule | Matches (metro strings / rows) | Changes (metro strings / rows) | Every match in the data |
+|---|---:|---:|---|
+| `N <container> (X unit C/U)` → N × X, `pack: N` | 2 / 2,615 | 2 / 2,615 | `Caja con 25 Sobres (1.2 Gr. C/u). Limón` (1,444), `… (1.2 Gr. C/U). Limón` (1,171): 1.2 g → 30 g, pack 25 |
+| `[1-9]\d{0,2}.\d{3}` before Gr./G./Ml. is a thousands point | 3 / 8,699 | 2 / 4,656 | `Bolsa 3.564 Gr. Polvo. Oxigeno Activo` (1,690) and `… Limpieza Instantánea` (2,966): 3.564 g → 3,564 g; `Frasco Gotero 24 Ml. 1.000 G., Solución Gotas` (4,043) matches but its first size, 24 ml, still wins |
+| the same shape before Kg./L./Lt. stays decimal | 0 / 0 (national: 2 strings, 861 rows) | 0 | `Botella 3.785 Lt. Entera` (860 national rows) and `Botella 1.892 Lt. Entera` (1): a US gallon and half gallon of milk, which confirms the decimal reading |
+| a leading zero is never a thousands group | 1 / 283 | 0 | `Frasco con 120 Ml. Solución 0.040 G./0.150 G./100 Ml.` stays 120 ml |
+
+Fewer than ten real examples exist for each rule; the table lists all of them. Bracketed sizes without
+`C/U`, or after a word that is not a container, keep their old reading (`Paquete con 2 Pinguinos (80
+Gr.)` 80 g, `Bote 480 Gr. (900 Ml.)` 480 g). The 3,564 g reading is the right one: at the recent
+median of 159 pesos it is 44.61 pesos a kilo, beside Ace's 648 g and 756 g bags at 46.30; read as
+3.564 g it was over 44,000 pesos a kilo. In the build: **te-d46ac7** (Té McCormick limón) is now
+`{ value: 30, unit: "g", pack: 25 }`, 68.33 pesos per 100 g at its recent median of 20.50 (it showed
+about 1,700); **detergente-p-8162e8** (Ace Oxígeno Activo) is `{ value: 3564, unit: "g" }`.
+`tests/presentation.test.mjs` has 10 new real-string cases (the four changed strings, both gallon
+milks, the leading-zero medicine, and three bracket forms that must not change) and two input forms
+(`Bolsa 1.500 Kg.` and `Bolsa 1.500 Gr.`, both 1,500 g); 99 tests pass, all the old ones included.
+
+Two more per-unit errors of the same family surfaced in the scan. They are one-off shapes, so instead
+of a parser rule they are fixed by curation, with the new `fixSizes` map in `data/overrides/qqp.json`
+(documented in `docs/PIPELINES.md`, Curation; applied right after parsing, listed in the run report
+and counted in `meta.json` → `rules.fixSizes`): `Caja con 4 Sobres Conteniendo Cada Uno 5 Ampolletas
+Aplicadoras con 0.5 Ml. C/U` (Lagricel Ofteno, `lagricel-ofteno-b7bc82`, parsed 0.5 ml, now
+`{ value: 10, unit: "ml", pack: 20 }`, 4 sobres × 5 ampolletas × 0.5 ml) and `2 Cajas con Frasco con
+30 Cápsulas C/U` (Biometrix, `biometrix-8c6488`, parsed 30 pza, now `{ value: 60, unit: "pza", pack:
+2 }`). Outside the build, `Caja con 2 Carteras. 4 Tabletas C/u` still parses as 4 (really 8); it
+needs a `fixSizes` line if the product comes back. Both in-build products are alone in their group.
+A scan of per-unit prices more than 5× or under 1/5 of their group's median
+(`compare.mjs`) finds 11 members, none a parse error (thermometers, imported mineral water, sweetener,
+bulk pepper, KN95 masks, a cheap disinfectant spray, potato starch).
+
+### Sizes and the cap
+
+`tools/check-qqp.mjs` fails products.json above 1,400 KB raw (the budget is bytes on the wire: Pages
+serves gzip); the pipeline's own limit, which halves the 26-week window when the file would not fit,
+moved from 700 KB to the same 1,400 KB, so nothing new is excluded. On 2026-10-21:
+
+| File | Bytes raw | gzip -9 | Before this round (raw) |
+|---|---:|---:|---:|
+| `products.json` | 784,562 | 96,837 | 654,168 (88,069 gzip) |
+| `stores.json` | 524,145 | 63,337 | 491,794 |
+| `groups.json` | 86,441 | 13,275 | 67,067 |
+| `meta.json` | 13,606 | 2,544 | 3,122 |
+| `visits.json` | 131,903 | 34,272 | new |
+| **All output** | **57,184,117 (5,237 files)** | | 56,859,594 (5,236 files) |
+
+Also changed: `meta.source.license.url` is the CC BY 4.0 deed (https://creativecommons.org/licenses/by/4.0/)
+and `meta.source.dataset` names the datos.gob.mx record that states it, for the newest archive in the
+build (`programa_quien_es_quien_precios_<year>`; today
+https://www.datos.gob.mx/dataset/programa_quien_es_quien_precios_2026); `tools/build-geo.mjs`'s
+User-Agent now points at https://github.com/vdm285/compa-precio (the CamelCase URL was a 404).
+
+### Verification
+
+`node tools/check-qqp.mjs` exits 0. Besides the shapes, it now recomputes every product's recent
+summary (stores, storesAll, min, median, max, last) from its `products/<id>.json` and compares it with
+products.json (2,366 of 2,366 equal), checks that medians are null exactly when `stores` is 0, that
+`weekInfo` is aligned with `weeks` and sums to `counts.observations`, that `partialWeeks` matches it,
+that every group's `unit` is one of `l, 100ml, kg, 100g, pza, null` and in a dimension its members
+have, that a group's `products` equals its members, and that `visits.json` is aligned with `weeks`
+and covers every store. `node --test tests/*.test.mjs`: 108 pass.
+
+By hand, from PROFECO's August 2026 CSVs (`data/cache/audit/pipeline/recompute-recent.mjs`: its own
+CSV reader and city filter, the documented store identity, per store the latest row dated 2026-08-04
+to 2026-08-31, the median of those): all six products match products.json exactly.
+
+| Product | n | min | median | max | asOf |
+|---|---:|---:|---:|---:|---|
+| `huevo-6da37e` Huevo San Juan C/18 (PACIC, group unit `pza`) | 136 | 42 | 43 | 52.50 | 2026-08-31 |
+| `tortilla-de-9688d0` Tortilla de Maíz 1 kg granel (PACIC, `kg`) | 274 | 12.40 | 20 | 25 | 2026-08-31 |
+| `leche-pasteurizada-8ec006` Alpura Clásica 1 l (`l`) | 78 | 27 | 32 | 37 | 2026-08-31 |
+| `jitomate-ced931` Jitomate bola 1 kg (PACIC, `kg`) | 58 | 19.90 | 19.90 | 66.70 | 2026-08-31 |
+| `detergente-p-8162e8` Ace 3,564 g (`kg`) | 115 | 138.50 | 159 | 184 | 2026-08-31 |
+| `te-d46ac7` Té McCormick 25 × 1.2 g (`100g`) | 60 | 19.90 | 20.50 | 27.50 | 2026-08-31 |
+
+The scan saw 2,366 window rows of these products, 15 of them from stores without coordinates (not
+published), and 12 cases where one store has two different prices on the same date (the row read last
+wins, in the pipeline and by hand). Scripts and outputs: `data/cache/audit/pipeline/`
+(`scan-parser.mjs`, `compare.mjs`, `recompute-recent.mjs`, their `.json`, and `before/` with the
+previous outputs).

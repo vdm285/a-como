@@ -10,6 +10,7 @@
 //  2. "N <container> [de|con] X unit [c/u]"              -> N * X          "Canasta con 6 Botellas de 355 Ml."
 //     "N <pieces> de X unit" or "... X unit c/u"         -> N * X          "Paquete 4 Pzas. 200 Gr. C/U"
 //     "N <pieces>. X unit" (no de / c/u)                 -> X, pack N      "Bolsa 15 Piezas. 382.5 Gr."
+//     "N <container> (X unit C/U)"                       -> N * X          "Caja con 25 Sobres (1.2 Gr. C/U)"
 //  3. "N <dose form>" (tabletas, cápsulas, ...)          -> N pza          "Caja con 30 Tabletas de 50 Mg."
 //  4. "N rollos"                                         -> N pza          "Paquete 4 Rollos. 200 Hojas Dobles"
 //  5. first "X unit" in the text                         -> X              "Botella 1.5 Lt.", "1 Kg. Granel"
@@ -18,6 +19,10 @@
 // Doses (mg, mcg, "875/125 Mg.", "1 Gr./100 Gr.", "Mg./ml") are removed before parsing so a
 // tablet's strength is never taken as the package weight. Weight ranges ("de 68 a 90 Gr.") are
 // ignored. A thousands comma ("10,000 Horas") is removed; a decimal comma ("1,5 Lt.") is a point.
+// A point followed by exactly three digits before grams or millilitres is a thousands separator
+// ("Bolsa 3.564 Gr." is 3,564 g of detergent, 47 pesos a kilo like its siblings); before kilos or
+// litres it stays a decimal ("Botella 3.785 Lt." is a US gallon). The data behind both readings:
+// docs/research/profeco-qqp-2026-10.md §20.
 
 const WEIGHT = { KG: 1000, KGS: 1000, KILO: 1000, KILOS: 1000, GR: 1, GRS: 1, G: 1, GRAMO: 1, GRAMOS: 1 };
 const VOLUME = { LT: 1000, LTS: 1000, L: 1000, LITRO: 1000, LITROS: 1000, ML: 1, MLS: 1, MILILITRO: 1, MILILITROS: 1, CL: 10 };
@@ -38,6 +43,8 @@ function normalize(text) {
   s = s.replace(/\bC\.B\.?\s*\d+/g, ' ');                     // barcode "C.B. 415083"
   s = s.replace(/(\d)\+(\d+)/g, (m, a, b) => String(Number(a) + Number(b))); // "20+2 Piezas"
   s = s.replace(/(\d),(\d{3})(?!\d)/g, '$1$2');                // thousands "10,000"
+  // thousands point before small units only: "3.564 Gr." -> 3564 g; "3.785 Lt." stays 3.785 l
+  s = s.replace(/(^|[^\d.,])([1-9]\d{0,2})\.(\d{3})(?=\s*(?:GRS?|G|GRAMOS?|MLS?|MILILITROS?)\b)/g, '$1$2$3');
   s = s.replace(/(\d),(\d{1,2})(?!\d)/g, '$1.$2');             // decimal comma "1,5"
   // doses and concentrations never describe the package size
   s = s.replace(/\d+(\.\d+)?(\s*\/\s*\d+(\.\d+)?)*\s*(MG|MCG|UI|U\.I\.|MEQ)\.?(\s*\/\s*(\d+(\.\d+)?\s*)?(MG|MCG|ML|GR|G|UI|KG|LT|L)\.?)*/g, ' ');
@@ -82,6 +89,10 @@ export function parsePresentation(text) {
   if (m) return withPack(toBase(m[2], m[3]), Number(m[1]));
   m = new RegExp(`(?:^|[^\\d.])(\\d+)\\s*PACK\\b[^\\d]*?(\\d+(?:\\.\\d+)?)\\s*(${UNIT_RE})\\b`).exec(s);
   if (m) return withPack(toBase(m[2], m[3]), Number(m[1]));
+
+  // 2a. "N <container> (X unit C/U)": the size in brackets is each one's -> "Caja con 25 Sobres (1.2 Gr. C/U)"
+  m = new RegExp(`(?:^|[^\\d.])(\\d+)\\s+(${CONTAINER_RE})\\.?\\s*\\(\\s*(?:DE\\s+)?(\\d+(?:\\.\\d+)?)\\s*(${UNIT_RE})\\b\\.?\\s*C\\s*\\/\\s*U\\b`).exec(s);
+  if (m) { const base = toBase(m[3], m[4]); if (base) return withPack(base, Number(m[1])); }
 
   // 2. "N <container> [DE|CON] X unit [C/U]" and "N piezas de X unit"
   m = new RegExp(`(?:^|[^\\d.])(\\d+)\\s+(${CONTAINER_RE})\\.?\\s+(?:(DE|CON)\\s+)?(\\d+(?:\\.\\d+)?)\\s*(${UNIT_RE})\\b\\.?(\\s*C\\s*\\/\\s*U)?`).exec(s);

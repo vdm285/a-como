@@ -49,8 +49,9 @@ export const CITIES = {
     // GIRO values to keep; null keeps every GIRO (the app can filter). See the research doc.
     giros: null,
     // Categories left out of the city build (accent-less lowercase). They are not groceries, have no
-    // comparable size, and without them products.json fits the 700 KB contract. Curation can add more
-    // in data/overrides/qqp.json (excludeCategories); removing one here needs a size check.
+    // comparable size, and without them products.json stays small (a 700 KB contract until 2026-10-21;
+    // the cap is now 1,400 KB raw, about 200 KB gzip). Curation can add more in
+    // data/overrides/qqp.json (excludeCategories); removing one here needs a size check.
     excludeCategories: ['arts. de esparcimiento (juguetes)', 'aparatos electricos', 'aparatos electronicos', 'articulos deportivos',
       'enseres menores', 'refrigeradores', 'accesorios domesticos', 'utensilios domesticos', 'material escolar'],
     // products.json is "what it costs now": a product not seen in the city within this many weeks is left
@@ -71,8 +72,11 @@ const SOURCE = {
   // Tokens seen on the page on 2026-10-21; the page is scraped first, these are the fallback.
   tokens: { 2026: '9d62040eae6dcc63e36b8ac821427647', 2025: 'b9540b181657c2bc7735892091e81f96' },
   extras: { 'QQP_metadatos_dataset.csv': '42ed7dad4da507b9d536d9b737e7912d', 'QQP_diccionario_dataset.csv': '2de3505b2d37e7db72557a09262d95c7' },
-  // datos.gob.mx states the dataset licence as Creative Commons Attribution 4.0 (see the research doc)
-  license: { name: 'CC BY 4.0 (Datos Abiertos, Gobierno de México)', url: 'https://datos.gob.mx/' },
+  // datos.gob.mx states the dataset licence as Creative Commons Attribution 4.0 (see the research doc);
+  // the dataset record that states it (one per year; meta.json names the newest archive's year), and
+  // the licence's own deed
+  datasetUrl: (year) => `https://www.datos.gob.mx/dataset/programa_quien_es_quien_precios_${year}`,
+  license: { name: 'CC BY 4.0 (Datos Abiertos, Gobierno de México)', url: 'https://creativecommons.org/licenses/by/4.0/' },
   userAgent: 'compa-precio build (github.com/vdm285/compa-precio)',
   // datos.profeco.gob.mx answers 404 to every URL from GitHub's runners (US IPs; measured
   // 2026-10-21, docs/research/profeco-qqp-2026-10.md §19). The yearly archives are therefore
@@ -89,7 +93,9 @@ const SOURCE = {
 };
 
 const LIMITS = {
-  productsJson: 700 * 1024,   // products.json
+  // products.json: the same cap as tools/check-qqp.mjs. The budget that matters is bytes on the wire
+  // (Pages serves gzip; 1,400 KB raw is about 200 KB compressed). Was 700 KB until 2026-10-21.
+  productsJson: 1400 * 1024,
   productFile: 30 * 1024,     // products/<id>.json
   weeksFile: 40 * 1024,       // products/<id>.weeks.json
   storeFile: 120 * 1024,      // stores/<id>.json
@@ -97,6 +103,11 @@ const LIMITS = {
   indexJson: 1500 * 1024,     // index.json (soft, warn only)
 };
 const INDEX_MIN_PRODUCTS = 30; // a store's weekly basket index needs at least this many products
+// "Recent" = the last RECENT_DAYS days of data, ending on meta.latestDate. products.json and groups.json
+// summarise each store's latest observation inside it; nothing older counts as a current price.
+const RECENT_DAYS = 28;
+// A week whose observations are under this share of the median week's is flagged partial in meta.json.
+const PARTIAL_WEEK_SHARE = 0.5;
 const WEEKS_WINDOW = 26;       // weeks kept per store in products/<id>.weeks.json
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -126,6 +137,21 @@ export function dayToIso(day) { return new Date(day * DAY).toISOString().slice(0
 export function mondayOf(day) { return day - ((day + 3) % 7 + 7) % 7; } // day 0 = Thu 1970-01-01
 function median(sorted) { const n = sorted.length; if (!n) return null; const h = n >> 1; return n % 2 ? sorted[h] : (sorted[h - 1] + sorted[h]) / 2; }
 function round2(x) { return Math.round(x * 100) / 100; }
+// The display unit of a generic product, decided once for the whole group (the same rule as
+// groupUnit in src/app/stage.js): the dimension most members share (ties: g, then ml, then pza) and,
+// within it, the MEDIAN member size: ml -> 'l' from 700 ml, else '100ml'; g -> 'kg' from 700 g, else
+// '100g'; pza -> 'pza'. null when no member has a size. The median, not the max: six 1 kg tuna loins
+// must not turn canned tuna into a per-kilo ranking.
+export function groupUnit(members) {
+  const by = { g: [], ml: [], pza: [] };
+  for (const p of members) if (p.size && p.size.value > 0 && by[p.size.unit]) by[p.size.unit].push(p.size.value);
+  let dim = null;
+  for (const d of ['g', 'ml', 'pza']) if (by[d].length && (!dim || by[d].length > by[dim].length)) dim = d;
+  if (!dim) return null;
+  if (dim === 'pza') return 'pza';
+  const m = median(by[dim].sort((a, b) => a - b));
+  return dim === 'ml' ? (m >= 700 ? 'l' : '100ml') : (m >= 700 ? 'kg' : '100g');
+}
 function round4(x) { return Math.round(x * 10000) / 10000; }
 function kb(n) { return `${(n / 1024).toFixed(1)} KB`; }
 const log = (...a) => console.error(new Date().toISOString().slice(11, 19), ...a);
@@ -437,10 +463,18 @@ async function main() {
   const warn = (m) => { warnings.push(m); log('warning:', m); };
 
   // overrides (curation)
-  let ov = { excludeStores: [], excludeProducts: [], excludeCategories: [], fixCoords: {}, renameChains: {}, notes: '' };
-  try { ov = { ...ov, ...JSON.parse(fs.readFileSync(OVERRIDES_FILE, 'utf8')) }; log(`overrides: ${ov.excludeStores.length} stores, ${ov.excludeProducts.length} products, ${ov.excludeCategories.length} categories excluded; ${Object.keys(ov.fixCoords).length} coordinate fixes; ${Object.keys(ov.renameChains).length} chain renames`); }
+  let ov = { excludeStores: [], excludeProducts: [], excludeCategories: [], fixCoords: {}, fixSizes: {}, renameChains: {}, notes: '' };
+  try { ov = { ...ov, ...JSON.parse(fs.readFileSync(OVERRIDES_FILE, 'utf8')) }; log(`overrides: ${ov.excludeStores.length} stores, ${ov.excludeProducts.length} products, ${ov.excludeCategories.length} categories excluded; ${Object.keys(ov.fixCoords).length} coordinate fixes; ${Object.keys(ov.fixSizes || {}).length} size fixes; ${Object.keys(ov.renameChains).length} chain renames`); }
   catch (e) { log(`no usable overrides file (${e.message}); continuing without`); }
   const excludeStores = new Set(ov.excludeStores), excludeProducts = new Set(ov.excludeProducts);
+  // fixSizes: "<productId>": { value, unit: g|ml|pza, pack?, why } replaces the parsed size (value = the package
+  // total). Applied right after parsing, before any per-unit use; an invalid entry is reported and ignored.
+  const fixSizes = new Map();
+  for (const [id, f] of Object.entries(ov.fixSizes || {})) {
+    const ok = f && Number(f.value) > 0 && ['g', 'ml', 'pza'].includes(f.unit) && (f.pack == null || (Number.isInteger(f.pack) && f.pack > 1));
+    if (!ok) { warn(`fixSizes.${id} is not { value > 0, unit: g|ml|pza, pack?: integer > 1 }; ignored`); continue; }
+    fixSizes.set(id, { size: { value: Number(f.value), unit: f.unit, ...(f.pack ? { pack: f.pack } : {}) }, why: String(f.why || '') });
+  }
   const excludeCategories = new Set([...(city.excludeCategories || []), ...ov.excludeCategories].map(normKey));
   // renameChains: "<PROFECO label>": { chain: "<brand a shopper says>", format: "<PROFECO's label, title-cased>" } (a plain string is the chain)
   const renameChains = new Map(Object.entries(ov.renameChains).map(([a, b]) => [normKey(a), typeof b === 'string' ? { chain: b, format: a } : { chain: b.chain || a, format: b.format || a }]));
@@ -540,7 +574,7 @@ async function main() {
   if (!rows.n) { log('no rows for the city; nothing written'); return 1; }
 
   // 3. stores: ids, display values, coordinates, overrides
-  const report = { builtFor: city.id, coords: { nullCoords: [], outsideBox: [], suspectedSwapped: [], fixed: [] }, duplicateNames: [], chainVariants: [], unparsedPresentations: [], priceOutliers: [], oversize: { storeFiles: [], weeksWindowReduced: [], productFiles: [], recentWeeks: null }, excluded: { stores: [], storesNoCoords: [], storesNoProducts: 0, products: 0, categories: 0, stale: 0 } };
+  const report = { builtFor: city.id, coords: { nullCoords: [], outsideBox: [], suspectedSwapped: [], fixed: [] }, duplicateNames: [], chainVariants: [], lastSeenWithoutProducts: [], sizesFixed: [], fixSizesUnused: [], unparsedPresentations: [], priceOutliers: [], oversize: { storeFiles: [], weeksWindowReduced: [], productFiles: [], recentWeeks: null }, excluded: { stores: [], storesNoCoords: [], storesNoProducts: 0, products: 0, categories: 0, stale: 0 } };
   const storeOut = new Array(stores.length).fill(null);
   const storeKeep = new Uint8Array(stores.length);
   const idSeen = new Map();
@@ -573,7 +607,7 @@ async function main() {
     // the app is a map: a store without a usable position is left out until curation fixes it (fixCoords)
     if (lat == null) { report.excluded.storesNoCoords.push(id); continue; }
     storeKeep[i] = 1;
-    storeOut[i] = { id, chain, format, name, address: addr, municipio: s.muni.best(), state: s.state.best(), lat: lat == null ? null : Number(lat.toFixed(6)), lon: lon == null ? null : Number(lon.toFixed(6)), giro: canon(labels.giro, s.giro.best()), firstSeen: dayToIso(s.first), lastSeen: dayToIso(s.last), products: 0, index: { latest: null, series: [] } };
+    storeOut[i] = { id, chain, format, name, address: addr, municipio: s.muni.best(), state: s.state.best(), lat: lat == null ? null : Number(lat.toFixed(6)), lon: lon == null ? null : Number(lon.toFixed(6)), giro: canon(labels.giro, s.giro.best()), firstSeen: dayToIso(s.first), lastSeen: dayToIso(s.last), products: 0, recentProducts: 0, lastVisitProducts: 0, index: { latest: null, latestWeek: null, series: [] } };
   }
   for (const [, arr] of byChainName) if (arr.length > 1) report.duplicateNames.push(arr);
   // products: ids, display values, size, overrides
@@ -592,18 +626,23 @@ async function main() {
     if (excludeCategories.has(normKey(cat))) { report.excluded.categories++; continue; }
     const gid = groupId(name);
     let g = groups.get(gid);
-    if (!g) { g = { id: gid, name, category: new Variants(), products: 0, stores: new Set() }; groups.set(gid, g); }
-    g.category.add(cat, p.rows); g.products++;
+    if (!g) { g = { id: gid, name, category: new Variants(), products: 0, stores: new Set(), recentStores: new Set() }; groups.set(gid, g); }
+    g.category.add(cat, p.rows); // g.products is counted from products.json at the end (stale members are not in it)
     let size = null;
     if (!NO_SIZE_CATEGORIES.has(normKey(cat)) && !NO_SIZE_CATALOGS.has(normKey(catalog))) {
       try { size = parsePresentation(pres); } catch (e) { warn(`parsePresentation failed for ${JSON.stringify(pres)}: ${e.message}`); }
-      if (!size) { const k = pres; const u = unparsed.get(k) || { presentation: k, rows: 0, products: [] }; u.rows += p.rows; if (u.products.length < 3) u.products.push(`${name} (${cat})`); unparsed.set(k, u); }
+      if (!size && !fixSizes.has(id)) { const k = pres; const u = unparsed.get(k) || { presentation: k, rows: 0, products: [] }; u.rows += p.rows; if (u.products.length < 3) u.products.push(`${name} (${cat})`); unparsed.set(k, u); }
     }
+    // curation: a size the label states but the parser misreads (data/overrides/qqp.json fixSizes)
+    const fixed = fixSizes.get(id);
+    if (fixed) { report.sizesFixed.push({ id, presentation: pres, parsed: size, fixed: fixed.size, why: fixed.why }); size = { ...fixed.size }; }
     productKeep[i] = 1;
-    productOut[i] = { id, group: gid, name, brand, presentation: pres, category: cat, catalog, size, stores: 0, min: null, median: null, max: null };
+    // stores/min/median/max/asOf: the recent window (filled in step 4); storesAll and last: the whole data range
+    productOut[i] = { id, group: gid, name, brand, presentation: pres, category: cat, catalog, size, stores: 0, storesAll: 0, min: null, median: null, max: null, asOf: null, last: null };
     // CATÁLOGO "PACIC" marks the official basket (Paquete Contra la Inflación y la Carestía); any spelling, any month
     if ([...p.catalog.map.keys()].some((v) => normKey(v) === 'pacic')) { productOut[i].pacic = 1; pacicCount++; }
   }
+  for (const id of fixSizes.keys()) if (!report.sizesFixed.some((f) => f.id === id)) { report.fixSizesUnused.push(id); warn(`fixSizes.${id}: no such product in the city build (excluded, or the id changed)`); }
   tick();
 
   // 4. weeks, the recency window, and the per-product aggregation
@@ -611,7 +650,7 @@ async function main() {
   if (!allWeeks.length) { log('no observations left after the exclusions; nothing written'); return 1; }
   // products.json must fit LIMITS.productsJson with full field names: keep the products seen within the
   // last `recentWeeks` weeks, halving the window while the (estimated) file would not fit
-  const estimate = (keep) => { let b = 2; for (let i = 0; i < products.length; i++) if (keep[i]) { const p = productOut[i]; b += JSON.stringify({ ...p, stores: 999, min: 9999.99, median: 9999.99, max: 9999.99 }).length + 1; } return b; };
+  const estimate = (keep) => { let b = 2; for (let i = 0; i < products.length; i++) if (keep[i]) { const p = productOut[i]; b += JSON.stringify({ ...p, stores: 999, storesAll: 999, min: 9999.99, median: 9999.99, max: 9999.99, asOf: '2026-01-01', last: '2026-01-01' }).length + 1; } return b; };
   let recentWeeks = city.recentWeeks || Infinity;
   const eligible = productKeep.slice();
   for (;;) {
@@ -631,7 +670,29 @@ async function main() {
   const weekIdx = new Map(weekDays.map((d, i) => [d, i]));
   const nWeeks = weeks.length;
   const windowStart = Math.max(0, nWeeks - WEEKS_WINDOW);
+  // The survey per week (meta.weekInfo): rows, distinct dates and stores. A week with under half the
+  // median week's rows is partial (the last week of a monthly file often holds one day); it stays in
+  // the data and the app labels it. The latest date in the data closes the recent window.
   let latestDay = -Infinity;
+  const weekObs = new Int32Array(nWeeks);
+  const weekDates = weekDays.map(() => new Set());
+  const weekStores = new Uint8Array(stores.length * nWeeks);
+  for (let i = 0; i < rows.n; i++) {
+    const si = rows.s[i];
+    if (!storeKeep[si] || !productKeep[rows.p[i]]) continue;
+    const d = rows.d[i]; const w = weekIdx.get(mondayOf(d));
+    weekObs[w]++; weekDates[w].add(d); weekStores[si * nWeeks + w] = 1;
+    if (d > latestDay) latestDay = d;
+  }
+  const medianWeekObs = median([...weekObs].sort((a, b) => a - b));
+  const weekInfo = weeks.map((week, w) => {
+    let n = 0; for (let si = 0; si < stores.length; si++) n += weekStores[si * nWeeks + w];
+    return { week, days: weekDates[w].size, observations: weekObs[w], stores: n, partial: weekObs[w] < PARTIAL_WEEK_SHARE * medianWeekObs };
+  });
+  const recentFromDay = latestDay - (RECENT_DAYS - 1);
+  const recent = { from: dayToIso(recentFromDay), to: dayToIso(latestDay), days: RECENT_DAYS };
+  log(`recent window ${recent.from} → ${recent.to}; partial weeks: ${weekInfo.filter((x) => x.partial).map((x) => `${x.week} (${x.observations} rows, ${x.days} d)`).join(', ') || 'none'} (median week ${medianWeekObs} rows)`);
+  const visits = new Int32Array(stores.length * nWeeks); // products recorded per store-week (visits.json)
   // counting sort of row indexes by product
   const counts = new Int32Array(products.length + 1);
   for (let i = 0; i < rows.n; i++) counts[rows.p[i] + 1]++;
@@ -647,6 +708,8 @@ async function main() {
   const ratios = stores.map(() => new Array(nWeeks));            // ratios[store][week] = number[]
   const storeItems = stores.map(() => []);                        // [[productId, price, date]]
   const storeProductCount = new Int32Array(stores.length);
+  const storeRecent = new Int32Array(stores.length);    // products with an observation in the recent window
+  const storeLastVisit = new Int32Array(stores.length); // products observed on the store's lastSeen date
   let cells = 0, productFiles = 0, observations = 0;
   const outBytes = { products: 0, weeks: 0 };
   for (let pi = 0; pi < products.length; pi++) {
@@ -674,18 +737,16 @@ async function main() {
         (byWeek[w] || (byWeek[w] = [])).push(rows.v[r]);
         const l = latest.get(si); if (l === undefined || rows.d[r] > rows.d[l]) latest.set(si, r);
         storeSet.add(si);
-        if (rows.d[r] > latestDay) latestDay = rows.d[r];
+        visits[key]++;
       }
       const series = new Array(nWeeks);
       const wmed = new Float64Array(nWeeks);
-      let lastWeek = -1;
       for (let w = 0; w < nWeeks; w++) {
         const a = byWeek[w];
         if (!a) { series[w] = [weeks[w], null, null, null, 0]; continue; }
         a.sort((x, y) => x - y);
         wmed[w] = median(a);
         series[w] = [weeks[w], round2(wmed[w]), a[0], a[a.length - 1], a.length];
-        lastWeek = w;
       }
       // ratios for the store index + the store's own product list
       for (const [key, r] of cell) {
@@ -693,15 +754,24 @@ async function main() {
         if (wmed[w] > 0) (ratios[si][w] || (ratios[si][w] = [])).push(rows.v[r] / wmed[w]);
       }
       const latestObj = {};
+      const g = groups.get(po.group);
+      const recentPrices = []; let asOf = -Infinity, last = -Infinity;
       for (const [si, r] of latest) {
-        latestObj[storeOut[si].id] = [rows.v[r], dayToIso(rows.d[r])];
-        storeItems[si].push([po.id, rows.v[r], dayToIso(rows.d[r])]);
+        const d = rows.d[r];
+        latestObj[storeOut[si].id] = [rows.v[r], dayToIso(d)];
+        storeItems[si].push([po.id, rows.v[r], dayToIso(d)]);
         storeProductCount[si]++;
+        g.stores.add(si);
+        if (d > last) last = d;
+        if (d === stores[si].last) storeLastVisit[si]++;
+        // "recent": the store's latest observation, when it falls inside [recent.from, recent.to]
+        if (d >= recentFromDay) { recentPrices.push(rows.v[r]); if (d > asOf) asOf = d; storeRecent[si]++; g.recentStores.add(si); }
       }
-      // products.json summary: prices of the product's latest week with observations
-      const lw = byWeek[lastWeek];
-      po.stores = storeSet.size; po.min = lw[0]; po.max = lw[lw.length - 1]; po.median = round2(median(lw));
-      const g = groups.get(po.group); for (const si of storeSet) g.stores.add(si);
+      // products.json summary: one price per store (its latest inside the recent window); a product
+      // nobody recorded in the window keeps null prices, stores 0 and the date of its newest observation
+      recentPrices.sort((x, y) => x - y);
+      po.stores = recentPrices.length; po.storesAll = storeSet.size; po.last = dayToIso(last);
+      if (recentPrices.length) { po.min = recentPrices[0]; po.max = recentPrices[recentPrices.length - 1]; po.median = round2(median(recentPrices)); po.asOf = dayToIso(asOf); }
       // products/<id>.json
       const pj = JSON.stringify({ id: po.id, latest: latestObj, series });
       if (pj.length > LIMITS.productFile) report.oversize.productFiles.push({ id: po.id, bytes: pj.length });
@@ -738,16 +808,20 @@ async function main() {
     try {
       const dense = new Array(nWeeks).fill(null);
       const sparse = [];
+      let latest = null, latestWeek = null;
       for (let w = 0; w < nWeeks; w++) {
         const a = ratios[si][w];
         if (!a || a.length < INDEX_MIN_PRODUCTS) continue;
         a.sort((x, y) => x - y);
         const v = Number(median(a).toFixed(3));
-        dense[w] = v; sparse.push([weeks[w], v]); so.index.latest = v;
+        dense[w] = v; sparse.push([weeks[w], v]); latest = v; latestWeek = weeks[w];
       }
       if (sparse.length) storesWithIndex++;
-      so.index.series = sparse;
-      so.products = storeProductCount[si];
+      so.index = { latest, latestWeek, series: sparse };
+      so.products = storeProductCount[si];          // all products ever recorded here (data range)
+      so.recentProducts = storeRecent[si];          // ... with an observation in the recent window
+      so.lastVisitProducts = storeLastVisit[si];    // ... recorded on lastSeen
+      if (!so.lastVisitProducts) report.lastSeenWithoutProducts.push({ id: so.id, lastSeen: so.lastSeen });
       indexStores[so.id] = dense;
       storesJson.push(so);
       // stores/<id>.json
@@ -770,30 +844,41 @@ async function main() {
   if (indexText.length > LIMITS.indexJson) warn(`index.json is ${kb(indexText.length)} (soft limit ${kb(LIMITS.indexJson)})`);
   fs.writeFileSync(path.join(OUT, 'index.json'), indexText);
 
-  // 6. products.json, groups.json
-  const productsJson = productOut.filter((p, i) => p && productKeep[i] && p.stores > 0).sort((a, b) => (a.id < b.id ? -1 : 1));
+  // 6. products.json, groups.json, visits.json
+  const productsJson = productOut.filter((p, i) => p && productKeep[i] && p.storesAll > 0).sort((a, b) => (a.id < b.id ? -1 : 1));
   const productsText = JSON.stringify(productsJson);
   if (productsText.length > LIMITS.productsJson) warn(`products.json is ${kb(productsText.length)}, over the ${kb(LIMITS.productsJson)} limit (window ${recentWeeks} weeks)`);
   fs.writeFileSync(path.join(OUT, 'products.json'), productsText);
-  const groupsJson = [...groups.values()].filter((g) => g.stores.size > 0).map((g) => ({ id: g.id, name: g.name, category: g.category.best(), products: g.products, stores: g.stores.size })).sort((a, b) => (a.id < b.id ? -1 : 1));
+  const members = new Map();
+  for (const p of productsJson) { if (!members.has(p.group)) members.set(p.group, []); members.get(p.group).push(p); }
+  const groupsJson = [...groups.values()].filter((g) => g.stores.size > 0 && members.has(g.id)).map((g) => ({ id: g.id, name: g.name, category: g.category.best(), products: members.get(g.id).length, stores: g.recentStores.size, storesAll: g.stores.size, unit: groupUnit(members.get(g.id)) })).sort((a, b) => (a.id < b.id ? -1 : 1));
   fs.writeFileSync(path.join(OUT, 'groups.json'), JSON.stringify(groupsJson));
+  // visits.json: products recorded per store per week (0 = no visit), for the survey-rhythm animation
+  const visitsStores = {};
+  for (let si = 0; si < stores.length; si++) if (storeOut[si] && indexStores[storeOut[si].id]) visitsStores[storeOut[si].id] = Array.from(visits.subarray(si * nWeeks, (si + 1) * nWeeks)); // the stores in stores.json
+  const visitsText = JSON.stringify({ weeks, stores: Object.fromEntries(Object.entries(visitsStores).sort((a, b) => (a[0] < b[0] ? -1 : 1))) });
+  fs.writeFileSync(path.join(OUT, 'visits.json'), visitsText);
 
   // 7. meta.json
   const municipios = [...new Set(storesJson.map((s) => s.municipio))].sort((a, b) => a.localeCompare(b, 'es'));
   const meta = {
     built: new Date().toISOString(),
-    source: { name: SOURCE.name, url: SOURCE.url, files: files.map((f) => ({ name: f.name, bytes: f.bytes, retrieved: f.retrieved, via: f.via, sha256: f.sha256 })), mirror: `https://github.com/${SOURCE.mirror.repo}/releases/tag/${SOURCE.mirror.tag}`, license: SOURCE.license },
+    source: { name: SOURCE.name, url: SOURCE.url, dataset: files.length ? SOURCE.datasetUrl(Math.max(...files.map((f) => f.year))) : null, files: files.map((f) => ({ name: f.name, bytes: f.bytes, retrieved: f.retrieved, via: f.via, sha256: f.sha256 })), mirror: `https://github.com/${SOURCE.mirror.repo}/releases/tag/${SOURCE.mirror.tag}`, license: SOURCE.license },
     city: { id: city.id, name: city.name, states: [...new Set(storesJson.map((s) => s.state))], municipios },
     weeks, latestDate: latestDay > -Infinity ? dayToIso(latestDay) : null,
+    // products.json and groups.json summarise each store's latest observation within these dates
+    recent,
+    // one entry per week in `weeks`: distinct survey dates, rows, stores, and partial (< 50 % of the median week's rows)
+    weekInfo, partialWeeks: weekInfo.filter((w) => w.partial).map((w) => w.week),
     counts: { stores: storesJson.length, products: productsJson.length, groups: groupsJson.length, observations, storeFiles, pacic: productsJson.filter((p) => p.pacic).length },
-    rules: { recentWeeks, excludeCategories: [...excludeCategories], indexMinProducts: INDEX_MIN_PRODUCTS },
+    rules: { recentWeeks, excludeCategories: [...excludeCategories], indexMinProducts: INDEX_MIN_PRODUCTS, recentDays: RECENT_DAYS, partialWeekShare: PARTIAL_WEEK_SHARE, fixSizes: productsJson.filter((p) => fixSizes.has(p.id)).length },
   };
   fs.writeFileSync(path.join(OUT, 'meta.json'), JSON.stringify(meta, null, 1));
 
   // 8. curation report for the research doc (cache only)
   report.unparsedPresentations = [...unparsed.values()].sort((a, b) => b.rows - a.rows).slice(0, 80);
   report.stats = stats; report.extractors = [...extractors]; report.warnings = warnings;
-  report.summary = { stores: storesJson.length, storesWithIndex, products: productsJson.length, groups: groupsJson.length, weeks: nWeeks, observations, cells, storeFiles, shortDates, productFiles, recentWeeks, bytes: { products: outBytes.products, weeks: outBytes.weeks, stores: storeBytes, storesJson: storesText.length, indexJson: indexText.length, productsJson: productsText.length } };
+  report.summary = { stores: storesJson.length, storesWithIndex, products: productsJson.length, groups: groupsJson.length, weeks: nWeeks, observations, cells, storeFiles, shortDates, productFiles, recentWeeks, bytes: { products: outBytes.products, weeks: outBytes.weeks, stores: storeBytes, storesJson: storesText.length, indexJson: indexText.length, productsJson: productsText.length, visitsJson: visitsText.length } };
   fs.writeFileSync(path.join(CACHE, `report-${city.id}.json`), JSON.stringify(report, null, 1));
 
   tick();
@@ -802,10 +887,10 @@ async function main() {
   console.log(JSON.stringify({
     city: city.id, years: args.years, extractors: [...extractors],
     rowsStreamed: stats.lines, rowsKept: stats.kept, observations, cells,
-    stores: storesJson.length, storesWithIndex, products: productsJson.length, pacicProducts: productsJson.filter((p) => p.pacic).length, groups: groupsJson.length, weeks: nWeeks, latestDate: meta.latestDate,
+    stores: storesJson.length, storesWithIndex, products: productsJson.length, pacicProducts: productsJson.filter((p) => p.pacic).length, productsWithRecentMedian: productsJson.filter((p) => p.median != null).length, recent, partialWeeks: meta.partialWeeks, groups: groupsJson.length, weeks: nWeeks, latestDate: meta.latestDate,
     excluded: { storesNoCoords: report.excluded.storesNoCoords.length, storesNoProducts: report.excluded.storesNoProducts, storesByOverride: report.excluded.stores.length, productsByCategory: report.excluded.categories, productsByOverride: report.excluded.products, productsStale: report.excluded.stale, recentWeeks },
     storesNullCoords: report.coords.nullCoords.length, storesOutsideBox: report.coords.outsideBox.length, unparsedPresentations: unparsed.size,
-    files: tot.n, bytes: tot.b, productsJsonBytes: productsText.length, storeFilesShortDates: shortDates, weeksWindowReduced: report.oversize.weeksWindowReduced.length, productFilesOver: report.oversize.productFiles.length,
+    files: tot.n, bytes: tot.b, productsJsonBytes: productsText.length, visitsJsonBytes: visitsText.length, storesLastSeenWithoutProducts: report.lastSeenWithoutProducts.length, sizesFixed: report.sizesFixed.length, fixSizesUnused: report.fixSizesUnused.length, storeFilesShortDates: shortDates, weeksWindowReduced: report.oversize.weeksWindowReduced.length, productFilesOver: report.oversize.productFiles.length,
     warnings: warnings.length, seconds: Math.round((Date.now() - t0) / 1000), peakRssMB: Math.round(peakRss / 1048576),
   }, null, 1));
   return 0;

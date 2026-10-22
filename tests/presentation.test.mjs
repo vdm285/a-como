@@ -93,6 +93,26 @@ const CASES = [
   ['', null],
 ];
 
+// Fixed 2026-10-21 (research doc §20): a per-unit size in brackets, and a thousands point before
+// grams. The scan of every 2025-2026 presentation found these strings and no others that change.
+const FIXES = [
+  // "(1.2 Gr. C/U)" is each sachet's weight: 25 × 1.2 g (te-d46ac7 showed 1.2 g)
+  ['Caja con 25 Sobres (1.2 Gr. C/U). Limón', { value: 30, unit: 'g', pack: 25 }],
+  ['Caja con 25 Sobres (1.2 Gr. C/u). Limón', { value: 30, unit: 'g', pack: 25 }],
+  // brackets without C/U, or after a word that is not a container, stay the total
+  ['Paquete con 2 Pinguinos (80 Gr.)', { value: 80, unit: 'g' }],
+  ['Bote 480 Gr. (900 Ml.) Sabor Napolitano', { value: 480, unit: 'g' }],
+  ['Caja con 10 Sobres (10x10 Cm.). Absorbente Estéril', { value: 10, unit: 'pza' }],
+  // "3.564 Gr." is 3,564 g (detergente-p-8162e8 showed 3.564 g, i.e. 47,000 pesos a kilo)
+  ['Bolsa 3.564 Gr. Polvo. Oxigeno Activo', { value: 3564, unit: 'g' }],
+  ['Bolsa 3.564 Gr. Polvo. Limpieza Instantánea', { value: 3564, unit: 'g' }],
+  // the same shape before litres or kilos is a decimal: a US gallon, half a gallon (national data)
+  ['Botella 3.785 Lt. Entera', { value: 3785, unit: 'ml' }],
+  ['Botella 1.892 Lt. Entera', { value: 1892, unit: 'ml' }],
+  // a leading zero is never a thousands group; the first size still wins
+  ['Frasco con 120 Ml. Solución 0.040 G./0.150 G./100 Ml.', { value: 120, unit: 'ml' }],
+];
+
 // Forms the app's own input may use (not in the PROFECO data but required by the brief)
 const EXTRA = [
   ['PAQUETE 4 PZAS. 200 GR. C/U', { value: 800, unit: 'g', pack: 4 }],
@@ -102,9 +122,11 @@ const EXTRA = [
   ['Huevo 18 piezas', { value: 18, unit: 'pza' }],
   ['Papel higiénico 12 rollos', { value: 12, unit: 'pza' }],
   ['Refresco 2.5 lt', { value: 2500, unit: 'ml' }],
+  ['Bolsa 1.500 Kg.', { value: 1500, unit: 'g' }],
+  ['Bolsa 1.500 Gr.', { value: 1500, unit: 'g' }],
 ];
 
-for (const [text, expected] of [...CASES, ...EXTRA]) {
+for (const [text, expected] of [...CASES, ...FIXES, ...EXTRA]) {
   test(`parsePresentation(${JSON.stringify(text)})`, () => {
     assert.deepEqual(parsePresentation(text), expected);
   });
