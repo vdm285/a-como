@@ -74,6 +74,18 @@ const SOURCE = {
   // datos.gob.mx states the dataset licence as Creative Commons Attribution 4.0 (see the research doc)
   license: { name: 'CC BY 4.0 (Datos Abiertos, Gobierno de México)', url: 'https://datos.gob.mx/' },
   userAgent: 'compa-precio build (github.com/vdm285/compa-precio)',
+  // datos.profeco.gob.mx answers 404 to every URL from GitHub's runners (US IPs; measured
+  // 2026-10-21, docs/research/profeco-qqp-2026-10.md §19). The yearly archives are therefore
+  // mirrored byte-for-byte as assets of a release on this repository, refreshed from a Mexican
+  // network with tools/mirror-qqp.mjs; the licence permits copies with credit. The build tries
+  // PROFECO first and falls back to the mirror, verifying each file's sha256.
+  mirror: {
+    repo: 'vdm285/compa-precio',
+    tag: 'qqp-mirror',
+    base: 'https://github.com/vdm285/compa-precio/releases/download/qqp-mirror/',
+  },
+  // The current year's archive is re-fetched when the cached copy is older than this.
+  staleDays: 6,
 };
 
 const LIMITS = {
@@ -144,10 +156,11 @@ class Variants {
 
 function parseArgs(argv) {
   const now = new Date();
-  const args = { years: [now.getFullYear(), now.getFullYear() - 1], skipDownload: false, city: 'cdmx', help: false };
+  const args = { years: [now.getFullYear(), now.getFullYear() - 1], skipDownload: false, downloadOnly: false, city: 'cdmx', help: false };
   for (const a of argv) {
     if (a.startsWith('--years=')) args.years = a.slice(8).split(',').map((y) => Number(y.trim())).filter((y) => y > 2000);
     else if (a === '--skip-download') args.skipDownload = true;
+    else if (a === '--download-only') args.downloadOnly = true;
     else if (a.startsWith('--city=')) args.city = a.slice(7).trim();
     else if (a === '--help' || a === '-h') args.help = true;
     else log(`ignoring unknown argument ${a}`);
@@ -163,11 +176,14 @@ function writeManifest(m) { fs.writeFileSync(path.join(CACHE, 'raw', 'manifest.j
 
 function curlAvailable() { const r = spawnSync('curl', ['--version'], { windowsHide: true }); return !r.error && r.status === 0; }
 
-async function downloadTo(url, file) {
+// Downloads to <file>.part and renames only when the result passes `check(tmpPath)`; an HTTP
+// error page (PROFECO answers blocked clients with a 236-byte 404 page) never replaces a file.
+async function downloadTo(url, file, check = () => true) {
   const tmp = `${file}.part`;
+  fs.rmSync(tmp, { force: true });
   if (curlAvailable()) {
-    const r = spawnSync('curl', ['-L', '-sS', '-A', SOURCE.userAgent, '-o', tmp, url], { stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true });
-    if (r.error || r.status !== 0) throw new Error(`curl failed (${r.error ? r.error.message : `exit ${r.status}`})`);
+    const r = spawnSync('curl', ['-L', '-sS', '-f', '--retry', '2', '-A', SOURCE.userAgent, '-o', tmp, url], { stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true });
+    if (r.error || r.status !== 0) { fs.rmSync(tmp, { force: true }); throw new Error(`curl failed (${r.error ? r.error.message : `exit ${r.status}`})`); }
   } else {
     const res = await fetch(url, { headers: { 'user-agent': SOURCE.userAgent } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -177,8 +193,33 @@ async function downloadTo(url, file) {
   }
   const size = fs.statSync(tmp).size;
   if (size === 0) { fs.rmSync(tmp, { force: true }); throw new Error('empty download'); }
+  const verdict = check(tmp);
+  if (verdict !== true) { fs.rmSync(tmp, { force: true }); throw new Error(typeof verdict === 'string' ? verdict : 'downloaded file failed its check'); }
   fs.renameSync(tmp, file);
   return size;
+}
+
+export function isRar(file) {
+  const head = Buffer.alloc(8);
+  const fd = fs.openSync(file, 'r');
+  try { fs.readSync(fd, head, 0, 8, 0); } finally { fs.closeSync(fd); }
+  return head.toString('latin1').startsWith('Rar!') ? true : `not a RAR archive (starts with ${JSON.stringify(head.toString('latin1'))})`;
+}
+
+export function sha256(file) {
+  const h = createHash('sha256');
+  const fd = fs.openSync(file, 'r');
+  const buf = Buffer.alloc(1 << 20);
+  try { let n; while ((n = fs.readSync(fd, buf, 0, buf.length, null)) > 0) h.update(buf.subarray(0, n)); } finally { fs.closeSync(fd); }
+  return h.digest('hex');
+}
+
+async function readMirrorIndex() {
+  try {
+    const res = await fetch(`${SOURCE.mirror.base}mirror.json`, { headers: { 'user-agent': SOURCE.userAgent }, redirect: 'follow' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) { log(`mirror index not available (${e.message})`); return null; }
 }
 
 // The page lists one link per year: <a href="file.php?t=TOKEN">Quién es Quién en los Precios 2026</a>
@@ -201,31 +242,67 @@ async function download(years, skip) {
   const manifest = readManifest();
   const files = [];
   const pageTokens = skip ? {} : await tokensFromPage();
+  let mirrorIndex; // fetched once, only if PROFECO fails
+  const now = new Date();
   for (const y of years) {
     const name = `QQP_${y}.rar`;
     const file = path.join(raw, name);
-    const have = fs.existsSync(file) && fs.statSync(file).size > 0;
-    if (!have && !skip) {
+    let have = fs.existsSync(file) && fs.statSync(file).size > 0;
+    if (have && isRar(file) !== true) { log(`cached ${name} is not a RAR archive (an error page?); discarding it`); fs.rmSync(file, { force: true }); have = false; delete manifest[name]; }
+    const entry = manifest[name];
+    const ageDays = entry && entry.retrieved ? (now - Date.parse(entry.retrieved)) / 86400000 : Infinity;
+    // The current year's archive grows every month; so does last year's until PROFECO closes it
+    // (its December lands in January or February). Older archives never change.
+    const live = y >= now.getFullYear() || (y === now.getFullYear() - 1 && now.getMonth() < 2);
+    const stale = !have || (live && ageDays > SOURCE.staleDays);
+    if (skip) {
+      if (!have) { log(`${name} is not in the cache and --skip-download was given; skipping ${y}`); continue; }
+    } else if (stale) {
+      let got = false;
       const token = pageTokens[y] || SOURCE.tokens[y];
-      if (!token) { log(`no download token for ${y} (not on the page, not in SOURCE.tokens); skipping`); continue; }
-      const url = SOURCE.fileUrl(token);
-      log(`downloading ${name} from ${url} ...`);
-      try {
-        const size = await downloadTo(url, file);
-        manifest[name] = { bytes: size, retrieved: new Date().toISOString(), url };
-        log(`downloaded ${name}: ${size} bytes`);
-      } catch (e) { log(`download of ${name} failed: ${e.message}`); continue; }
-    } else if (!have) { log(`${name} is not in the cache and --skip-download was given; skipping ${y}`); continue; }
-    else log(`${name} already in cache (${fs.statSync(file).size} bytes)`);
+      if (token) {
+        const url = SOURCE.fileUrl(token);
+        log(`downloading ${name} from ${url} ...`);
+        const before = have ? { sha: entry && entry.sha256, st: fs.statSync(file) } : null;
+        try {
+          const size = await downloadTo(url, file, isRar);
+          const sha = sha256(file);
+          // unchanged content keeps its old mtime, so the extraction cache stays valid
+          if (before && before.sha === sha) fs.utimesSync(file, before.st.atime, before.st.mtime);
+          manifest[name] = { bytes: size, retrieved: now.toISOString(), url, via: 'profeco', sha256: sha };
+          log(`downloaded ${name} from PROFECO: ${size} bytes${before && before.sha === sha ? ' (unchanged)' : ''}`);
+          got = true;
+        } catch (e) { log(`PROFECO download of ${name} failed: ${e.message}`); }
+      } else log(`no PROFECO token for ${y}`);
+      if (!got) {
+        if (mirrorIndex === undefined) mirrorIndex = await readMirrorIndex();
+        const m = mirrorIndex && mirrorIndex.files ? mirrorIndex.files[name] : null;
+        if (!m) log(`the mirror has no ${name}`);
+        else if (have && entry && entry.sha256 === m.sha256) { log(`PROFECO unreachable; the mirror's ${name} is the cached copy (retrieved ${m.retrieved}); keeping it`); manifest[name] = { ...entry, retrieved: m.retrieved, via: entry.via || 'mirror' }; }
+        else if (have && entry && Date.parse(m.retrieved) <= Date.parse(entry.retrieved)) log(`PROFECO unreachable; the mirror's ${name} (${m.retrieved}) is not newer than the cached copy (${entry.retrieved}); keeping it`);
+        else {
+          const url = `${SOURCE.mirror.base}${name}`;
+          log(`downloading ${name} from the mirror ${url} (PROFECO copy retrieved ${m.retrieved}) ...`);
+          try {
+            const size = await downloadTo(url, file, (t) => { const r = isRar(t); if (r !== true) return r; const h = sha256(t); return h === m.sha256 ? true : `sha256 mismatch (${h} ≠ ${m.sha256})`; });
+            manifest[name] = { bytes: size, retrieved: m.retrieved, url: m.url, via: 'mirror', mirror: url, sha256: m.sha256 };
+            log(`downloaded ${name} from the mirror: ${size} bytes, sha256 verified`);
+            got = true;
+          } catch (e) { log(`mirror download of ${name} failed: ${e.message}`); }
+        }
+      }
+      if (!got && !have) { log(`no copy of ${name} from PROFECO, the mirror or the cache; skipping ${y}`); continue; }
+    } else log(`${name} already in cache (${fs.statSync(file).size} bytes, retrieved ${entry ? entry.retrieved : 'unknown'})`);
     const st = fs.statSync(file);
-    if (!manifest[name]) manifest[name] = { bytes: st.size, retrieved: st.mtime.toISOString(), url: SOURCE.fileUrl(pageTokens[y] || SOURCE.tokens[y] || '') };
-    files.push({ year: y, name, file, bytes: st.size, retrieved: manifest[name].retrieved });
+    if (!manifest[name]) manifest[name] = { bytes: st.size, retrieved: st.mtime.toISOString(), url: SOURCE.fileUrl(pageTokens[y] || SOURCE.tokens[y] || ''), sha256: sha256(file) };
+    if (!manifest[name].sha256) manifest[name].sha256 = sha256(file);
+    files.push({ year: y, name, file, bytes: st.size, retrieved: manifest[name].retrieved, via: manifest[name].via || 'profeco', sha256: manifest[name].sha256 });
   }
   if (!skip) {
     for (const [name, token] of Object.entries(SOURCE.extras)) {
       const file = path.join(raw, name);
       if (fs.existsSync(file) && fs.statSync(file).size > 0) continue;
-      try { const size = await downloadTo(SOURCE.fileUrl(token), file); manifest[name] = { bytes: size, retrieved: new Date().toISOString(), url: SOURCE.fileUrl(token) }; }
+      try { const size = await downloadTo(SOURCE.fileUrl(token), file, (t) => (/^\s*</.test(fs.readFileSync(t, 'utf8').slice(0, 64)) ? 'got an HTML page' : true)); manifest[name] = { bytes: size, retrieved: new Date().toISOString(), url: SOURCE.fileUrl(token) }; }
       catch (e) { log(`download of ${name} failed: ${e.message}`); }
     }
   }
@@ -352,7 +429,7 @@ async function main() {
   let peakRss = 0;
   const tick = () => { peakRss = Math.max(peakRss, process.memoryUsage().rss); };
   const args = parseArgs(process.argv.slice(2));
-  if (args.help) { console.log('node tools/build-qqp.mjs [--years=2026,2025] [--skip-download] [--city=cdmx]'); return 0; }
+  if (args.help) { console.log('node tools/build-qqp.mjs [--years=2026,2025] [--skip-download | --download-only] [--city=cdmx]'); return 0; }
   const city = CITIES[args.city];
   if (!city) { log(`unknown city "${args.city}"; known: ${Object.keys(CITIES).join(', ')}`); return 1; }
   fs.mkdirSync(CACHE, { recursive: true });
@@ -371,6 +448,7 @@ async function main() {
   // 1. download + extract
   let files = [];
   try { files = await download(args.years, args.skipDownload); } catch (e) { log(`download phase failed: ${e.message}`); }
+  if (args.downloadOnly) { log(`download only: ${files.map((f) => `${f.name} via ${f.via}`).join(', ') || 'nothing'}`); return files.length ? 0 : 1; }
   const csvs = [];
   const extractors = new Set();
   for (const f of files) {
@@ -704,7 +782,7 @@ async function main() {
   const municipios = [...new Set(storesJson.map((s) => s.municipio))].sort((a, b) => a.localeCompare(b, 'es'));
   const meta = {
     built: new Date().toISOString(),
-    source: { name: SOURCE.name, url: SOURCE.url, files: files.map((f) => ({ name: f.name, bytes: f.bytes, retrieved: f.retrieved })), license: SOURCE.license },
+    source: { name: SOURCE.name, url: SOURCE.url, files: files.map((f) => ({ name: f.name, bytes: f.bytes, retrieved: f.retrieved, via: f.via, sha256: f.sha256 })), mirror: `https://github.com/${SOURCE.mirror.repo}/releases/tag/${SOURCE.mirror.tag}`, license: SOURCE.license },
     city: { id: city.id, name: city.name, states: [...new Set(storesJson.map((s) => s.state))], municipios },
     weeks, latestDate: latestDay > -Infinity ? dayToIso(latestDay) : null,
     counts: { stores: storesJson.length, products: productsJson.length, groups: groupsJson.length, observations, storeFiles, pacic: productsJson.filter((p) => p.pacic).length },

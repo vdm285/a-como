@@ -14,7 +14,8 @@
     "check": "node tools/check-qqp.mjs",
     "geo:preview": "node tools/preview-geo.mjs",
     "icons": "node tools/build-icons.mjs",
-    "shots": "node tools/shots.mjs"
+    "shots": "node tools/shots.mjs",
+    "qqp:mirror": "node tools/mirror-qqp.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.2.5",

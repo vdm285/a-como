@@ -36,6 +36,18 @@ Written when the pipeline lands (in flight 2026-10-21). The contract the app alr
 
 The store index for a week is the median, over the products PROFECO saw in that store that week, of (store price ÷ city-wide median of the same product that week); null under 30 products. The app never recomputes it; it reads it.
 
+## The mirror (why CI does not download from PROFECO)
+
+`datos.profeco.gob.mx` answers 404 to GitHub's runners (US addresses; measured 2026-10-21, research doc §19) while it serves the same files to a home connection in Mexico. The yearly archives are therefore mirrored byte for byte as assets of the release [`qqp-mirror`](https://github.com/vdm285/compa-precio/releases/tag/qqp-mirror), with `mirror.json` (bytes, sha256, the date PROFECO was accessed, the source URL). The pipeline tries PROFECO first and falls back to the mirror, verifying the checksum; an error page never replaces a cached archive (every download must start with the RAR signature), and the current year's archive is re-fetched when the cached copy is older than six days.
+
+To refresh the data, from any network in Mexico, about once a month (PROFECO publishes monthly):
+
+```bash
+npm run qqp:mirror
+```
+
+It downloads the archives that changed, uploads them with the new index (needs `gh` logged in with write access), and the next scheduled build (or a manual run of the Pages workflow) deploys them. If nobody refreshes the mirror, the site keeps working and shows the date of its latest week.
+
 ## Schedule
 
-`.github/workflows/pages.yml`: on every push to `main`, every Tuesday 13:00 UTC, and by hand. `npm test` → `npm run qqp` (with `continue-on-error`, so a PROFECO outage deploys the previous data rather than failing) → `npm run build` → Pages. The RAR cache is kept between runs with `actions/cache`. GitHub disables a public repository's cron after 60 days without repository activity; a commit re-arms it.
+`.github/workflows/pages.yml`: on every push to `main`, every Tuesday 13:00 UTC, and by hand. `npm test` → install `libarchive-tools` → `npm run qqp` (PROFECO, else the mirror) → `npm run check` (the contract in this file) → `npm run build` → Pages. There is no `continue-on-error`: if the data cannot be built or breaks the contract, the job fails and the previous deployment stays live. Only the archives are cached between runs (`data/cache/qqp/raw`); the extracted CSVs are several GB and are rebuilt. GitHub disables a public repository's cron after 60 days without repository activity; a commit or a mirror refresh followed by a manual run re-arms it.

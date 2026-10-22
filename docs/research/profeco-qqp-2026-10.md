@@ -772,3 +772,19 @@ every count in sections 3–10 and `presentations.tsv`, `cdmx-stores.tsv`, `surv
 `verify.mjs` and `final-stats.mjs` (output checks, the index recomputation, the tables in sections 7,
 11 and 12). The pipeline's own `data/cache/qqp/report-cdmx.json` lists every excluded or fixed store,
 the unparsed presentations and the oversize decisions of the last run.
+
+## 19. Reachability from GitHub's runners, and the mirror (added 2026-10-21, later)
+
+The first Pages deploy failed in 19 s: from a GitHub-hosted runner every URL under `datos.profeco.gob.mx` answers **HTTP 404 with a 236-byte Apache page**, with the build's User-Agent and with a browser's. A throwaway probe workflow measured, from runner IP 20.98.141.161 (Microsoft, Des Moines, Iowa, US):
+
+| Host | Answer from the runner |
+|---|---|
+| `datos.profeco.gob.mx` (the page and every `file.php?t=` archive) | 404, 236 bytes |
+| `repodatos.atdt.gob.mx` (the half-month CSVs) | 403 Akamai "Access Denied" (the same from Mexico, section 14) |
+| `datos.gob.mx` CKAN API (`package_show`) | 403 with the build's User-Agent, 200 JSON with a browser's |
+| `qqp.profeco.gob.mx` (the consumer site) | 200 |
+| `web.archive.org` | 200 |
+
+The same archive URLs answer normally from a home connection in Mexico City. So the yearly archives are mirrored byte for byte as assets of the release [`qqp-mirror`](https://github.com/vdm285/compa-precio/releases/tag/qqp-mirror) on this repository, with `mirror.json` listing each file's bytes, sha256, the date PROFECO was accessed and its source URL. `tools/mirror-qqp.mjs` refreshes it from a network that reaches PROFECO (it runs `tools/build-qqp.mjs --download-only` and uploads only the archives whose sha256 changed). The build tries PROFECO first, then the mirror, and verifies the checksum; the credit's access date stays the date PROFECO was accessed. The licence permits it: Libre Uso MX (a) "Hacer y distribuir copias del conjunto de datos y su contenido", and CC BY 4.0 on datos.gob.mx; the release notes carry the credit and the non-endorsement line.
+
+Consequence: PROFECO publishes monthly, and the site's data is as fresh as the last mirror refresh. Someone (or a scheduled task on a machine in Mexico) has to run `npm run qqp:mirror` about once a month; when nobody does, the site keeps working and shows the date of its latest week.
