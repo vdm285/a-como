@@ -41,7 +41,7 @@ export function search(index, query, limits = { groups: 6, products: 8, stores: 
   return { groups, products, stores, total: groups.length + products.length + stores.length };
 }
 
-export function searchView({ query, results, active, onInput, onPick, onClear, onKey, onBlur, onFocus }) {
+export function searchView({ query, results, active, placeholder, onInput, onPick, onClear, onKey, onBlur, onFocus }) {
   const item = (e, i) => html`<button id=${`sr-${i}`} class="item ${i === active ? 'active' : ''}" role="option" aria-selected=${i === active} tabindex="-1"
       @mousedown=${(ev) => ev.preventDefault()} @click=${() => onPick(e)} @mousemove=${() => onKey({ hover: i })}>
     <span class="n">${e.name}${e.brand ? html`<span class="b"> · ${e.brand}</span>` : nothing}</span>
@@ -53,7 +53,7 @@ export function searchView({ query, results, active, onInput, onPick, onClear, o
   return html`<div class="float search" role="search" @focusout=${onBlur}>
     <div class="box">
       ${I.search()}
-      <input type="search" autocomplete="off" spellcheck="false" enterkeyhint="search" placeholder=${t('searchPh')} .value=${query}
+      <input type="search" autocomplete="off" spellcheck="false" enterkeyhint="search" placeholder=${placeholder || t('searchPh')} .value=${query}
         role="combobox" aria-label=${t('searchPh')} aria-expanded=${open} aria-controls="search-list" aria-activedescendant=${open && active >= 0 ? `sr-${active}` : ''}
         @input=${(e) => onInput(e.target.value)} @keydown=${(e) => onKey({ key: e.key, event: e })} @focus=${onFocus} />
       ${query ? html`<button class="clear" title=${t('clear')} aria-label=${t('clear')} @mousedown=${(ev) => ev.preventDefault()} @click=${onClear}>${I.x()}</button>` : nothing}

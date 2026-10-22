@@ -20,10 +20,8 @@ const STR = {
     products: 'Productos',
     stores: 'Tiendas',
     noResults: 'Nada con ese nombre. Prueba otra palabra: "leche", "huevo", "tortilla", "Walmart".',
-    index: 'Índice de canasta',
-    indexShort: 'índice',
     indexRef: '1.00 es la mediana de la ciudad esa semana',
-    indexMethod: 'Para cada producto que PROFECO vio en la tienda esa semana se divide su precio entre la mediana de ese mismo producto en toda la ciudad esa semana; el índice es la mediana de esas razones. Hacen falta al menos 30 productos, así que las tortillerías y las panaderías no tienen índice.',
+    indexMethod: 'Para cada producto que PROFECO vio en la tienda esa semana se divide su precio entre la mediana de ese mismo producto en toda la ciudad esa semana; el índice es la mediana de esas razones. Un producto cuenta solo si PROFECO lo vio en al menos 3 tiendas esa semana, y hacen falta al menos 30 productos, así que las tortillerías y las panaderías no tienen índice.',
     howIndex: 'Cómo se calcula',
     cheaper: 'más barato',
     dearer: 'más caro',
@@ -96,7 +94,7 @@ const STR = {
     storesRecent_1: '1 tienda con precio reciente',
     storesRecentShort: '{n} tiendas',
     storesRecentShort_1: '1 tienda',
-    storesThisWeek: '{n} esa semana',
+    storesThisWeek: '{n} tiendas esa semana',
     noRecentShort: 'sin precio reciente',
     noRecentPrice: 'Sin precio reciente.',
     lastData: 'Último dato: {date}.',
@@ -176,17 +174,79 @@ const STR = {
     sources: 'Fuentes',
     sourcePrices: 'Precios: "Programa Quién es Quién en los Precios", PROFECO (Procuraduría Federal del Consumidor). Descargado de datos.profeco.gob.mx el {retrieved}. Datos abiertos del Gobierno de México, licencia Creative Commons Atribución 4.0 (Términos de Libre Uso MX). Son precios de referencia tomados por PROFECO en una muestra de tiendas; esta app no es de PROFECO ni está avalada por ella.',
     derived: 'A cómo calcula medianas, precios por unidad e índices a partir de esos datos; no cambia ningún precio.',
-    sourceMap: 'Mapa: alcaldías y municipios de INEGI; calles, parques y agua © colaboradores de OpenStreetMap (ODbL).',
-    creditShort: 'Precios: PROFECO, Quién es Quién en los Precios, datos.profeco.gob.mx, consultado {date}',
+    sourceMap: 'Mapa: límites de INEGI, Marco Geoestadístico, diciembre de 2025; calles, parques y agua © colaboradores de OpenStreetMap (ODbL).',
+    creditShort: 'Fuente: "Quién es Quién en los Precios", PROFECO, datos.profeco.gob.mx, {date}',
     code: 'Código abierto en GitHub',
     builtOn: 'compilado el {date}',
-    kbdHint: 'Teclado: / busca · Esc regresa un nivel · Espacio reproduce las semanas · ← → cambian de semana en la línea de tiempo · ↑ ↓ recorren una lista · Enter abre.',
+    kbdHint: 'Teclado: / busca · Esc regresa un nivel · Espacio reproduce las semanas · ← → cambian de semana en la línea de tiempo · ↑ ↓ recorren una lista · Enter abre. En el mapa: las flechas pasan de tienda en tienda, + y − acercan, 0 encuadra la ciudad.',
     reset: 'Ver toda la ciudad',
     copyLink: 'Copiar liga',
     copied: 'Liga copiada',
     offline: 'Sin conexión: mostrando lo último que se cargó.',
     close: 'Cerrar',
     pctBelow: '{pct} abajo', pctAbove: '{pct} arriba', atMedian: 'en la mediana',
+    index: "¿Qué tan cara es cada tienda?",
+    indexShort: "contra la ciudad",
+    indexSpan: "semanas del {span}",
+    indexWhat: "Cada tienda contra la mediana de la ciudad, en lo que PROFECO vio ahí esa semana.",
+    storeDearer: "{pct} más cara",
+    storeCheaper: "{pct} más barata",
+    storeAtMedian: "en la mediana",
+    storeCheaperWord: 'tienda más barata',
+    cityMedian: 'mediana de la ciudad',
+    basketMedianWhat: 'total mediano de tu canasta',
+    weekOf: 'semana del {date}',
+    storeDearerWord: 'tienda más cara',
+    indexCardTitle: 'Qué tan cara es esta tienda',
+    indexRatio: 'Razón de la última semana: {v}.',
+    cheapestHere: 'la más barata',
+    qty: 'Cantidad',
+    savingsMedian: 'Ahorras {amount} frente al total mediano de {n} tiendas completas ({median}).',
+    tlGroupMedian: 'mediana semanal del precio por unidad más bajo de cada tienda',
+    indexSub: "que la mediana de la ciudad · semana del {date}",
+    emptyIndexFew: "menos de 30 productos comparables",
+    emptyIndexStale: "sin visita en 28 días",
+    refProduct: "mediana reciente de la ciudad: {ref} · {n} tiendas",
+    refGroup: "mediana reciente de lo más barato en cada tienda: {ref} · {n} tiendas",
+    refBasket: "total mediano en las {n} tiendas con todo: {ref}",
+    refWeekOnly: "mediana de la ciudad esa semana: {ref} (sin precio reciente)",
+    refTooFew: "sólo {n} tiendas con precio: sin comparación",
+    vsRefGroup: "{pct} vs. la mediana de lo más barato",
+    vsRefBasket: "{pct} vs. el total mediano",
+    vsRefWeek: "{pct} vs. la mediana de esa semana",
+    reasonOtherUnit: "aquí sólo en otra presentación",
+    groupStoresLine: "{n} tiendas por {unit}",
+    groupOtherLine: "{n} sólo en otra unidad",
+    weekRefGroup: "mediana de lo más barato esa semana: {ref} · {n} tiendas",
+    visitLine_1: "Última visita: {date} · 1 producto",
+    allTimeLine_1: "1 producto desde {date}",
+    searchPhShort: "¿A cómo…? Busca un producto",
+    mapLabel: "Mapa de tiendas",
+    undo: "Deshacer",
+    ownDeleted: "Precio borrado",
+    sharedReplaced: "Canasta reemplazada: {n} productos",
+    sharedMerged: "Se agregaron {n} productos",
+    staleShared: "Esa canasta ya no está en los datos de PROFECO.",
+    sharedDropped: "{n} ya no están en los datos",
+    offlineNotLoaded: "Sin conexión: esto todavía no se ha descargado en este dispositivo.",
+    offlineStart: "Sin conexión: muestro lo que ya tenías guardado.",
+    partLoaded: "{n} de {m} sin cargar",
+    nResults: "{n} resultados",
+    nResults_1: "1 resultado",
+    allAt: "{n} tiendas a {price}",
+    basics: "Lo básico",
+    chains: "Cadenas",
+    playFrom: "Reproduciendo desde el {date}",
+    pausedAt: "En pausa: semana del {date}",
+    removed: "Quitaste {name}",
+    units_n: "{n} piezas",
+    pageWeek: "cuatro semanas",
+    timelineCollapsed: "Ver la línea de tiempo",
+    peak: "pico",
+    recentWord: "reciente",
+    openIndex: "¿Qué tan cara es cada tienda?",
+    storyGap: "{name}: {a} en {ka}, {b} en {kb}",
+    storySub: "Mediana de {na} {kaPl} y {nb} {kbPl} · {span}",
     perL: 'litro', perKg: 'kilo', per100g: '100 g', per100ml: '100 ml', perPza: 'pieza',
   },
   en: {
@@ -204,10 +264,8 @@ const STR = {
     products: 'Products',
     stores: 'Stores',
     noResults: 'Nothing by that name. Try another word: "leche", "huevo", "tortilla", "Walmart".',
-    index: 'Basket index',
-    indexShort: 'index',
     indexRef: '1.00 is the city median that week',
-    indexMethod: 'For every product PROFECO saw in the store that week, its price is divided by the city-wide median of the same product that week; the index is the median of those ratios. At least 30 products are required, so tortillerías and bakeries have no index.',
+    indexMethod: 'For every product PROFECO saw in the store that week, its price is divided by the city-wide median of the same product that week; the index is the median of those ratios. A product counts only when PROFECO saw it in at least 3 stores that week, and at least 30 products are required, so tortillerías and bakeries have no index.',
     howIndex: 'How it is computed',
     cheaper: 'cheaper',
     dearer: 'dearer',
@@ -280,7 +338,7 @@ const STR = {
     storesRecent_1: '1 store with a recent price',
     storesRecentShort: '{n} stores',
     storesRecentShort_1: '1 store',
-    storesThisWeek: '{n} that week',
+    storesThisWeek: '{n} stores that week',
     noRecentShort: 'no recent price',
     noRecentPrice: 'No recent price.',
     lastData: 'Last seen: {date}.',
@@ -360,17 +418,79 @@ const STR = {
     sources: 'Sources',
     sourcePrices: 'Prices: "Programa Quién es Quién en los Precios", PROFECO (Mexico\'s federal consumer protection agency). Downloaded from datos.profeco.gob.mx on {retrieved}. Mexican government open data under Creative Commons Attribution 4.0 (Libre Uso MX terms). Reference prices surveyed by PROFECO in a sample of stores; this app is not made or endorsed by PROFECO.',
     derived: 'A cómo computes medians, per-unit prices and indices from that data; it changes no price.',
-    sourceMap: 'Map: boroughs and municipalities from INEGI; streets, parks and water © OpenStreetMap contributors (ODbL).',
-    creditShort: 'Prices: PROFECO, Quién es Quién en los Precios, datos.profeco.gob.mx, retrieved {date}',
+    sourceMap: 'Map: boundaries from INEGI, Marco Geoestadístico, December 2025; streets, parks and water © OpenStreetMap contributors (ODbL).',
+    creditShort: 'Source: "Quién es Quién en los Precios", PROFECO, datos.profeco.gob.mx, {date}',
     code: 'Open source on GitHub',
     builtOn: 'built {date}',
-    kbdHint: 'Keyboard: / searches · Esc goes back one level · Space plays the weeks · ← → change week on the timeline · ↑ ↓ walk a list · Enter opens.',
+    kbdHint: 'Keyboard: / searches · Esc goes back one level · Space plays the weeks · ← → change week on the timeline · ↑ ↓ walk a list · Enter opens. On the map: arrows move from store to store, + and − zoom, 0 fits the city.',
     reset: 'Show the whole city',
     copyLink: 'Copy link',
     copied: 'Link copied',
     offline: 'Offline: showing the last data loaded.',
     close: 'Close',
     pctBelow: '{pct} below', pctAbove: '{pct} above', atMedian: 'at the median',
+    index: "How expensive is each store?",
+    indexShort: "against the city",
+    indexSpan: "weeks of {span}",
+    indexWhat: "Each store against the city median, on what PROFECO saw there that week.",
+    storeDearer: "{pct} dearer",
+    storeCheaper: "{pct} cheaper",
+    storeAtMedian: "at the median",
+    storeCheaperWord: 'cheaper store',
+    cityMedian: 'city median',
+    basketMedianWhat: 'median total of your basket',
+    weekOf: 'week of {date}',
+    storeDearerWord: 'dearer store',
+    indexCardTitle: 'How dear this store is',
+    indexRatio: 'Latest weekly ratio: {v}.',
+    cheapestHere: 'cheapest store',
+    qty: 'Quantity',
+    savingsMedian: 'Saves {amount} against the median total of {n} complete stores ({median}).',
+    tlGroupMedian: "weekly median of each store's lowest price per unit",
+    indexSub: "than the city median · week of {date}",
+    emptyIndexFew: "under 30 comparable products",
+    emptyIndexStale: "no visit in 28 days",
+    refProduct: "recent city median: {ref} · {n} stores",
+    refGroup: "recent median of each store's cheapest: {ref} · {n} stores",
+    refBasket: "median total at the {n} stores with everything: {ref}",
+    refWeekOnly: "city median that week: {ref} (no recent price)",
+    refTooFew: "only {n} stores with a price: no comparison",
+    vsRefGroup: "{pct} vs. the median of the cheapest",
+    vsRefBasket: "{pct} vs. the median total",
+    vsRefWeek: "{pct} vs. that week's median",
+    reasonOtherUnit: "only in another presentation here",
+    groupStoresLine: "{n} stores by the {unit}",
+    groupOtherLine: "{n} only in another unit",
+    weekRefGroup: "median of the cheapest that week: {ref} · {n} stores",
+    visitLine_1: "Last visit: {date} · 1 product",
+    allTimeLine_1: "1 product since {date}",
+    searchPhShort: "How much…? Search a product",
+    mapLabel: "Map of stores",
+    undo: "Undo",
+    ownDeleted: "Price deleted",
+    sharedReplaced: "Basket replaced: {n} products",
+    sharedMerged: "{n} products added",
+    staleShared: "That basket is no longer in PROFECO's data.",
+    sharedDropped: "{n} are no longer in the data",
+    offlineNotLoaded: "Offline: this has not been downloaded on this device yet.",
+    offlineStart: "Offline: showing what you already had saved.",
+    partLoaded: "{n} of {m} not loaded",
+    nResults: "{n} results",
+    nResults_1: "1 result",
+    allAt: "{n} stores at {price}",
+    basics: "The basics",
+    chains: "Chains",
+    playFrom: "Playing from {date}",
+    pausedAt: "Paused: week of {date}",
+    removed: "Removed {name}",
+    units_n: "{n} items",
+    pageWeek: "four weeks",
+    timelineCollapsed: "Show the timeline",
+    peak: "peak",
+    recentWord: "recent",
+    openIndex: "How expensive is each store?",
+    storyGap: "{name}: {a} at {ka}, {b} at {kb}",
+    storySub: "Median of {na} {kaPl} and {nb} {kbPl} · {span}",
     perL: 'litre', perKg: 'kilo', per100g: '100 g', per100ml: '100 ml', perPza: 'piece',
   },
 };
@@ -381,7 +501,7 @@ export function getLang() { return lang; }
 export function t(key, vars) {
   if (vars && vars.n === 1) { const one = `${key.replace(/_n$/, '')}_1`; if ((STR[lang] && STR[lang][one]) || STR.es[one]) key = one; }
   let s = (STR[lang] && STR[lang][key]) ?? STR.es[key] ?? key;
-  if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, typeof v === 'number' && Number.isInteger(v) && Math.abs(v) >= 1000 ? new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'es-MX').format(v) : String(v));
   return s;
 }
 
@@ -394,7 +514,7 @@ export function money(v) {
 export function pct(v, digits = 0) {
   if (v == null || !Number.isFinite(v)) return '—';
   const sign = v > 0.00049 ? '+' : v < -0.00049 ? '−' : '';
-  return `${sign}${Math.abs(v * 100).toFixed(digits)} %`;
+  return `${sign}${Math.abs(v * 100).toFixed(digits)}${lang === 'en' ? '' : ' '}%`;
 }
 
 let dataYear = String(new Date().getFullYear());
@@ -423,12 +543,20 @@ export function fspan(from, to, short = false) {
   const yA = from.slice(0, 4), yB = to.slice(0, 4);
   const showYear = !(short && yB === dataYear);
   if (yA !== yB) return `${fdate(from)} – ${fdate(to)}`;
-  if (from.slice(0, 7) === to.slice(0, 7)) {
-    const day = (d) => fmt({ day: 'numeric' }).format(d);
-    return `${day(a)}–${day(b)} ${clean(fmt({ month: 'short' }).format(b))}${showYear ? ' ' + yB : ''}`;
+  const day = (d) => fmt({ day: 'numeric' }).format(d);
+  const mon = (d) => clean(fmt({ month: 'short' }).format(d));
+  if (lang === 'en') {
+    if (from.slice(0, 7) === to.slice(0, 7)) return `${mon(a)} ${day(a)}–${day(b)}${showYear ? ', ' + yB : ''}`;
+    return `${mon(a)} ${day(a)} – ${mon(b)} ${day(b)}${showYear ? ', ' + yB : ''}`;
   }
+  if (from.slice(0, 7) === to.slice(0, 7)) return `${day(a)}–${day(b)} ${mon(b)}${showYear ? ' ' + yB : ''}`;
   const dm = (d) => clean(fmt({ day: 'numeric', month: 'short' }).format(d));
   return `${dm(a)} – ${dm(b)}${showYear ? ' ' + yB : ''}`;
+}
+export function mxDay(ts) {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }
 // unit names: "litro" / short "L"
 export function unitName(unit, short = false) {

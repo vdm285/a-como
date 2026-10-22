@@ -116,6 +116,48 @@ try {
     await sleep(800);
     check('delete removes the row', (await count(page, '.card .ownlist li')) === 0);
     check('own price date is today (local)', date.length > 0, date);
+    const undo = await page.$('.toast.on .toast-btn');
+    check('delete offers an undo', !!undo);
+    if (undo) { await undo.click(); await sleep(900); }
+    check('undo brings the price back', (await count(page, '.card .ownlist li')) === 1);
+    await ctx.close();
+  }
+  // 5b. Settings opened over a card returns to that card
+  {
+    const { ctx, page } = await fresh();
+    await open(page, 'p/leche-ultrapasteurizada-a3d941');
+    await sleep(1200);
+    await page.click('.settings-btn');
+    await sleep(600);
+    const inSettings = /#s/.test(page.url());
+    await page.click('.card .x');
+    await sleep(800);
+    check('Settings closes back to the card beneath', inSettings && /#p\//.test(page.url()), page.url().split('#')[1]);
+    await ctx.close();
+  }
+  // 5c. the map by keyboard, and a price tag is a button
+  {
+    const { ctx, page } = await fresh();
+    await open(page);
+    const chip = await page.$('.timeline.collapsed .tl-chip');
+    check('the index opens with the timeline folded into a chip', !!chip);
+    const title = await page.$eval('.legend .ltitle', (e) => e.textContent).catch(() => '');
+    check('the index is named as a question', /Qué tan cara/.test(title), title);
+    await page.evaluate(() => document.querySelector('#stage svg').focus());
+    await sleep(200);
+    await page.keyboard.press('ArrowRight');
+    await sleep(200);
+    check('arrow keys pick a store on the map', (await count(page, '#stage .kbd-ring')) === 1);
+    await page.keyboard.press('Enter');
+    await sleep(900);
+    check('Enter on the map opens that store', /#t\//.test(page.url()), page.url().split('#')[1]);
+    await page.goto(`${BASE}#p/jitomate-3532af`, { waitUntil: 'networkidle2' });
+    await sleep(2000);
+    const tags = await count(page, '#stage .tag');
+    check('a product shows price tags', tags >= 3, tags);
+    const box = await page.$eval('#stage .tag .tag-box', (e) => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }).catch(() => null);
+    if (box) { await page.mouse.click(box.x, box.y); await sleep(900); }
+    check('clicking a price tag opens its store', /#t\//.test(page.url()), page.url().split('#')[1]);
     await ctx.close();
   }
   // 6. Escape in the search does not close the card
@@ -141,7 +183,14 @@ try {
     const label = await page.$eval('.timeline .tl-label', (e) => e.textContent).catch(() => '');
     check('a week link shows that week', /20 abr 2026/.test(label), label);
     const hero = await page.$eval('.card .hero .unit', (e) => e.textContent).catch(() => '');
-    check('the card headline is that week\'s median', /esa semana/.test(hero), hero);
+    check('the card headline is that week\'s cheapest store', /la más barata/.test(hero), hero);
+    const refl = await page.$eval('.card .refline', (e) => e.textContent).catch(() => '');
+    check('the card names that week\'s city median', /esa semana/.test(refl), refl);
+    const numeral = await page.$eval('.numeral .nbig', (e) => e.textContent).catch(() => '');
+    check('the week numeral shows a price', /\$\d/.test(numeral), numeral);
+    // the timeline is drawn in real pixels: the SVG's width attribute matches its box
+    const tl = await page.$eval('.tl-svg', (e) => ({ attr: Number(e.getAttribute('width')), box: Math.round(e.getBoundingClientRect().width) })).catch(() => ({}));
+    check('the timeline is not stretched', tl.attr > 100 && Math.abs(tl.attr - tl.box) <= 2, tl);
     await page.keyboard.press('Escape'); await sleep(400); // card
     await page.keyboard.press('Escape'); await sleep(800); // week → recent
     const label2 = await page.$eval('.timeline .tl-label', (e) => e.textContent).catch(() => '');

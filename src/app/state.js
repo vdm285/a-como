@@ -13,7 +13,8 @@ function writeJson(key, value) {
 }
 
 export const state = {
-  prefs: Object.assign({ lang: null, motion: true, labels: true }, readJson(PREFS_KEY, {})),
+  // motion stays unset until the reader touches the switch, so the OS setting can decide
+  prefs: Object.assign({ lang: null, labels: true }, readJson(PREFS_KEY, {})),
   basket: readJson(BASKET_KEY, []), // [{ id, qty }]
   view: { kind: 'city', id: null },
   week: null,
@@ -59,15 +60,15 @@ export function setWeek(week) {
 
 export function basketAdd(id, qty = 1) {
   const it = state.basket.find((b) => b.id === id);
-  if (it) it.qty += qty; else state.basket.push({ id, qty });
+  if (it) it.qty = Math.min(99, it.qty + qty); else state.basket.push({ id, qty: Math.min(99, qty) });
   writeJson(BASKET_KEY, state.basket);
   notify('basket');
 }
 export function basketSet(id, qty) {
   const i = state.basket.findIndex((b) => b.id === id);
   if (qty <= 0) { if (i >= 0) state.basket.splice(i, 1); }
-  else if (i >= 0) state.basket[i].qty = qty;
-  else state.basket.push({ id, qty });
+  else if (i >= 0) state.basket[i].qty = Math.min(99, qty);
+  else state.basket.push({ id, qty: Math.min(99, qty) });
   writeJson(BASKET_KEY, state.basket);
   notify('basket');
 }
