@@ -28,17 +28,18 @@ function el(name, attrs = {}, parent) {
 
 // points: [{ id, lat, lon }] — one per map location (co-located stores share a point).
 export function createMap(host, geo, points, { motion = () => true } = {}) {
-  const svg = el('svg', { role: 'img', 'aria-label': 'Mapa' }, host);
+  const svg = el('svg', { role: 'application', tabindex: '0', 'aria-roledescription': 'mapa', 'aria-label': 'Mapa' }, host);
   const defs = el('defs', {}, svg);
   const pat = el('pattern', { id: 'hatch', patternUnits: 'userSpaceOnUse', width: 4, height: 4, patternTransform: 'rotate(45)' }, defs);
   el('rect', { width: 4, height: 4, fill: 'rgba(255,255,255,0.06)' }, pat);
   el('line', { x1: 0, y1: 0, x2: 0, y2: 4, stroke: 'rgba(255,255,255,0.45)', 'stroke-width': 1.2 }, pat);
   el('rect', { class: 'bg', width: '100%', height: '100%', fill: 'transparent' }, svg);
+  // screen-space alcaldía labels sit under the dots: the data outranks the names
+  const labelsG = el('g', { class: 'L-labels' }, svg);
   const world = el('g', { class: 'world' }, svg);
   const layers = {};
   for (const name of ['zmvm', 'alcaldias', 'green', 'water', 'airport', 'roads', 'rings', 'dots', 'halo']) layers[name] = el('g', { class: `L-${name}` }, world);
-  // screen-space layers (not scaled by the world transform)
-  const labelsG = el('g', { class: 'L-labels' }, svg);
+  // price tags are screen-space and above everything (they are buttons)
   const tagsG = el('g', { class: 'L-tags' }, svg);
 
   let W = host.clientWidth || 800, H = host.clientHeight || 600;
@@ -54,11 +55,11 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   let view = { k: 1, x: 0, y: 0 };
   let atFit = true; // false once the reader zooms or pans by hand
   let selected = null, hovered = null;
-  let lastColors = null, ownIds = new Set(), tags = [], labelsOn = true;
+  let lastColors = null, ownIds = new Set(), tags = [], labelsOn = true, obstacles = [], placedTags = [], active = null;
   const byId = new Map(located.map((s) => [s.id, s]));
   const dotEls = new Map();
   const ringEls = new Map();
-  const handlers = { hover: [], click: [], background: [], move: [] };
+  const handlers = { hover: [], click: [], background: [], move: [], active: [] };
   let labelItems = [];
 
   // The projection is fitted once to the whole viewport; a padding change (a card opening on
@@ -195,8 +196,9 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     for (const [id, ring] of ringEls) { const c = dotEls.get(id); const r = c ? Number(c.getAttribute('r')) : DOT_R / view.k; ring.setAttribute('r', r + 3 / view.k); }
     const halo = layers.halo.firstChild;
     if (halo) { const c = dotEls.get(selected); const r = c ? Number(c.getAttribute('r')) : DOT_R / view.k; halo.setAttribute('r', r + 6 / view.k); }
-    drawLabels();
     drawTags();
+    drawLabels();
+    drawActive();
     for (const h of handlers.move) h();
   }
 
@@ -204,14 +206,15 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   function drawLabels() {
     labelsG.innerHTML = '';
     if (!labelsOn || view.k > 4.5) return;
-    const placed = [];
-    const size = 10.5;
+    const placed = [...obstacles, ...placedTags];
+    const size = W < 520 ? 9 : 10.5;
+    const hit = (box, b) => !(box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3]);
     for (const it of labelItems) {
       const x = it.x * view.k + view.x, y = it.y * view.k + view.y;
-      const w = it.name.length * size * 0.66 + 6, h = size + 4;
+      const w = it.name.length * size * 0.7 + 6, h = size + 4;
       const box = [x - w / 2, y - h / 2, x + w / 2, y + h / 2];
-      if (box[2] < 0 || box[0] > W || box[3] < 0 || box[1] > H) continue;
-      if (placed.some((b) => !(box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3]))) continue;
+      if (box[0] < 4 || box[2] > W - 4 || box[1] < 4 || box[3] > H - 4) continue;
+      if (placed.some((b) => hit(box, b))) continue;
       placed.push(box);
       const t = el('text', { x, y, class: 'alc-label' }, labelsG);
       t.style.fontSize = `${size}px`;
@@ -222,32 +225,42 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
   // ---- price tags: callouts in screen space with a leader to the dot ----
   function drawTags() {
     tagsG.innerHTML = '';
+    placedTags = [];
     if (!tags.length) return;
-    const placed = [];
+    const placed = [...obstacles];
+    const colouredNear = (box) => { let n = 0; for (const [id, c] of dotEls) { if (c.classList.contains('empty')) continue; const p = byId.get(id); const dx = p._x * view.k + view.x, dy = p._y * view.k + view.y; if (dx > box[0] - 3 && dx < box[2] + 3 && dy > box[1] - 3 && dy < box[3] + 3) n++; } return n; };
     for (const tg of tags) {
       const s = byId.get(tg.id);
       if (!s || s._x == null) continue;
       const x = s._x * view.k + view.x, y = s._y * view.k + view.y;
       if (x < pad.left - 10 || x > W - pad.right + 10 || y < pad.top - 10 || y > H - pad.bottom + 10) continue;
-      const priceW = tg.text.length * 7.4 + 16, subW = (tg.sub || '').length * 5.9 + 16;
-      const w = Math.min(190, Math.max(priceW, subW)), h = tg.sub ? 36 : 22;
+      // measure the real text, then size the box
+      const probe = el('g', { class: 'tag' }, tagsG);
+      const p1 = el('text', { class: 'tag-price', x: 0, y: 0 }, probe); p1.textContent = tg.text;
+      let sub = tg.sub || '';
+      const p2 = sub ? el('text', { class: 'tag-sub', x: 0, y: 0 }, probe) : null;
+      if (p2) { p2.textContent = sub; while (p2.getComputedTextLength() > 172 && sub.length > 4) { sub = sub.slice(0, -2); p2.textContent = `${sub}…`; } sub = p2.textContent; }
+      const tw = Math.max(p1.getComputedTextLength(), p2 ? p2.getComputedTextLength() : 0);
+      probe.remove();
+      const w = Math.ceil(tw) + 16, h = tg.sub ? 36 : 22;
       // try above-right, above-left, below-right, below-left
       const spots = [[x + 10, y - h - 10], [x - w - 10, y - h - 10], [x + 10, y + 10], [x - w - 10, y + 10]];
-      let spot = null;
+      let spot = null, spotCost = Infinity;
       for (const [bx, by] of spots) {
         const box = [bx, by, bx + w, by + h];
         if (box[0] < pad.left || box[2] > W - pad.right || box[1] < pad.top || box[3] > H - pad.bottom) continue;
         if (placed.some((b) => !(box[2] + 4 < b[0] || box[0] > b[2] + 4 || box[3] + 4 < b[1] || box[1] > b[3] + 4))) continue;
-        spot = box; break;
+        const cost = colouredNear(box);
+        if (cost < spotCost) { spot = box; spotCost = cost; if (!cost) break; }
       }
       if (!spot) continue;
-      placed.push(spot);
-      const g = el('g', { class: `tag ${tg.kind || ''}` }, tagsG);
+      placed.push(spot); placedTags.push(spot);
+      const g = el('g', { class: `tag ${tg.kind || ''}`, 'data-id': tg.id, role: 'button', tabindex: '-1', 'aria-label': `${tg.text}, ${sub}` }, tagsG);
       const ax = spot[0] < x ? spot[2] : spot[0], ay = spot[1] < y ? spot[3] : spot[1];
       el('line', { x1: x, y1: y, x2: ax, y2: ay, class: 'tag-leader' }, g);
       el('rect', { x: spot[0], y: spot[1], width: w, height: h, rx: 8, class: 'tag-box', style: tg.color ? `stroke:${tg.color}` : null }, g);
       const t1 = el('text', { x: spot[0] + 8, y: spot[1] + 15, class: 'tag-price' }, g); t1.textContent = tg.text;
-      if (tg.sub) { const t2 = el('text', { x: spot[0] + 8, y: spot[1] + 29, class: 'tag-sub' }, g); t2.textContent = tg.sub.length > 28 ? `${tg.sub.slice(0, 27)}…` : tg.sub; }
+      if (tg.sub) { const t2 = el('text', { x: spot[0] + 8, y: spot[1] + 29, class: 'tag-sub' }, g); t2.textContent = sub; }
     }
   }
 
@@ -300,7 +313,8 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     svg.setPointerCapture(e.pointerId);
-    if (pointers.size === 1) drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false, touch: e.pointerType !== 'mouse' };
+    // pointer capture retargets the release to the svg: remember a pressed tag now
+    if (pointers.size === 1) drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false, touch: e.pointerType !== 'mouse', tag: e.target && e.target.closest ? e.target.closest('.tag') : null };
     else if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), k: view.k, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, vx: view.x, vy: view.y };
@@ -335,6 +349,8 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     pointers.delete(e.pointerId);
     if (pointers.size < 2) pinch = null;
     if (drag && e.type === 'pointerup' && !drag.moved) {
+      const tagEl = drag.tag;
+      if (tagEl) { drag = null; clearTimeout(bgTimer); for (const h of handlers.click) h(tagEl.getAttribute('data-id')); return; }
       const rect = host.getBoundingClientRect();
       const px = e.clientX - rect.left, py = e.clientY - rect.top;
       const id = nearest(px, py, drag.touch ? SNAP_TOUCH : SNAP_MOUSE);
@@ -382,6 +398,46 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     for (const h of handlers.hover) h(id, x, y);
   }
 
+  // ---- keyboard ----
+  function screenOf(id) { const p = byId.get(id); return [p._x * view.k + view.x, p._y * view.k + view.y]; }
+  function drawActive() {
+    layers.halo.querySelectorAll('.kbd-ring').forEach((n) => n.remove());
+    if (!active || !dotEls.get(active)) return;
+    const c = dotEls.get(active);
+    el('circle', { cx: c.getAttribute('cx'), cy: c.getAttribute('cy'), r: (Number(c.getAttribute('r')) || DOT_R / view.k) + 5 / view.k, class: 'kbd-ring' }, layers.halo);
+  }
+  function setActive(id) {
+    active = id; drawActive();
+    if (id) { const [x, y] = screenOf(id); for (const h of handlers.active) h(id, x, y); }
+  }
+  function move(dx, dy) {
+    const from = active ? screenOf(active) : [pad.left + (W - pad.left - pad.right) / 2, pad.top + (H - pad.top - pad.bottom) / 2];
+    let best = null, bd = Infinity;
+    for (const id of dotEls.keys()) {
+      if (id === active) continue;
+      const [x, y] = screenOf(id); const vx = x - from[0], vy = y - from[1];
+      const along = vx * dx + vy * dy; if (along <= 0) continue;
+      const across = Math.abs(vx * dy - vy * dx);
+      if (across > along * 1.2) continue; // a 100-degree cone
+      const d = along + across * 2;
+      if (d < bd) { bd = d; best = id; }
+    }
+    if (best) setActive(best);
+  }
+  svg.addEventListener('keydown', (e) => {
+    const k = e.key;
+    if (k === 'ArrowLeft') { e.preventDefault(); move(-1, 0); }
+    else if (k === 'ArrowRight') { e.preventDefault(); move(1, 0); }
+    else if (k === 'ArrowUp') { e.preventDefault(); move(0, -1); }
+    else if (k === 'ArrowDown') { e.preventDefault(); move(0, 1); }
+    else if (k === 'Enter' && active) { e.preventDefault(); for (const h of handlers.click) h(active); }
+    else if (k === '+' || k === '=') { e.preventDefault(); const [x, y] = active ? screenOf(active) : [W / 2, H / 2]; const r = host.getBoundingClientRect(); zoomAt(x + r.left, y + r.top, 1.6); }
+    else if (k === '-' || k === '_') { e.preventDefault(); const [x, y] = active ? screenOf(active) : [W / 2, H / 2]; const r = host.getBoundingClientRect(); zoomAt(x + r.left, y + r.top, 1 / 1.6); }
+    else if (k === '0') { e.preventDefault(); atFit = true; animateTo(fitView()); }
+  });
+  svg.addEventListener('focus', () => { if (!active) { move(0, 1); if (!active) move(1, 0); } else setActive(active); });
+  svg.addEventListener('blur', () => { active = null; drawActive(); for (const h of handlers.active) h(null); });
+
   // ---- public API ----
   const api = {
     svg,
@@ -425,6 +481,10 @@ export function createMap(host, geo, points, { motion = () => true } = {}) {
     // tags: [{ id, text, sub, color, kind }] in priority order
     setTags(list) { tags = list || []; drawTags(); },
     setLabels(on) { labelsOn = on; drawLabels(); },
+    // screen rectangles the labels and tags must avoid (search, legend, timeline, card, buttons)
+    setObstacles(list) { obstacles = list || []; drawTags(); drawLabels(); },
+    setName(text) { svg.setAttribute('aria-label', text); },
+    onActive(h) { handlers.active.push(h); },
     isAtFit() { return atFit; },
     screenXY(id) {
       const s = byId.get(id);
