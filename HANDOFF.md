@@ -48,8 +48,8 @@ Kept for later: the group card still fetches one file per member; stores.json st
 
 ### Next
 
-1. The showpiece portfolio (`docs/portfolio/`: three demos of how the app could open), reviewed and published for the owner to pick from.
-2. The checkpoint: live link, decisions, liberties, the name shortlist (below, unchanged), question cards.
+1. Done the same night: the showpiece portfolio (`docs/portfolio/`, three demos of how the app could open), built, reviewed adversarially and fixed by sub-agents, read in full and published as private artifacts for the owner: Respira https://claude.ai/artifact/A7GHaUhcyZgWe29Z8rxepq, Relieve https://claude.ai/artifact/UBFtXeq1N1fmgY2dHdbkW9, Portada https://claude.ai/artifact/XyKBwWehvCFJGezSkxwW98. Republish by publishing the same files again (`demo-data.js` travels as a supporting file); regenerate it with `node tools/portfolio-data.mjs` after any pipeline rule change.
+2. Round 3 of the self-audit against the live site, then the checkpoint: live link, decisions, liberties, the name shortlist (below, unchanged), question cards.
 
 ## 2026-10-21, night — first self-audit round landed; live on Pages
 
