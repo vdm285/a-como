@@ -9,15 +9,15 @@ A cómo is static. Two pipelines feed it: the **geometry** (slow-changing, commi
 | layer | what | source | license |
 |---|---|---|---|
 | `alcaldias` | the 16 alcaldías of Ciudad de México, `name` + `key` (CVEGEO) | INEGI, Marco Geoestadístico (web service of the Catálogo Único de Claves Geoestadísticas, entity 09) | Términos de Libre Uso de la Información del INEGI; credit "Fuente: INEGI, Marco Geoestadístico, diciembre de 2025" |
-| `zmvm` | 23 Estado de México municipalities of the metro area | same service, entity 15 | same |
+| `zmvm` | 23 Estado de México municipalities: the 19 of the metro area named in the brief plus 4 rural ones the script adds because they touch Ciudad de México (Juchitepec, Tianguistenco, Ocoyoacac, Xalatlaco); Zumpango, which the price pipeline counts as metro, is not drawn (PROFECO surveys no store there) | same service, entity 15 | same |
 | `roads` | 19 arteries a chilango knows (Periférico, Circuito Interior, Viaducto, Insurgentes, Reforma, Tlalpan, Zaragoza, Constituyentes, Eje Central, the highways out of the city…), merged by name, `class` | OpenStreetMap via the Overpass API | ODbL; credit "© OpenStreetMap contributors" linked to openstreetmap.org/copyright |
-| `green` | 23 big green areas (Chapultepec, Desierto de los Leones, Ajusco, Tlalpan, Viveros, Cerro de la Estrella, Sierra de Guadalupe, Santa Catarina, Xochimilco…) | OSM / Overpass | ODbL |
+| `green` | 22 big green areas (Chapultepec, Desierto de los Leones, Ajusco, Tlalpan, Viveros, Cerro de la Estrella, Sierra de Guadalupe, Santa Catarina, Xochimilco…) | OSM / Overpass | ODbL |
 | `water` | 12 (Lago de Chapultepec, Xochimilco canals, Texcoco lakes, dams) | OSM / Overpass | ODbL |
 | `airport` | AICM and AIFA | OSM / Overpass | ODbL |
 
-WGS84 lon/lat, five decimals, simplified in the script (no library) to keep the file under 300 kB (183 kB on 2026-10-21). The app projects it with d3-geo's Mercator fitted to the alcaldías; `tools/preview-geo.mjs` renders the same projection to `data/cache/geo/check.png` for a human eye. Details, quotes and the retrieved dates: `docs/research/geo-cdmx-2026-10.md`.
+WGS84 lon/lat, five decimals, simplified in the script (no library) to keep the file under 300 kB (167,751 bytes on 2026-10-21). The app projects it with d3-geo's Mercator fitted to the store locations (not the alcaldías: the south is forest without a store and 91 stores lie north of the alcaldías' box). The geo research recommends a conic equal-area projection; at the scale of one metro area the difference is under one percent and Mercator keeps north up with straight arteries, so it stays; `tools/preview-geo.mjs` renders the same projection to `data/cache/geo/check.png` for a human eye. Details, quotes and the retrieved dates: `docs/research/geo-cdmx-2026-10.md`.
 
-Re-run only when a boundary changes (INEGI publishes the Marco Geoestadístico yearly) or a road is missing; commit the new file with its build date. Overpass is a shared free instance: the script sends one query per layer with a descriptive User-Agent and a pause between them; do not loop it.
+Re-run only when a boundary changes (INEGI publishes the Marco Geoestadístico yearly) or a road is missing; commit the new file with its build date. Overpass is a shared free instance: the script sends two queries per build (roads, then areas) with a descriptive User-Agent and a pause between them, and caches them on disk; do not loop it.
 
 Known curation items: a park polygon in the south is cut by the download bounding box (a straight edge below Tlalpan/Milpa Alta); Soriana's "MEGA SORIANA" versus "Mercado" formats are a prices-pipeline matter, not geometry.
 

@@ -1,26 +1,26 @@
 # A cómo
 
-**El mapa de precios del súper en la Ciudad de México.** Cada tienda que vigila PROFECO, dibujada donde está, coloreada por lo que buscas; una canasta que dice en qué tienda sale más barata la lista completa; y tus propios precios junto a los oficiales, guardados sólo en tu teléfono.
+**El mapa de precios del súper en la Ciudad de México.** Las tiendas de alimentos que vigila PROFECO, dibujadas donde están y coloreadas por lo que buscas; una canasta que dice en qué tienda sale más barata la lista completa; una línea de tiempo que muestra cómo se mueve un precio por la ciudad; y tus propios precios junto a los oficiales, guardados sólo en tu teléfono.
 
-*The supermarket price map of Mexico City: every store PROFECO monitors, drawn where it stands and coloured by what you search; a basket that says which store is cheapest for the whole list; your own shelf prices beside the official ones, kept only on your phone. Spanish first; English is a setting.*
+*The supermarket price map of Mexico City: the food stores PROFECO surveys, drawn where they stand and coloured by what you search; a basket that says which store is cheapest for the whole list; a timeline that shows a price moving across the city; your own shelf prices beside the official ones, kept only on your phone. Spanish first; English is a setting.*
 
-Live: https://vdm285.github.io/compa-precio/
+Live: https://vdm285.github.io/compa-precio/ (working name "A cómo"; the repository keeps its first name until the owner picks one).
 
 ## What it does
 
-- **Where is this cheaper?** Search a product ("leche Lala 1 L") and the map colours every store by its latest price against the city median. Search a generic product ("leche") and it colours by the cheapest price per litre at each store, sizes and brands compared like with like.
-- **Which store for my list?** Add products to the basket; the map colours by the basket total per store, hatches the stores that lack an item, and ranks them.
-- **How expensive is this store?** Tap a dot: its basket index (median price ratio against the city, documented in the card), where it beats the city and where it loses, and everything PROFECO saw there.
-- **How did it move?** A scrubber under the map walks the weeks since January 2025; play it and watch a price cross the city.
-- **Is the price I am looking at good?** Type the number you see on the shelf; it sits beside PROFECO's with its date, and it never leaves your browser (export to JSON or CSV any time).
+- **Where is this cheaper?** Search a product ("leche Lala 1 L") and the map colours every store by its recent price against the city median, with tags on the three cheapest and the dearest. Search a generic product ("leche") and it colours by the cheapest price per litre at each store, sizes and brands compared like with like.
+- **Which store for my list?** Add products to the basket: the map colours by the basket total per store, hatches the stores that lack an item, and the card races the chains.
+- **How expensive is this store?** Tap a dot: its basket index (the median of its price ratios against the city, explained in the card), where it beats the city and where it loses in the last 28 days, and everything PROFECO saw there.
+- **How did it move?** The timeline under the map walks the last 26 weeks against today's reference: play the jitomate and watch the city go red in April and blue in August.
+- **Is the price in front of me good?** Type it on the product card: it sits beside PROFECO's with its date, as a gold ring on the map, and never leaves your browser (export to JSON or CSV any time).
+
+PROFECO surveys weekly and publishes monthly, five to nine weeks behind; the app says how recent its data is. Nothing is invented: no estimated prices, no generated images, no community layer.
 
 ## Data and credits
 
-- Prices: **PROFECO, Quién es Quién en los Precios**, open data under the Mexican government's free-use terms (Libre Uso MX), rebuilt weekly by a GitHub Actions job. The files are not committed; see `docs/PIPELINES.md` and `docs/research/profeco-qqp-2026-10.md`.
-- Map: borough and municipality shapes from **INEGI**; streets, parks and water © **OpenStreetMap contributors** (ODbL). See `docs/research/geo-cdmx-2026-10.md`.
-- The code in this repository is public domain (The Unlicense). The data files are not: price data is PROFECO open data (Creative Commons Attribution 4.0, credit required, dataset name, agency, link and access date as the app shows them); the map geometry under `public/data/geo/` is built from INEGI (free use with credit) and © OpenStreetMap contributors (ODbL, share-alike for the derived file). Keep their credits if you reuse them. Details and quotes: `docs/research/licenses-2026-10.md`. The app is not made or endorsed by PROFECO.
-
-Nothing is invented: no estimated prices, no generated images, no community layer. When PROFECO did not visit a store that week, the map shows a hollow dot and says so.
+- **Prices**: "Programa Quién es Quién en los Precios", PROFECO (Procuraduría Federal del Consumidor), https://datos.profeco.gob.mx/datos_abiertos/qqp.php. Mexican government open data under Creative Commons Attribution 4.0, as the datos.gob.mx record states (historically "Términos de Libre Uso MX"). Reference prices surveyed by PROFECO in a sample of stores; this app is not made or endorsed by PROFECO. The app shows the access date. Rebuilt on every deploy, never committed. PROFECO's site does not answer GitHub's build servers, so its yearly archives are mirrored byte for byte, with checksums and the access date, on the [`qqp-mirror` release](https://github.com/vdm285/compa-precio/releases/tag/qqp-mirror). Details: `docs/PIPELINES.md`, `docs/research/profeco-qqp-2026-10.md`.
+- **Map**: alcaldías and metro municipalities from INEGI, Marco Geoestadístico, diciembre de 2025 (free use with credit); arteries, parks, water and airports © OpenStreetMap contributors (ODbL; the derived geometry file is ODbL too). Details: `docs/research/geo-cdmx-2026-10.md`.
+- **The code** in this repository is public domain (The Unlicense). The data files are not: they keep the licences above, with their credits, if you reuse them. Quotes and reasoning: `docs/research/licenses-2026-10.md`.
 
 ## Run it
 
@@ -36,8 +36,12 @@ npm run qqp
 npm run dev
 ```
 
-`npm run qqp` downloads PROFECO's yearly archives into `data/cache/qqp/` (D: only; a few hundred MB) and writes `public/data/qqp/`. `npm run geo` rebuilds the committed map geometry. `npm test` runs the logic tests. `npm run build` writes `dist/`.
+`npm run qqp` downloads PROFECO's yearly archives (about 145 MB, from PROFECO or the mirror) into `data/cache/qqp/`, extracts them (about 7 GB of CSV), and writes `public/data/qqp/` (about 55 MB). It needs Node 22+, about 2 GB of RAM, five to eight minutes, and a program that reads RAR5: 7-Zip (Windows; the built-in `tar.exe` also works), or `libarchive-tools` (bsdtar) on Linux. Everything it downloads stays under `data/cache/`.
+
+Other scripts: `npm test` (logic and parser tests), `npm run check` (the data contract), `npm run build` (writes `dist/`), `npm run shots` and `node tools/smoke.mjs` (screenshots and flow checks against the dev server), `npm run geo` (rebuilds the committed map geometry), `npm run qqp:mirror` (refreshes the mirror; needs a network in Mexico and `gh` with write access).
+
+Deploys: GitHub Actions (`.github/workflows/pages.yml`) builds and publishes on every push to `main`, every Tuesday, and by hand. If the data cannot be built, nothing is published and the previous site stays.
 
 ## For the next person (human or AI)
 
-Start with `AGENTS.md`, then `docs/VISION.md`, then `HANDOFF.md`. The owner's working method lives outside the repo in `D:\_GitHub\revamp-playbook.md`.
+Start with `AGENTS.md` (rules, where things live, checks, gotchas), then `docs/VISION.md`, then `HANDOFF.md` (the state, dated).

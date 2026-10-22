@@ -279,6 +279,8 @@ GitHub Docs pages show no publication date; all read 2026-10-21.
   output (or a small "last-run" stamp) keeps itself alive, while a job that only deploys an
   artifact may not.
 
+> **Superseded (2026-10-21, later the same day).** The half-month CSV URLs on repodatos.atdt.gob.mx answered HTTP 403 to every client tried, from Mexico and from a GitHub runner, so no weekly half-month download was built (profeco-qqp §14). datos.profeco.gob.mx itself answers 404 to GitHub runners, so CI reads a byte-for-byte mirror of the yearly archives on this repository's qqp-mirror release (profeco-qqp §19). The runner's 7z did extract RAR5 in practice (run 39699189226), and the workflow also installs libarchive-tools. The canonical credit line is §1.3 below; the app renders it with the access date.
+
 **Is the weekly job within limits?** Yes, with margin. Measured inputs (owner's download,
 2026-10-21): `QQP_2025.rar` 85.1 MB, `QQP_2026.rar` 60.0 MB; the 2025 archive expands to 4.17 GB
 of CSV, which fits the 14 GB SSD if files are processed one at a time and deleted. Better still,
