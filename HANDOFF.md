@@ -2,6 +2,55 @@
 
 The state of the code, dated, newest first. `docs/VISION.md` is the direction; this file is what exists. Read `AGENTS.md` first.
 
+## 2026-10-21, late night — second self-audit round landed
+
+### State in one paragraph
+
+Round 2 of the self-audit is applied and pushed (commits `140b7a5` to `41af9b7`). The app keeps the same stage and modes; what changed is how honestly and how comfortably it speaks. Comparisons need three stores or they are not drawn; the index is asked as a question and answered in words; product, generic product and basket cards share one grammar; the timeline is drawn in real pixels over every week of the data, with the week's city value printed large over the map; the map works by keyboard and its price tags open their store; a first visit can start offline, and "offline" is never shown as "not in PROFECO's data". Bundle: 170 kB JS / 61 kB gzip, 33 kB CSS / 10 kB gzip.
+
+### The self-audit (round 2)
+
+Fresh reviewers measured the round-1 app; about 65 findings. The ones that changed something:
+
+| Found (measured) | Fixed by |
+|---|---|
+| A store's weekly index divided by a "city median" taken from one or two stores, i.e. its own price | Pipeline: a product enters the index only when 3 stores reported it that week (`INDEX_MIN_STORES`) |
+| The 40 kB weekly-file cap had halved busy products (tortilla: 13 weeks of 26) | Cap 72 kB; the check requires every weekly file to cover `meta.weeks.slice(-26)` |
+| A per-litre price computed from a size in grams in mixed groups; basket weeks summed by position across files that start on different weeks | `perUnit` checks the dimension (`DIM`); `basketAtWeek` matches by date; tests for both |
+| Chips and colours from a reference of one or two stores | Gating at 3: neutral grey dots, no chips, the legend says why |
+| In the April jitomate spike, cheap prices for that week were flagged "revísalo" against the August median | The flag asks about the price's own comparison set (that week, in a chosen week); the map's tags likewise |
+| Each card had its own layout; the product hero was a median while the list started with the cheapest | One grammar: cheapest store first, reference named once, the strip, the list |
+| The timeline SVG stretched with its box; 26 weeks only; "Reciente" an SVG shape | Drawn at its measured width over all 88 weeks, older ones shaded, peak and recent annotated, a real button, keys for weeks, months, first, last; folded into a chip on the index |
+| In a dear week every dot is the same red and the size of the change is lost | The week's city value in large type over the map |
+| The map was unreachable by keyboard; price tags guessed their width and could not be clicked; labels sat over dots and chrome | Arrow-key navigation with announcements, Enter, + − 0; measured tags placed off the chrome and off coloured dots, clickable; labels under the dots |
+| Offline errors sent the reader to the city as if the data were gone; a first visit could not start offline | Precache of assets and boot data at install; offline replies marked; a distinct message; the link kept |
+| Settings forgot the card beneath; closing pushed new history; no undo; Enter during catalogue load did nothing; results not announced | All fixed; undo for own-price delete and basket clear |
+| The chain race's dots stretched into ellipses on a phone; strip labels hidden under stacked dots | HTML race positioned in percent; symmetric stacks in taller rows |
+
+Kept for later: the group card still fetches one file per member; stores.json still carries each store's index series; the weekly cron still dies after 60 days without a commit.
+
+### Verified, and how
+
+- `npm test` 109/109; `npm run check` exit 0 on the rebuilt data (5,237 files, 54.6 MB).
+- `node tools/smoke.mjs` 42/42 against a fresh dev server, including map keys, a tag click, undo, Settings returning to its card, the pixel timeline and the week numeral.
+- `tools/shots.mjs` captures at 1600×900 and 375×812 read by eye, twice (before and after the strip, flag and timeline fixes), plus English on a past week and Settings.
+- Offline on a production build: warm visit, server stopped, cold start drew all 412 locations (200 coloured) from the precache; a never-fetched product showed "todavía no se ha descargado en este dispositivo" and kept its link.
+
+### Not verified
+
+- A real phone and Safari; English beyond the product, week and Settings views; the Tuesday cron's first scheduled run.
+
+### Liberties added in this round
+
+- **Index rule**: 3 stores per product per week, on top of 30 products per store (fewer stores now have an index some weeks).
+- **The index renamed** for the reader ("¿Qué tan cara es cada tienda?", "3 % más cara"); "índice" stays in the method note.
+- **The week numeral** over the map and **the folded timeline** on the index.
+
+### Next
+
+1. The showpiece portfolio (`docs/portfolio/`: three demos of how the app could open), reviewed and published for the owner to pick from.
+2. The checkpoint: live link, decisions, liberties, the name shortlist (below, unchanged), question cards.
+
 ## 2026-10-21, night — first self-audit round landed; live on Pages
 
 ### State in one paragraph

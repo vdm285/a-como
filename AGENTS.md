@@ -72,6 +72,10 @@ and read the captures in `data/cache/shots/` by eye: the city, a product, a past
 - **Heredocs with backticks break in this shell**: write patch scripts to `data/cache/patches/` and run them by path.
 - **The browser pane's screenshots time out when the window is behind**: use `npm run shots` (puppeteer-core with the installed Chrome) for exact viewports; with an emulated viewport, click coordinates are in the screenshot's frame.
 - **Size caps are bytes on the wire** (Pages serves gzip): products.json is ~770 kB raw, ~97 kB gzip; the checker fails above 1,400 kB raw.
+- **Chrome profiles under `data/` crash Vite's watcher**, so the config ignores `data/**`. A dev server another agent started can keep serving stale modules after its watcher dies (a "does not provide an export" error for an export that exists): start your own on another port (`npx vite --port 5176 --strictPort`) rather than killing theirs.
+- **Puppeteer's offline mode does not reach the service worker**: the worker keeps fetching from the live server. Test offline by stopping the server after a warm visit, with a persistent profile under `data/cache/`.
+- **Pointer capture retargets the release**: after `setPointerCapture`, `pointerup` targets the capturing element, so record what was pressed at `pointerdown` (the map's price tags).
+- **`page.focus()` refuses SVG elements** in puppeteer; focus from page script.
 - **lit**: never remove DOM that lit rendered; key forms by subject (`keyed`) so a typed value never carries to the next product.
 
 ## Renaming (when the owner picks a name)

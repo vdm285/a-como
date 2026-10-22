@@ -1,6 +1,6 @@
 # How the stage speaks
 
-Written 2026-10-21, revised after the first self-audit the same day. This is the rule the app follows for every number and word on a screen. When a rule here and the code disagree, one of them is a bug.
+Written 2026-10-21, revised after the first and the second self-audits the same day. This is the rule the app follows for every number and word on a screen. When a rule here and the code disagree, one of them is a bug.
 
 We do not promise that a price is right today. We promise that every price names who recorded it and when, and that every comparison names its reference.
 
@@ -8,18 +8,19 @@ We do not promise that a price is right today. We promise that every price names
 
 - **Prices are PROFECO's**, as published in "Quién es Quién en los Precios": label price per product per store per visit. PROFECO surveys weekly and publishes monthly, five to nine weeks behind; the app says so in Settings and never calls old data "today".
 - **Recent** means the last 28 days of data (`meta.recent`, for example 4–31 Aug 2026). The default view uses each store's latest price inside that window, with its date. A store whose latest price is older is a quiet ring, and its tooltip says when PROFECO last saw the product there. We never carry an old price into "recent", never average across weeks, never interpolate a week.
-- **A chosen week** uses only that week's observations (the last 26 weeks per store). A store PROFECO did not visit that week is a quiet ring that says "sin dato esa semana".
+- **A chosen week** uses only that week's observations. The timeline draws every week of the data (88 for a product) and lets the reader pick the last 26; the older weeks are shaded. A store PROFECO did not visit that week is a quiet ring that says "sin dato esa semana".
 - **Light weeks** (`meta.partialWeeks`: under half the median week's observations, such as the last Monday of the file or the Christmas weeks) are marked on the timeline and labelled "semana con pocos datos". A store's recent index skips them: 53 stores on one Monday are too thin a baseline.
 - **Dates carry the year** whenever it is not the year of the latest data.
 
 ## Comparisons
 
-- **One reference per stage**: the city median of the recent window, stated on the legend ("mediana reciente de la ciudad: $19.00"). Scrubbing the timeline colours every week against that same reference, so movement shows; the card's headline in a week is that week's median, with the recent one named as the reference.
-- **The median, never the mean.** A chip ("31 % abajo") needs a median from at least three stores; with fewer, no chip.
-- **The store index** is the median, over the products PROFECO saw in the store that week, of the store's price divided by the city median of the same product that week; it needs at least 30 products, so tortillerías and bakeries have none. The card explains it under "Cómo se calcula" and names the week of the index it shows.
+- **One reference per stage**: the city median of the recent window, stated on the legend ("mediana reciente de la ciudad: $19.00"). Scrubbing the timeline colours every week against that same reference, so movement shows. Because a dear week turns every dot the same red, the week's city value is printed large over the map while the week is on stage.
+- **One card grammar** for a product, a generic product and the basket: the cheapest store first with its price and date, the reference named once under it (in a chosen week, that week's city median and the recent one), the strip of every store, then the ranked list.
+- **The median, never the mean.** A chip ("31 % abajo") needs a reference from at least three stores. With fewer, there is no chip, the dots are neutral grey and the legend says the comparison is not possible.
+- **The store index** is the median, over the products PROFECO saw in the store that week, of the store's price divided by the city median of the same product that week. A product counts only when at least three stores reported it that week (with one or two, the "median" is the store's own price), and a store needs at least 30 such products, so tortillerías and bakeries have none. The stage asks it as a question, "¿Qué tan cara es cada tienda?", and answers in words, "3 % más cara"; the card explains it under "Cómo se calcula" and names the week of the index it shows.
 - **A generic product** compares its members in one unit decided for the whole group (the dimension most members share; litres or kilos when the median member size is 700 ml or 700 g or more, else 100 ml or 100 g; pieces for eggs and rolls). Members in another unit are listed apart with their own per-unit price; members whose presentation has no size are listed apart by label price, marked "sin tamaño en el nombre". The group's reference is "la mediana de lo más barato en cada tienda", said in those words.
 - **One colour scale**: blue cheaper, grey the median, red dearer, never red/green. The cap (±5 %, ±10 %…) is chosen once per stage from the recent spread, printed on the legend as "o más", and kept while the reader scrubs, so a saturated dot reads "at least this much".
-- **A price more than 150 % away from the recent median** (with n ≥ 3) is shown as published with a "revísalo" flag: it may be a capture error or a real price. It is never presented as a store's win or loss.
+- **A price more than 150 % away from its own comparison set** (with n ≥ 3) is shown as published with a "revísalo" flag: it may be a capture error or a real price. It is never presented as a store's win or loss. The comparison set is the recent prices in the default view and that week's prices in a chosen week: in the April 2026 jitomate spike a $49 kilo was cheap for its week, not an error.
 - **Medicines** count in a store's wins and losses only when the store is a pharmacy; their spread swamps a supermarket's list.
 
 ## Words and credits
@@ -27,6 +28,7 @@ We do not promise that a price is right today. We promise that every price names
 - **Nothing invented.** No product photographs until a legal, matched source exists; categories and product names are PROFECO's own spelling. Store names, addresses and coordinates are PROFECO's; a wrong coordinate or size is fixed through `data/overrides/qqp.json` with a note, never guessed in code. Chains appear by name only, no logos.
 - **The reader's prices are the reader's.** They sit beside PROFECO's, marked "tu precio" in gold, with their own date in the reader's calendar, and the card states the difference against PROFECO's. They never enter any median or ranking and never leave the browser.
 - **PACIC**: the official basket has 24 products; PROFECO's catalogue tags more generic products as PACIC (31 in this build). The basket card says both numbers.
-- **Credit**: the footer carries the short form (dataset, agency, link, access date); Settings carries the full credit (CC BY 4.0, Libre Uso MX, non-endorsement, "A cómo calcula medianas…"), INEGI's product and edition, and © OpenStreetMap contributors. `docs/research/licenses-2026-10.md` §1.3 has the canonical wording.
+- **Credit**: the footer carries the short form (dataset, agency, link, access date in AAAA-MM-DD, the numeric form Libre Uso MX asks for, so it is never localised); Settings carries the full credit (CC BY 4.0, Libre Uso MX, non-endorsement, "A cómo calcula medianas…"), INEGI's product and edition, and © OpenStreetMap contributors. `docs/research/licenses-2026-10.md` §1.3 has the canonical wording.
 - **Spanish first.** Mexican usage: "súper", "mandado", "a cómo", "canasta", "anaquel". English is a translation of the same strings, never a different product.
+- **Offline is not absence.** When something cannot be fetched because the device is offline, the app keeps the link and says it has not been downloaded on this device yet; only data that is truly gone sends the reader back to the city with "Eso ya no está en los datos de PROFECO".
 - **If a number looks wrong**, the fix is a line in the override file and a rerun, recorded under "Curation" in `docs/PIPELINES.md`, so the next person knows why.

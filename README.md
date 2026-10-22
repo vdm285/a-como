@@ -11,7 +11,7 @@ Live: https://vdm285.github.io/compa-precio/ (working name "A cómo"; the reposi
 - **Where is this cheaper?** Search a product ("leche Lala 1 L") and the map colours every store by its recent price against the city median, with tags on the three cheapest and the dearest. Search a generic product ("leche") and it colours by the cheapest price per litre at each store, sizes and brands compared like with like.
 - **Which store for my list?** Add products to the basket: the map colours by the basket total per store, hatches the stores that lack an item, and the card races the chains.
 - **How expensive is this store?** Tap a dot: its basket index (the median of its price ratios against the city, explained in the card), where it beats the city and where it loses in the last 28 days, and everything PROFECO saw there.
-- **How did it move?** The timeline under the map walks the last 26 weeks against today's reference: play the jitomate and watch the city go red in April and blue in August.
+- **How did it move?** The timeline under the map walks the last 26 weeks against the recent reference: play the jitomate and watch the whole city turn red in the April 2026 spike, then settle back around the median by August.
 - **Is the price in front of me good?** Type it on the product card: it sits beside PROFECO's with its date, as a gold ring on the map, and never leaves your browser (export to JSON or CSV any time).
 
 PROFECO surveys weekly and publishes monthly, five to nine weeks behind; the app says how recent its data is. Nothing is invented: no estimated prices, no generated images, no community layer.
