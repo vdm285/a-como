@@ -149,12 +149,20 @@ for (let i = 0; i < base.length; i += 25) {
   if (existsSync(join(DIR, 'products', wf))) {
     const w = read(`products/${wf}`);
     const ws = statSync(join(DIR, 'products', wf)).size / 1024; maxW = Math.max(maxW, ws);
-    if (ws > 40) warn(`products/${wf} is ${ws.toFixed(0)} kB (cap 40)`);
+    if (ws > 72) warn(`products/${wf} is ${ws.toFixed(0)} kB (cap 72)`);
     if (!Array.isArray(w.weeks) || w.weeks.length > 26) fail(`products/${wf}: weeks must be ≤ 26`);
+    // every weeks file covers the same weeks (the last 26 of meta.weeks): the app aligns baskets by date
+    else if (JSON.stringify(w.weeks) !== JSON.stringify(meta.weeks.slice(-w.weeks.length)) || w.weeks.length !== Math.min(26, meta.weeks.length)) fail(`products/${wf}: weeks differ from the last 26 of meta.weeks (${w.weeks[0]} … ${w.weeks.length})`);
     for (const [sid, arr] of Object.entries(w.stores || {})) { if (!storeIds.has(sid)) fail(`products/${wf}: unknown store ${sid}`); if (arr.length !== w.weeks.length) fail(`products/${wf}: ${sid} series length ${arr.length} ≠ ${w.weeks.length}`); }
   }
   checked++;
 }
+
+// every weeks file must cover the same 26 weeks (sampling above could miss one)
+const want = JSON.stringify(meta.weeks.slice(-Math.min(26, meta.weeks.length)));
+let misaligned = 0;
+for (const wf of weeksF) { const w = read(`products/${wf}`); if (JSON.stringify(w.weeks) !== want) { misaligned++; if (misaligned <= 3) fail(`products/${wf}: ${w.weeks.length} weeks from ${w.weeks[0]}, expected the last 26 of meta.weeks`); } }
+if (misaligned > 3) fail(`${misaligned} weeks files misaligned in all`);
 
 // store files
 const sfiles = existsSync(join(DIR, 'stores')) ? readdirSync(join(DIR, 'stores')) : [];

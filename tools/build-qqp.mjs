@@ -97,12 +97,13 @@ const LIMITS = {
   // (Pages serves gzip; 1,400 KB raw is about 200 KB compressed). Was 700 KB until 2026-10-21.
   productsJson: 1400 * 1024,
   productFile: 30 * 1024,     // products/<id>.json
-  weeksFile: 40 * 1024,       // products/<id>.weeks.json
+  weeksFile: 72 * 1024,       // products/<id>.weeks.json (a staple sold in ~280 stores needs ~48 kB for 26 weeks; a shorter window made basket weeks disagree)
   storeFile: 120 * 1024,      // stores/<id>.json
   storesJson: 1500 * 1024,    // stores.json (soft, warn only)
   indexJson: 1500 * 1024,     // index.json (soft, warn only)
 };
 const INDEX_MIN_PRODUCTS = 30; // a store's weekly basket index needs at least this many products
+const INDEX_MIN_STORES = 3;    // ...each seen in at least this many stores that week (a one-store "median" is the price itself)
 // "Recent" = the last RECENT_DAYS days of data, ending on meta.latestDate. products.json and groups.json
 // summarise each store's latest observation inside it; nothing older counts as a current price.
 const RECENT_DAYS = 28;
@@ -751,7 +752,7 @@ async function main() {
       // ratios for the store index + the store's own product list
       for (const [key, r] of cell) {
         const si = (key / nWeeks) | 0; const w = key % nWeeks;
-        if (wmed[w] > 0) (ratios[si][w] || (ratios[si][w] = [])).push(rows.v[r] / wmed[w]);
+        if (wmed[w] > 0 && byWeek[w] && byWeek[w].length >= INDEX_MIN_STORES) (ratios[si][w] || (ratios[si][w] = [])).push(rows.v[r] / wmed[w]);
       }
       const latestObj = {};
       const g = groups.get(po.group);
@@ -871,7 +872,7 @@ async function main() {
     // one entry per week in `weeks`: distinct survey dates, rows, stores, and partial (< 50 % of the median week's rows)
     weekInfo, partialWeeks: weekInfo.filter((w) => w.partial).map((w) => w.week),
     counts: { stores: storesJson.length, products: productsJson.length, groups: groupsJson.length, observations, storeFiles, pacic: productsJson.filter((p) => p.pacic).length },
-    rules: { recentWeeks, excludeCategories: [...excludeCategories], indexMinProducts: INDEX_MIN_PRODUCTS, recentDays: RECENT_DAYS, partialWeekShare: PARTIAL_WEEK_SHARE, fixSizes: productsJson.filter((p) => fixSizes.has(p.id)).length },
+    rules: { recentWeeks, excludeCategories: [...excludeCategories], indexMinProducts: INDEX_MIN_PRODUCTS, indexMinStores: INDEX_MIN_STORES, recentDays: RECENT_DAYS, partialWeekShare: PARTIAL_WEEK_SHARE, fixSizes: productsJson.filter((p) => fixSizes.has(p.id)).length },
   };
   fs.writeFileSync(path.join(OUT, 'meta.json'), JSON.stringify(meta, null, 1));
 
